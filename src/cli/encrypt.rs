@@ -11,7 +11,7 @@ use std::io::{self, Read};
 use std::path::PathBuf;
 
 use crate::cli::common::command::{
-    resolve_cli_write_session, run_write_command_with_trust, CliWriteSession, WriteCommandLabels,
+    open_cli_write_session, run_write_command_with_trust, CliWriteSession, WriteCommandLabels,
 };
 use crate::cli::common::context::CliContext;
 use crate::cli::common::output::file::{resolve_encrypted_output_path, save_encrypted_output};
@@ -23,7 +23,6 @@ use kapsaro_core::api::file::encrypt::{
     execute_encrypt_file_command_with_recipient_set_confirmation, resolve_encrypt_file_command,
 };
 use kapsaro_core::api::file::load_plaintext_bytes;
-use kapsaro_core::api::workspace::WorkspaceWriteDirectories;
 use kapsaro_core::{Error, Result};
 
 #[derive(Args)]
@@ -64,15 +63,7 @@ pub(crate) fn run(args: EncryptArgs) -> Result<()> {
         args.stdin,
     )?;
     let context = CliContext::resolve(&args.common)?;
-    let workspace_path = context.workspace_path()?;
-    let directories = WorkspaceWriteDirectories::open(workspace_path)?;
-    let session = resolve_cli_write_session(
-        &context,
-        &args.common,
-        directories,
-        args.member.member_handle.clone(),
-        false,
-    )?;
+    let session = open_cli_write_session(&context, args.member.member_handle.clone(), false)?;
     let encrypted = encrypt_under_trust_review(&session, &input_bytes)?;
 
     save_encrypted_output(output_path.as_ref(), &encrypted, args.common.quiet.quiet)?;
@@ -96,7 +87,7 @@ fn encrypt_under_trust_review(session: &CliWriteSession, input_bytes: &[u8]) -> 
             || {
                 execute_encrypt_file_command_with_recipient_set_confirmation(
                     &command,
-                    confirm_recipient_set_approval,
+                    |outcome, _| confirm_recipient_set_approval(outcome),
                 )
             },
         )

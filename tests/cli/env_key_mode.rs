@@ -574,3 +574,63 @@ fn test_env_key_mode_allows_doctor() {
         .success()
         .stdout(predicate::str::contains("\"checks\""));
 }
+
+/// The read path treats the value case-insensitively, so the diagnosis has to
+/// name the same states the read path acts on.
+#[test]
+fn test_env_key_doctor_warns_when_strict_key_checking_is_disabled_in_upper_case() {
+    let (workspace_dir, home_dir, _ssh_temp, _ssh_priv, exported_key) = setup_env_key_workspace();
+
+    let output = env_key_cmd(&home_dir, &exported_key, TEST_PASSWORD)
+        .arg("doctor")
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .arg("--home")
+        .arg(home_dir.path())
+        .arg("--json")
+        .env("KAPSARO_STRICT_KEY_CHECKING", "NO")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let report: serde_json::Value = serde_json::from_slice(&output).unwrap();
+    assert!(
+        report["checks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|check| { check["id"] == "ci.strict_key_checking" && check["status"] == "warn" }),
+        "{report}"
+    );
+}
+
+#[test]
+fn test_env_key_doctor_fails_when_strict_key_checking_is_neither_yes_nor_no() {
+    let (workspace_dir, home_dir, _ssh_temp, _ssh_priv, exported_key) = setup_env_key_workspace();
+
+    let output = env_key_cmd(&home_dir, &exported_key, TEST_PASSWORD)
+        .arg("doctor")
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .arg("--home")
+        .arg(home_dir.path())
+        .arg("--json")
+        .env("KAPSARO_STRICT_KEY_CHECKING", "maybe")
+        .assert()
+        .code(1)
+        .get_output()
+        .stdout
+        .clone();
+
+    let report: serde_json::Value = serde_json::from_slice(&output).unwrap();
+    assert!(
+        report["checks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|check| { check["id"] == "ci.strict_key_checking" && check["status"] == "fail" }),
+        "{report}"
+    );
+}

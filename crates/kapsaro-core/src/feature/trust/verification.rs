@@ -11,7 +11,7 @@ use crate::feature::verify::public_key::{
     verify_public_key_for_verification_context, TRUST_STORE_KEYSTORE_PUBLIC_KEY_CONTEXT,
 };
 use crate::format::schema::validator::load_embedded_trust_validator;
-use crate::format::signature::{decode_ed25519_signature, verify_signature_algorithm};
+use crate::format::signature::{decode_ed25519_signature, validate_signature_algorithm};
 use crate::format::trust_store::build_trust_store_signature_bytes;
 use crate::model::identity::{Kid, MemberHandle};
 use crate::model::public_key::{PublicKey, VerifiedSigningPublicKey};
@@ -48,8 +48,8 @@ pub(crate) fn verify_trust_store(
     validate_schema(doc)?;
     validate_format(doc)?;
     let signer_public_key = resolve_signer_public_key(doc, signer_keys)?;
-    let verified_signer_public_key = validate_signer_public_key(&signer_public_key)?;
-    validate_signature(doc, verified_signer_public_key.verifying_key())?;
+    let verified_signer_public_key = verify_signer_public_key(&signer_public_key)?;
+    verify_trust_store_signature(doc, verified_signer_public_key.verifying_key())?;
     validate_kid_match(doc, &signer_public_key)?;
     validate_owner_match(doc, &signer_public_key)?;
     validate_signer_independent_content(doc)?;
@@ -93,7 +93,7 @@ fn validate_format(doc: &TrustStoreDocument) -> Result<()> {
     Ok(())
 }
 
-/// Take the signer's public half out of the snapshot the caller captured.
+/// Take the signer's public half out of the snapshot the caller read beforehand.
 ///
 /// The snapshot holds one member's key, so a document naming another owner is
 /// rejected here rather than silently verified against a key that never
@@ -145,7 +145,7 @@ fn build_missing_signer_key_error(keystore_root: &Path, owner: &MemberHandle, ki
     .with_recovery(TRUST_SIGNER_KEY_MISSING_RECOVERY)
 }
 
-fn validate_signer_public_key(signer_public_key: &PublicKey) -> Result<VerifiedSigningPublicKey> {
+fn verify_signer_public_key(signer_public_key: &PublicKey) -> Result<VerifiedSigningPublicKey> {
     verify_public_key_for_verification_context(
         signer_public_key,
         TRUST_STORE_KEYSTORE_PUBLIC_KEY_CONTEXT,
@@ -159,7 +159,10 @@ fn validate_signer_public_key(signer_public_key: &PublicKey) -> Result<VerifiedS
     .map(|verified| verified.verified_public_key)
 }
 
-fn validate_signature(doc: &TrustStoreDocument, verifying_key: &VerifyingKey) -> Result<()> {
+fn verify_trust_store_signature(
+    doc: &TrustStoreDocument,
+    verifying_key: &VerifyingKey,
+) -> Result<()> {
     let canonical = build_trust_store_signature_bytes(&doc.protected)?;
     verify_trust_store_bytes(&canonical, verifying_key, &doc.signature).map_err(|e| {
         Error::build_crypto_error_with_source("Trust store signature verification failed", e)
@@ -172,7 +175,7 @@ pub fn verify_trust_store_bytes(
     verifying_key: &VerifyingKey,
     signature: &TrustStoreSignature,
 ) -> Result<()> {
-    verify_signature_algorithm(&signature.alg, SIGNATURE_ED25519)?;
+    validate_signature_algorithm(&signature.alg, SIGNATURE_ED25519)?;
     let signature_bytes = decode_ed25519_signature(&signature.sig)?;
     verify_detached_bytes(canonical_bytes, verifying_key, &signature_bytes)
 }

@@ -5,7 +5,7 @@
 
 use crate::cli::common::output::text::layout;
 use crate::cli::common::output::text::print_warning_line;
-use crate::cli::common::presentation::format_kid_display;
+use kapsaro_core::api::key::format_kid_display;
 use kapsaro_core::api::rewrap::promotion::PromotionReviewFailure;
 use kapsaro_core::api::trust::TrustApprovalCandidate;
 
@@ -111,5 +111,5 @@ pub(crate) fn format_github_verification(
 }
 
 #[cfg(test)]
-#[path = "../../../../../tests/unit/internal/cli_common_trust_test.rs"]
-mod tests;
+#[path = "../../../../../tests/unit/internal/cli_common_output_trust_review_test.rs"]
+mod cli_common_output_trust_review_test;

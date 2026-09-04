@@ -78,23 +78,29 @@ impl WrapSet {
     /// opened is the one `self_wrap_kid` named rather than another that happens
     /// to carry the same key id. An entry carrying the key id but naming
     /// somebody else is reported rather than opened.
-    pub fn find_by_kid_for_member(&self, kid: &str, member_handle: &str) -> Result<&RecipientWrap> {
-        if let Some(wrap_item) = self.items.iter().find(|item| {
-            item.kid.as_str() == kid && item.recipient_handle.as_str() == member_handle
-        }) {
+    pub fn find_by_kid_for_member(
+        &self,
+        kid: &Kid,
+        member_handle: &MemberHandle,
+    ) -> Result<&RecipientWrap> {
+        if let Some(wrap_item) = self
+            .items
+            .iter()
+            .find(|item| &item.kid == kid && &item.recipient_handle == member_handle)
+        {
             return Ok(wrap_item);
         }
 
-        match self.items.iter().find(|item| item.kid.as_str() == kid) {
+        match self.items.iter().find(|item| &item.kid == kid) {
             Some(wrap_item) => Err(Error::build_crypto_error(format!(
                 "wrap_item.rh '{}' does not match member_handle '{}' for kid '{}'",
                 wrap_item.recipient_handle,
                 member_handle,
-                format_kid_display_lossy(kid)
+                format_kid_display_lossy(kid.as_str())
             ))),
             None => Err(Error::build_crypto_error(format!(
                 "No wrap found for kid '{}' (member: {})",
-                format_kid_display_lossy(kid),
+                format_kid_display_lossy(kid.as_str()),
                 member_handle
             ))),
         }
@@ -105,10 +111,10 @@ impl WrapSet {
     /// `parse` accepted the set only after its recipient handles were checked
     /// for uniqueness, so at most one entry names any given member and the
     /// answer is a single key id rather than a list of candidates.
-    pub fn self_wrap_kid(&self, member_handle: &str) -> Option<&Kid> {
+    pub fn self_wrap_kid(&self, member_handle: &MemberHandle) -> Option<&Kid> {
         self.items
             .iter()
-            .find(|item| item.recipient_handle.as_str() == member_handle)
+            .find(|item| &item.recipient_handle == member_handle)
             .map(|item| &item.kid)
     }
 }

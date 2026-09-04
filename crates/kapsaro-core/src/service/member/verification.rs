@@ -11,6 +11,7 @@ use crate::feature::member::verification::{
 use crate::io::verify_online::github::verify_github_account;
 use crate::io::verify_online::VerificationResult;
 use crate::io::workspace::members::{get_active_member_file_path, list_active_member_paths};
+use crate::model::identity::MemberHandle;
 use crate::support::display::sanitize_display_field;
 use crate::support::path::format_path_relative_to_cwd;
 use crate::support::runtime::block_on;
@@ -20,7 +21,7 @@ use std::path::{Path, PathBuf};
 use super::types::MemberVerificationResult;
 use super::view::build_member_verification_result;
 
-pub fn verify_members(
+pub fn evaluate_members_online(
     workspace_path: &Path,
     member_handles: &[String],
 ) -> Result<Vec<MemberVerificationResult>> {
@@ -126,11 +127,14 @@ fn select_verification_member_files(
     member_handles
         .iter()
         .map(|member_handle| {
-            let path = get_active_member_file_path(workspace_path, member_handle);
+            // The handle names one entry of members/active, so it is validated
+            // as a handle before it is joined onto that directory.
+            let member_handle = MemberHandle::try_from(member_handle.as_str())?;
+            let path = get_active_member_file_path(workspace_path, member_handle.as_str());
             path.exists().then_some(path).ok_or_else(|| {
                 Error::build_not_found_error(format!(
                     "Member '{}' not found in active/",
-                    sanitize_display_field(member_handle)
+                    sanitize_display_field(member_handle.as_str())
                 ))
             })
         })
@@ -138,5 +142,5 @@ fn select_verification_member_files(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/internal/app_member_verification_test.rs"]
-mod tests;
+#[path = "../../../tests/unit/internal/service_member_verification_test.rs"]
+mod service_member_verification_test;

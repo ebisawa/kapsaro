@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::cli::common::{
-    cmd, make_secret_home, setup_workspace, BOB_MEMBER_HANDLE, TEST_MEMBER_HANDLE,
+    cmd, setup_secret_home, setup_workspace, BOB_MEMBER_HANDLE, TEST_MEMBER_HANDLE,
 };
 use kapsaro_core::test_support::storage::keystore::active::load_active_kid;
 use predicates::prelude::*;
@@ -19,7 +19,7 @@ fn assert_doctor_workspace_source(mut command: assert_cmd::Command, source: &str
 }
 
 #[test]
-fn test_doctor_missing_trust_store_warns_but_exits_success() {
+fn test_doctor_missing_trust_store_warns_but_exits_zero() {
     let (workspace_dir, home_dir, _ssh_temp, _ssh_priv) = setup_workspace();
 
     cmd()
@@ -60,7 +60,7 @@ fn test_doctor_debug_logs_local_state_without_password_env_name() {
 }
 
 #[test]
-fn test_doctor_json_missing_trust_store_warns_but_exits_success() {
+fn test_doctor_json_missing_trust_store_warns_but_exits_zero() {
     let (workspace_dir, home_dir, _ssh_temp, _ssh_priv) = setup_workspace();
 
     let output = cmd()
@@ -244,37 +244,24 @@ fn test_doctor_json_incomplete_workspace_fails_with_json() {
         .any(|check| { check["id"] == "workspace.structure" && check["status"] == "fail" }));
 }
 
+/// doctor resolves the owner through the same configuration chain as every
+/// other command, so a configuration file it cannot read is reported by name.
 #[test]
-fn test_doctor_reports_invalid_owner_config_and_continues_workspace_checks() {
+fn test_doctor_reports_an_unreadable_owner_configuration() {
     let (workspace_dir, home_dir, _ssh_temp, _ssh_priv) = setup_workspace();
     fs::write(home_dir.path().join("config.toml"), "member_handle = [\n").unwrap();
 
-    let output = cmd()
+    cmd()
         .arg("doctor")
         .arg("--json")
         .arg("--workspace")
         .arg(workspace_dir.path())
         .arg("--home")
         .arg(home_dir.path())
+        .env_remove("KAPSARO_MEMBER_HANDLE")
         .assert()
         .code(1)
-        .get_output()
-        .stdout
-        .clone();
-
-    let value: serde_json::Value = serde_json::from_slice(&output).unwrap();
-    assert!(value["checks"].as_array().unwrap().iter().any(|check| {
-        check["id"] == "keystore.member"
-            && check["status"] == "fail"
-            && check["reason"]
-                .as_str()
-                .is_some_and(|reason| reason.contains("Invalid TOML in config file"))
-    }));
-    assert!(value["checks"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .any(|check| { check["id"] == "members.active.present" && check["status"] == "ok" }));
+        .stderr(predicate::str::contains("Invalid TOML in config file"));
 }
 
 #[test]
@@ -299,7 +286,7 @@ fn test_doctor_env_key_without_explicit_member_keeps_local_owner_unresolved() {
         .stdout
         .clone();
     let exported_key = String::from_utf8(exported_key).unwrap();
-    let diagnostic_home = make_secret_home();
+    let diagnostic_home = setup_secret_home();
 
     let output = cmd()
         .arg("doctor")

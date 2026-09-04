@@ -26,7 +26,7 @@ fn hkdf_sha256_prk_expansion_matches_one_shot_derivation() {
     let salt = HkdfSalt::new([22u8; 32]);
     let info = Info::from_string("kapsaro:test:hkdf:info");
 
-    let prk = derive_hkdf_sha256_prk(&ikm, salt.as_bytes());
+    let prk = derive_hkdf_sha256_prk(&ikm, &salt);
     let from_prk = derive_hkdf_sha256_array_from_prk(&prk, &info).unwrap();
     let one_shot = derive_hkdf_sha256_array(&ikm, Some(&salt), &info).unwrap();
 
@@ -37,7 +37,7 @@ fn hkdf_sha256_prk_expansion_matches_one_shot_derivation() {
 fn hkdf_sha256_prk_expansion_is_bound_to_info() {
     let ikm = Ikm::from(&[33u8; 32][..]);
     let salt = HkdfSalt::new([44u8; 32]);
-    let prk = derive_hkdf_sha256_prk(&ikm, salt.as_bytes());
+    let prk = derive_hkdf_sha256_prk(&ikm, &salt);
     let info_a = Info::from_string("kapsaro:test:hkdf:info:a");
     let info_b = Info::from_string("kapsaro:test:hkdf:info:b");
 

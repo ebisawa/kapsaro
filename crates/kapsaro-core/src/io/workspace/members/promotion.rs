@@ -8,12 +8,12 @@ use super::paths::{
     ensure_members_root_at, member_file_name, open_optional_members_dir_at, open_status_dir_at,
     MemberStatus,
 };
-use super::store::{check_workspace_member_kid_uniqueness_in_open_dirs, MemberKidCandidate};
+use super::store::{enforce_workspace_member_kid_uniqueness_in_open_dirs, MemberKidCandidate};
 use crate::support::fs::lock;
 use crate::support::fs::read::load_capped_bytes;
 use crate::support::fs::relative::{
-    create_text_noreplace_at, ensure_text_file_content_matches_at, open_regular_file_at,
-    regular_file_exists_at, remove_file_at, save_text_at, DirectoryFd, OpenDir, RemovedEntry,
+    ensure_text_file_content_matches_at, open_regular_file_at, regular_file_exists_at,
+    remove_file_at, save_text_at, save_text_noreplace_at, DirectoryFd, OpenDir, RemovedEntry,
 };
 use crate::support::limits::MAX_JSON_DOCUMENT_READ_SIZE;
 use crate::support::path::format_path_relative_to_cwd;
@@ -53,7 +53,7 @@ where
     let Some(active_dir) = open_optional_members_dir_at(workspace, MemberStatus::Active)? else {
         return Ok(PromotionDestinationState::Missing);
     };
-    read_destination_state(&active_dir, &member_file_name(member_handle))
+    load_destination_state(&active_dir, &member_file_name(member_handle))
 }
 
 /// Promote every reviewed member through the workspace the review was made in.
@@ -129,7 +129,7 @@ fn ensure_destination_matches(
     file_name: &str,
     snapshot: &IncomingMemberPromotionSnapshot,
 ) -> Result<()> {
-    if read_destination_state(active_dir, file_name)? == snapshot.destination {
+    if load_destination_state(active_dir, file_name)? == snapshot.destination {
         return Ok(());
     }
     Err(Error::build_invalid_operation_error(format!(
@@ -138,7 +138,7 @@ fn ensure_destination_matches(
     )))
 }
 
-fn read_destination_state<D>(dir: &D, file_name: &str) -> Result<PromotionDestinationState>
+fn load_destination_state<D>(dir: &D, file_name: &str) -> Result<PromotionDestinationState>
 where
     D: DirectoryFd,
 {
@@ -166,7 +166,7 @@ fn promote_snapshotted_member(
         // A member new to active/ must not take over a name something else
         // created since the review, so the write refuses to replace an entry.
         PromotionDestinationState::Missing => {
-            create_text_noreplace_at(active_dir, &file_name, &snapshot.source_content)?
+            save_text_noreplace_at(active_dir, &file_name, &snapshot.source_content)?
         }
         PromotionDestinationState::Present(_) => {
             save_text_at(active_dir, &file_name, &snapshot.source_content)?
@@ -223,7 +223,7 @@ fn ensure_snapshotted_promotion_kids_are_unique(
         .iter()
         .map(|snapshot| (MemberStatus::Incoming, snapshot.member_handle.clone()))
         .collect::<Vec<_>>();
-    check_workspace_member_kid_uniqueness_in_open_dirs(
+    enforce_workspace_member_kid_uniqueness_in_open_dirs(
         active_dir,
         incoming_dir,
         &candidates,

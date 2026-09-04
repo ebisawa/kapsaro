@@ -21,6 +21,10 @@ pub use crate::service::trust::{
     TrustApprovalCandidate, WriteTrustOptions,
 };
 
+pub use crate::service::trust::{
+    StrictKeyChecking, StrictKeyCheckingResolution, StrictKeyCheckingSource,
+};
+
 pub mod enforcement {
     pub use crate::service::trust::{
         ArtifactRecipientHandleHint, ArtifactRecipientSetReview, ArtifactRecipientSetSnapshot,
@@ -46,7 +50,7 @@ pub mod management {
 pub mod recovery {
     pub use crate::service::trust::recovery::{
         build_trust_store_reset_plan_from_list_command, build_trust_store_reset_plan_from_session,
-        classify_trust_store_reset, execute_trust_store_reset,
+        evaluate_trust_store_reset, execute_trust_store_reset,
         observe_trust_store_recovery_from_list_command, observe_trust_store_recovery_from_session,
         TrustStoreRecoveryToken, TrustStoreResetCause, TrustStoreResetLoss, TrustStoreResetPlan,
     };
@@ -59,6 +63,7 @@ pub mod resign {
 pub mod review {
     pub use crate::service::trust::review::{
         execute_read_with_signer_trust, review_write_recipient_trust, ReadSignerTrustReviewPlan,
-        SignerTrustLabels, TrustReviewContext, WriteRecipientTrustReviewPlan,
+        ReadTrustConfirmations, SignerTrustLabels, TrustReviewContext,
+        WriteRecipientTrustReviewPlan,
     };
 }

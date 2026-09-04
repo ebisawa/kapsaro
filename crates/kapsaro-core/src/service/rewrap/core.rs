@@ -12,6 +12,7 @@ use crate::feature::rewrap::{rewrap_content, RewrapRequest};
 use crate::format::content::EncContent;
 use crate::io::trust::paths::TRUST_DIR_NAME;
 use crate::io::workspace::setup::SECRETS_DIR_NAME;
+use crate::service::artifact::verified::{EncArtifactKind, VerifiedEncArtifact};
 use crate::service::artifact::ReviewedTextFile;
 use crate::service::file::{FileEncArtifact, VerifiedFileEncArtifact};
 use crate::service::key::{KeyContext, Kid, MemberHandle, RecipientKeys};
@@ -72,14 +73,9 @@ impl RewrapOptions {
     }
 }
 
-enum AuthorizedArtifact {
-    File(VerifiedFileEncArtifact),
-    Kv(VerifiedKvEncArtifact),
-}
-
 /// Trust-authorized rewrap input bound to artifact, recipients, key, and options.
 pub struct AuthorizedRewrapInput<'a> {
-    artifact: AuthorizedArtifact,
+    content: EncContent,
     recipients: RecipientKeys,
     key_ctx: &'a KeyContext,
     options: RewrapOptions,
@@ -186,9 +182,17 @@ struct RewrapPublishTarget {
     reviewed: ReviewedTextFile,
 }
 
-enum PreparedRewrapReview {
+enum RewrapReviewPlan {
     Ready(Box<(RewrapTarget, ReviewedTextFile)>),
     Review(Box<RewrapReview>),
+}
+
+/// Pre- and post-promotion evaluators with the recipient set fixed for one decision.
+struct RewrapTrustSnapshot {
+    input: TrustPolicyEvaluator,
+    output: TrustPolicyEvaluator,
+    recipients: RecipientKeys,
+    members: CurrentMemberSnapshot,
 }
 
 struct RewrapReviewInput {
@@ -220,71 +224,53 @@ pub struct RewrapAcceptance {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) enum RewrapArtifactKind {
-    File,
-    Kv,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
 struct RewrapOperationBinding {
-    artifact_kind: RewrapArtifactKind,
+    artifact_kind: EncArtifactKind,
     options: RewrapOptions,
 }
 
-impl<'a> AuthorizedRewrapInput<'a> {
-    pub(crate) fn from_file(
-        artifact: VerifiedFileEncArtifact,
-        recipients: RecipientKeys,
-        key_ctx: &'a KeyContext,
-        options: RewrapOptions,
-    ) -> Result<Self> {
-        key_ctx.enforce_decryption_key_not_expired(
-            &artifact.inner().document().protected.wrap,
-            options.operation_options(),
-        )?;
-        key_ctx.inner().enforce_signing_key_not_expired()?;
-        crate::feature::envelope::key_possession::verify_file_key_possession(
-            artifact.inner(),
-            crate::feature::envelope::unwrap::unwrap_master_key_for_file_with_context(
-                artifact.inner(),
-                key_ctx.member_handle(),
-                key_ctx.inner(),
-            )?
-            .value,
-        )?;
-        Ok(Self {
-            artifact: AuthorizedArtifact::File(artifact),
-            recipients,
-            key_ctx,
-            options,
-            publish_target: None,
-        })
-    }
+/// The artifact a rewrap runs on, with the values every later step reads off it.
+///
+/// The digest and the operation binding are derived from the artifact and the
+/// options together, so deriving them once keeps the value a review is checked
+/// against identical to the one the capability is bound to.
+struct VerifiedRewrapArtifact<A> {
+    artifact: A,
+    digest: [u8; 32],
+    operation: RewrapOperationBinding,
+}
 
-    pub(crate) fn from_kv(
-        artifact: VerifiedKvEncArtifact,
+fn verify_rewrap_artifact<A: VerifiedEncArtifact>(
+    reviewed: &ReviewedTextFile,
+    options: RewrapOptions,
+) -> Result<VerifiedRewrapArtifact<A>> {
+    let artifact = A::verify_text(reviewed.require_content()?, options.operation_options())?;
+    let digest = artifact.binding_digest();
+    Ok(VerifiedRewrapArtifact {
+        artifact,
+        digest,
+        operation: RewrapOperationBinding {
+            artifact_kind: A::KIND,
+            options,
+        },
+    })
+}
+
+impl<'a> AuthorizedRewrapInput<'a> {
+    pub(crate) fn from_verified<A: VerifiedEncArtifact>(
+        artifact: A,
         recipients: RecipientKeys,
         key_ctx: &'a KeyContext,
         options: RewrapOptions,
     ) -> Result<Self> {
-        let document = artifact.inner().document();
         key_ctx.enforce_decryption_key_not_expired(
-            &document.wrap().wrap,
+            artifact.wrap_items(),
             options.operation_options(),
         )?;
         key_ctx.inner().enforce_signing_key_not_expired()?;
-        crate::feature::envelope::key_possession::verify_kv_key_possession(
-            artifact.inner(),
-            crate::feature::envelope::unwrap::unwrap_master_key_for_kv_with_context(
-                &document.head().sid,
-                &document.wrap().wrap,
-                key_ctx.member_handle(),
-                key_ctx.inner(),
-            )?
-            .value,
-        )?;
+        artifact.verify_key_possession(key_ctx)?;
         Ok(Self {
-            artifact: AuthorizedArtifact::Kv(artifact),
+            content: artifact.into_enc_content(),
             recipients,
             key_ctx,
             options,
@@ -294,12 +280,8 @@ impl<'a> AuthorizedRewrapInput<'a> {
 
     /// Rewrite the exact artifact and recipient set authorized by trust policy.
     pub fn rewrite(&self) -> Result<String> {
-        let content = match &self.artifact {
-            AuthorizedArtifact::File(artifact) => EncContent::FileEnc(artifact.content().clone()),
-            AuthorizedArtifact::Kv(artifact) => EncContent::KvEnc(artifact.content().clone()),
-        };
         rewrap_content(
-            &content,
+            &self.content,
             &RewrapRequest {
                 member_handle: self.key_ctx.member_handle().as_str(),
                 key_ctx: self.key_ctx.inner(),
@@ -409,11 +391,18 @@ impl RewrapTarget {
         )
     }
 
-    fn artifact_kind(&self) -> Result<RewrapArtifactKind> {
-        match crate::service::artifact::detect_reviewed_artifact(&self.review()?)? {
-            EncContent::FileEnc(_) => Ok(RewrapArtifactKind::File),
-            EncContent::KvEnc(_) => Ok(RewrapArtifactKind::Kv),
-        }
+    /// Read the artifact once and report which kind the bytes turned out to be.
+    ///
+    /// The read is handed back with the kind so the authorization that follows
+    /// works on the same bytes the detection saw, rather than reading the
+    /// target a second time.
+    fn review_with_kind(&self) -> Result<(EncArtifactKind, ReviewedTextFile)> {
+        let reviewed = self.review()?;
+        let kind = match crate::service::artifact::detect_reviewed_artifact(&reviewed)? {
+            EncContent::FileEnc(_) => EncArtifactKind::File,
+            EncContent::KvEnc(_) => EncArtifactKind::Kv,
+        };
+        Ok((kind, reviewed))
     }
 
     fn ensure_parent_current(&self) -> Result<()> {
@@ -702,7 +691,11 @@ impl<'a> RewrapSession<'a> {
             .into_accepted_candidates_and_approvals(accepted_member_handles)?;
         let promoted_member_handles =
             super::snapshot::promote_accepted_incoming_members(&self.workspace, &candidates)?;
-        self.ensure_post_promotion_snapshot()?;
+        if promoted_member_handles.is_empty() {
+            self.ensure_post_promotion_snapshot()?;
+        } else {
+            self.refresh_post_promotion_snapshot()?;
+        }
         let trust_outcome = if approvals.is_empty() {
             None
         } else {
@@ -749,9 +742,20 @@ impl<'a> RewrapSession<'a> {
         options: RewrapOptions,
         allow_non_member: bool,
     ) -> Result<RewrapSessionDecision<AuthorizedRewrapInput<'s>>> {
-        match target.artifact_kind()? {
-            RewrapArtifactKind::File => self.begin_file_rewrap(target, options, allow_non_member),
-            RewrapArtifactKind::Kv => self.begin_kv_rewrap(target, options, allow_non_member),
+        let (kind, reviewed) = target.review_with_kind()?;
+        match kind {
+            EncArtifactKind::File => self.begin_rewrap_as::<VerifiedFileEncArtifact>(
+                target,
+                reviewed,
+                options,
+                allow_non_member,
+            ),
+            EncArtifactKind::Kv => self.begin_rewrap_as::<VerifiedKvEncArtifact>(
+                target,
+                reviewed,
+                options,
+                allow_non_member,
+            ),
         }
     }
 
@@ -762,107 +766,123 @@ impl<'a> RewrapSession<'a> {
         options: RewrapOptions,
         acceptance: Option<RewrapAcceptance>,
     ) -> Result<RewrapSessionDecision<AuthorizedRewrapInput<'s>>> {
+        let review = *review;
         match review.operation.artifact_kind {
-            RewrapArtifactKind::File => self.resume_file_rewrap(review, options, acceptance),
-            RewrapArtifactKind::Kv => self.resume_kv_rewrap(review, options, acceptance),
+            EncArtifactKind::File => {
+                self.resume_rewrap_as::<VerifiedFileEncArtifact>(review, options, acceptance)
+            }
+            EncArtifactKind::Kv => {
+                self.resume_rewrap_as::<VerifiedKvEncArtifact>(review, options, acceptance)
+            }
         }
     }
 
-    /// Begin file rewrap authorization from the session's fixed snapshots.
-    pub fn begin_file_rewrap<'s>(
+    /// Begin authorization from an artifact this session already read.
+    fn begin_rewrap_as<'s, A: VerifiedEncArtifact>(
         &'s self,
         target: RewrapTarget,
+        reviewed: ReviewedTextFile,
         options: RewrapOptions,
         allow_non_member: bool,
     ) -> Result<RewrapSessionDecision<AuthorizedRewrapInput<'s>>> {
         self.ensure_post_promotion_snapshot()?;
-        let reviewed = target.review()?;
-        let artifact = FileEncArtifact::parse(reviewed.require_content()?.to_string())?
-            .verify(options.operation_options())?;
-        let digest = artifact.binding_digest()?;
-        let operation = RewrapOperationBinding {
-            artifact_kind: RewrapArtifactKind::File,
-            options,
+        let verified = verify_rewrap_artifact::<A>(&reviewed, options)?;
+        let prepared =
+            self.build_input_review_plan(&verified, target, reviewed, allow_non_member)?;
+        let (target, reviewed) = match prepared {
+            RewrapReviewPlan::Ready(ready) => *ready,
+            RewrapReviewPlan::Review(review) => {
+                return Ok(RewrapSessionDecision::ReviewRequired(review));
+            }
         };
+        self.decide_rewrap(
+            verified.artifact,
+            self.load_trust_snapshot()?,
+            verified.operation,
+            verified.digest,
+            None,
+            RewrapPublishTarget::new(target, reviewed),
+        )
+    }
+
+    /// Read the input's trust state and settle on the review the rewrap needs.
+    ///
+    /// The evaluator loaded here is the pre-promotion one, so what the review
+    /// shows is the trust state the input was read under rather than the state
+    /// the output is later judged against.
+    fn build_input_review_plan<A: VerifiedEncArtifact>(
+        &self,
+        verified: &VerifiedRewrapArtifact<A>,
+        target: RewrapTarget,
+        reviewed: ReviewedTextFile,
+        allow_non_member: bool,
+    ) -> Result<RewrapReviewPlan> {
         let input = self.load_input_evaluator()?;
-        let subject = artifact.recipient_set_subject()?;
-        let review = input.preflight_file_read(
-            &artifact,
+        let subject = verified.artifact.recipient_set_subject()?;
+        let input_review = input.preflight_read(
+            &verified.artifact,
             self.key_ctx,
             KnownKeyReview::Required,
             allow_non_member,
         )?;
-        let prepared = self.build_review(
+        self.build_review(
             RewrapReviewInput {
                 target,
-                digest,
-                operation,
+                digest: verified.digest,
+                operation: verified.operation,
                 input_state: input,
-                input_review: review,
+                input_review,
                 reviewed,
             },
             &subject,
-        )?;
-        let (target, reviewed) = match prepared {
-            PreparedRewrapReview::Ready(ready) => *ready,
-            PreparedRewrapReview::Review(review) => {
-                return Ok(RewrapSessionDecision::ReviewRequired(review));
-            }
-        };
-        let (input, output, recipients, members) = self.load_evaluators_and_recipients()?;
-        let decision = output.evaluate_file_rewrap(
-            &input,
-            artifact,
-            recipients,
-            self.key_ctx,
-            options,
-            None,
-        )?;
-        into_session_decision(
-            decision,
-            digest,
-            operation,
-            None,
-            RewrapPublishTarget::new(target, reviewed),
-            input,
-            members,
         )
     }
 
-    /// Resume file authorization after persisting reviews and optional acceptance.
-    pub fn resume_file_rewrap<'s>(
+    /// Resume authorization after persisting reviews and optional acceptance.
+    fn resume_rewrap_as<'s, A: VerifiedEncArtifact>(
         &'s self,
-        review: Box<RewrapReview>,
+        review: RewrapReview,
         options: RewrapOptions,
         acceptance: Option<RewrapAcceptance>,
     ) -> Result<RewrapSessionDecision<AuthorizedRewrapInput<'s>>> {
-        let review = *review;
         review
             .reviewed
             .ensure_identity_and_content_current_at(review.target.dir.as_ref())?;
-        let artifact = FileEncArtifact::parse(review.reviewed.require_content()?.to_string())?
-            .verify(options.operation_options())?;
-        let digest = artifact.binding_digest()?;
-        let operation = RewrapOperationBinding {
-            artifact_kind: RewrapArtifactKind::File,
-            options,
-        };
-        review.validate(digest, operation)?;
-        let (input, output, recipients, members) = self.load_evaluators_and_recipients()?;
+        let verified = verify_rewrap_artifact::<A>(&review.reviewed, options)?;
+        review.validate(verified.digest, verified.operation)?;
+        let snapshot = self.load_trust_snapshot()?;
         let live_members = CurrentMemberSnapshot::load_at(&self.workspace)?;
-        review.validate_state(&input, &live_members)?;
+        review.validate_state(&snapshot.input, &live_members)?;
         let expected_review_id = review.expected_acceptance_review_id();
         let acceptance =
             resolve_session_acceptance(acceptance, review.accepted_non_member, expected_review_id)?;
+        self.decide_rewrap(
+            verified.artifact,
+            snapshot,
+            verified.operation,
+            verified.digest,
+            acceptance,
+            RewrapPublishTarget::new(review.target, review.reviewed),
+        )
+    }
+
+    /// Re-evaluate input and output trust, then bind the rewrap capability.
+    fn decide_rewrap<'s, A: VerifiedEncArtifact>(
+        &'s self,
+        artifact: A,
+        snapshot: RewrapTrustSnapshot,
+        operation: RewrapOperationBinding,
+        digest: [u8; 32],
+        acceptance: Option<RewrapAcceptance>,
+        publish_target: RewrapPublishTarget,
+    ) -> Result<RewrapSessionDecision<AuthorizedRewrapInput<'s>>> {
         let retained_acceptance = acceptance.as_ref().map(RewrapAcceptance::duplicate);
-        let target = review.target;
-        let reviewed = review.reviewed;
-        let decision = output.evaluate_file_rewrap(
-            &input,
+        let decision = snapshot.output.evaluate_rewrap(
+            &snapshot.input,
             artifact,
-            recipients,
+            snapshot.recipients,
             self.key_ctx,
-            options,
+            operation.options,
             acceptance,
         )?;
         into_session_decision(
@@ -870,114 +890,9 @@ impl<'a> RewrapSession<'a> {
             digest,
             operation,
             retained_acceptance,
-            RewrapPublishTarget::new(target, reviewed),
-            input,
-            members,
-        )
-    }
-
-    /// Begin KV rewrap authorization from the session's fixed snapshots.
-    pub fn begin_kv_rewrap<'s>(
-        &'s self,
-        target: RewrapTarget,
-        options: RewrapOptions,
-        allow_non_member: bool,
-    ) -> Result<RewrapSessionDecision<AuthorizedRewrapInput<'s>>> {
-        self.ensure_post_promotion_snapshot()?;
-        let reviewed = target.review()?;
-        let artifact =
-            crate::service::kv::KvEncArtifact::parse(reviewed.require_content()?.to_string())?
-                .verify(options.operation_options())?;
-        let digest = artifact.binding_digest();
-        let operation = RewrapOperationBinding {
-            artifact_kind: RewrapArtifactKind::Kv,
-            options,
-        };
-        let input = self.load_input_evaluator()?;
-        let subject = artifact.recipient_set_subject()?;
-        let review = input.preflight_kv_read(
-            &artifact,
-            self.key_ctx,
-            KnownKeyReview::Required,
-            allow_non_member,
-        )?;
-        let prepared = self.build_review(
-            RewrapReviewInput {
-                target,
-                digest,
-                operation,
-                input_state: input,
-                input_review: review,
-                reviewed,
-            },
-            &subject,
-        )?;
-        let (target, reviewed) = match prepared {
-            PreparedRewrapReview::Ready(ready) => *ready,
-            PreparedRewrapReview::Review(review) => {
-                return Ok(RewrapSessionDecision::ReviewRequired(review));
-            }
-        };
-        let (input, output, recipients, members) = self.load_evaluators_and_recipients()?;
-        let decision =
-            output.evaluate_kv_rewrap(&input, artifact, recipients, self.key_ctx, options, None)?;
-        into_session_decision(
-            decision,
-            digest,
-            operation,
-            None,
-            RewrapPublishTarget::new(target, reviewed),
-            input,
-            members,
-        )
-    }
-
-    /// Resume KV authorization after persisting reviews and optional acceptance.
-    pub fn resume_kv_rewrap<'s>(
-        &'s self,
-        review: Box<RewrapReview>,
-        options: RewrapOptions,
-        acceptance: Option<RewrapAcceptance>,
-    ) -> Result<RewrapSessionDecision<AuthorizedRewrapInput<'s>>> {
-        let review = *review;
-        review
-            .reviewed
-            .ensure_identity_and_content_current_at(review.target.dir.as_ref())?;
-        let artifact = crate::service::kv::KvEncArtifact::parse(
-            review.reviewed.require_content()?.to_string(),
-        )?
-        .verify(options.operation_options())?;
-        let digest = artifact.binding_digest();
-        let operation = RewrapOperationBinding {
-            artifact_kind: RewrapArtifactKind::Kv,
-            options,
-        };
-        review.validate(digest, operation)?;
-        let (input, output, recipients, members) = self.load_evaluators_and_recipients()?;
-        let live_members = CurrentMemberSnapshot::load_at(&self.workspace)?;
-        review.validate_state(&input, &live_members)?;
-        let expected_review_id = review.expected_acceptance_review_id();
-        let acceptance =
-            resolve_session_acceptance(acceptance, review.accepted_non_member, expected_review_id)?;
-        let retained_acceptance = acceptance.as_ref().map(RewrapAcceptance::duplicate);
-        let target = review.target;
-        let reviewed = review.reviewed;
-        let decision = output.evaluate_kv_rewrap(
-            &input,
-            artifact,
-            recipients,
-            self.key_ctx,
-            options,
-            acceptance,
-        )?;
-        into_session_decision(
-            decision,
-            digest,
-            operation,
-            retained_acceptance,
-            RewrapPublishTarget::new(target, reviewed),
-            input,
-            members,
+            publish_target,
+            snapshot.input,
+            snapshot.members,
         )
     }
 
@@ -985,7 +900,55 @@ impl<'a> RewrapSession<'a> {
         &self,
         input: RewrapReviewInput,
         subject: &RecipientSetSubject,
-    ) -> Result<PreparedRewrapReview> {
+    ) -> Result<RewrapReviewPlan> {
+        if input.input_review.non_member_signer().is_some() {
+            return self.build_non_member_review(input);
+        }
+        self.build_recipient_review(input, subject)
+    }
+
+    /// Open a review that shows only the non-member signer.
+    ///
+    /// Recipient requests stay out of it until the signer is accepted, so the
+    /// operator is not asked to approve keys from an artifact they may refuse.
+    fn build_non_member_review(&self, input: RewrapReviewInput) -> Result<RewrapReviewPlan> {
+        let RewrapReviewInput {
+            target,
+            digest,
+            operation,
+            input_state,
+            input_review,
+            reviewed,
+        } = input;
+        let non_member = input_review.non_member_signer().map(|review| {
+            RewrapNonMemberReview::from_verified(
+                digest,
+                operation.artifact_kind,
+                operation.options,
+                review,
+            )
+        });
+        let post_promotion_members = self.ensure_post_promotion_snapshot()?.members().clone();
+        Ok(RewrapReviewPlan::Review(Box::new(RewrapReview {
+            target,
+            digest,
+            operation,
+            requests: Vec::new(),
+            first_request_is_signer: false,
+            non_member,
+            accepted_non_member: None,
+            reviewed,
+            input_state,
+            post_promotion_members: Some(post_promotion_members),
+        })))
+    }
+
+    /// Collect the input and output recipient requests one rewrap still needs.
+    fn build_recipient_review(
+        &self,
+        input: RewrapReviewInput,
+        subject: &RecipientSetSubject,
+    ) -> Result<RewrapReviewPlan> {
         let RewrapReviewInput {
             target,
             digest,
@@ -995,66 +958,52 @@ impl<'a> RewrapSession<'a> {
             reviewed,
         } = input;
         let first_request_is_signer = input_review.first_request_is_signer();
-        let non_member = input_review.non_member_signer().map(|review| {
-            RewrapNonMemberReview::from_verified(
-                digest,
-                operation.artifact_kind,
-                operation.options,
-                review,
-            )
-        });
-        if non_member.is_some() {
-            let post_promotion_members = self.ensure_post_promotion_snapshot()?.members().clone();
-            return Ok(PreparedRewrapReview::Review(Box::new(RewrapReview {
-                target,
-                digest,
-                operation,
-                requests: Vec::new(),
-                first_request_is_signer: false,
-                non_member,
-                accepted_non_member: None,
-                reviewed,
-                input_state,
-                post_promotion_members: Some(post_promotion_members),
-            })));
-        }
         let mut requests = input_review.into_recipient_requests()?;
-        let (_, output, recipients, members) = self.load_evaluators_and_recipients()?;
-        requests.extend(output.preflight_rewrap_output(subject, &recipients, self.key_ctx)?);
-        if requests.is_empty() && non_member.is_none() {
-            return Ok(PreparedRewrapReview::Ready(Box::new((target, reviewed))));
+        let snapshot = self.load_trust_snapshot()?;
+        requests.extend(snapshot.output.preflight_rewrap_output(
+            subject,
+            &snapshot.recipients,
+            self.key_ctx,
+        )?);
+        if requests.is_empty() {
+            return Ok(RewrapReviewPlan::Ready(Box::new((target, reviewed))));
         }
-        Ok(PreparedRewrapReview::Review(Box::new(RewrapReview {
+        Ok(RewrapReviewPlan::Review(Box::new(RewrapReview {
             target,
             digest,
             operation,
             requests,
             first_request_is_signer,
-            non_member,
+            non_member: None,
             accepted_non_member: None,
             reviewed,
             input_state,
-            post_promotion_members: Some(members),
+            post_promotion_members: Some(snapshot.members),
         })))
     }
 
-    fn load_evaluators_and_recipients(
-        &self,
-    ) -> Result<(
-        TrustPolicyEvaluator,
-        TrustPolicyEvaluator,
-        RecipientKeys,
-        CurrentMemberSnapshot,
-    )> {
+    /// Fix the evaluators and recipient set that one rewrap decision reads.
+    fn load_trust_snapshot(&self) -> Result<RewrapTrustSnapshot> {
         let snapshot = self.ensure_post_promotion_snapshot()?;
         let members = snapshot.members().clone();
         let recipients = snapshot.recipients().clone();
         let store = self.load_store()?;
         let output = TrustPolicyEvaluator::new(members.clone(), store);
         let input = output.with_members(self.pre_promotion_members.clone());
-        Ok((input, output, recipients, members))
+        Ok(RewrapTrustSnapshot {
+            input,
+            output,
+            recipients,
+            members,
+        })
     }
 
+    /// Return the members and recipients every target of this session writes to,
+    /// reading them once and holding them for the rest of the session.
+    ///
+    /// A session that answers this before promoting has fixed the set without
+    /// the members it is about to admit, so [`Self::apply_promotions`] replaces
+    /// what is held here rather than adding to it.
     fn ensure_post_promotion_snapshot(&self) -> Result<super::snapshot::PostPromotionSnapshot> {
         let mut slot = self
             .post_promotion_snapshot
@@ -1066,6 +1015,22 @@ impl<'a> RewrapSession<'a> {
         let snapshot = super::snapshot::PostPromotionSnapshot::load_at(&self.workspace)?;
         *slot = Some(snapshot.clone());
         Ok(snapshot)
+    }
+
+    /// Read the members again after a promotion and replace what was held.
+    ///
+    /// The snapshot taken before the promotion answers from a workspace the
+    /// promoted members were not in yet, and every recipient set this session
+    /// writes comes from it. Leaving that answer in place would rewrap the
+    /// artifacts to everyone except the members just admitted to read them.
+    fn refresh_post_promotion_snapshot(&self) -> Result<()> {
+        let snapshot = super::snapshot::PostPromotionSnapshot::load_at(&self.workspace)?;
+        let mut slot = self
+            .post_promotion_snapshot
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        *slot = Some(snapshot);
+        Ok(())
     }
 
     fn load_input_evaluator(&self) -> Result<TrustPolicyEvaluator> {
@@ -1225,7 +1190,7 @@ fn into_session_decision<'a>(
 impl RewrapNonMemberReview {
     pub(crate) fn from_verified(
         digest: [u8; 32],
-        artifact_kind: RewrapArtifactKind,
+        artifact_kind: EncArtifactKind,
         options: RewrapOptions,
         review: &NonMemberSignerReview,
     ) -> Self {
@@ -1286,7 +1251,7 @@ impl RewrapAcceptance {
     pub(crate) fn validate(
         self,
         digest: [u8; 32],
-        artifact_kind: RewrapArtifactKind,
+        artifact_kind: EncArtifactKind,
         options: RewrapOptions,
         candidate: &KnownKeyReviewCandidate,
     ) -> Result<(MemberHandle, Kid)> {
@@ -1332,5 +1297,5 @@ fn resolve_session_acceptance(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/internal/api_rewrap_test.rs"]
-mod tests;
+#[path = "../../../tests/unit/internal/service_rewrap_core_test.rs"]
+mod service_rewrap_core_test;

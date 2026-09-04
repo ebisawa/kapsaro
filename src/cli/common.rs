@@ -12,6 +12,7 @@ pub(crate) mod kv_read;
 pub(crate) mod presentation;
 pub(crate) mod prompt;
 pub(crate) mod read_review;
+pub(crate) mod read_session;
 
 pub(crate) mod output;
 

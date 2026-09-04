@@ -3,7 +3,7 @@
 
 //! File payload encryption operations
 
-use crate::crypto::rng::fill_secret_array;
+use crate::crypto::rng::generate_secret_array;
 use crate::crypto::types::data::Plaintext;
 use crate::crypto::types::keys::{MacKey, MasterKey, XChaChaKey};
 use crate::feature::context::crypto::SigningContext;
@@ -52,7 +52,7 @@ fn validate_recipient_members(
 ///
 /// Returns plaintext wrapped in Zeroizing to ensure it's zeroed after encryption.
 fn build_encrypt_context(content: &[u8]) -> Result<(MasterKey, Zeroizing<Vec<u8>>)> {
-    let master_key_bytes = fill_secret_array::<32>()?;
+    let master_key_bytes = generate_secret_array::<32>()?;
     let master_key = MasterKey::from_zeroizing(master_key_bytes);
     Ok((master_key, Zeroizing::new(content.to_vec())))
 }

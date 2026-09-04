@@ -30,17 +30,16 @@ pub fn save_private_export_text(path: impl AsRef<std::path::Path>, content: &str
 }
 
 /// Validate an encoded password-protected key without constructing a context.
-pub fn validate_environment_key(encoded: SecretString, password: SecretString) -> Result<()> {
-    crate::feature::context::env_key::load_private_key(encoded.into_inner(), password.into_inner())
+pub fn load_environment_key(encoded: SecretString, password: SecretString) -> Result<()> {
+    crate::feature::context::env_key::parse_env_key(encoded.into_inner(), password.into_inner())
         .map(|_| ())
 }
 
 use crate::service::operation::OperationOptions;
 use crate::service::secret::SecretString;
 use crate::service::ssh::{
-    into_internal_backend, resolve_ssh_signing_context,
-    resolve_ssh_signing_context_for_fingerprint, SshSignatureBackend, SshSigningContextResolution,
-    SshSigningInputs,
+    into_internal_backend, resolve_ssh_signing_context_for_fingerprint, SshSignatureBackend,
+    SshSigningContextResolution, SshSigningInputs,
 };
 
 /// Filesystem-backed local keystore.
@@ -102,9 +101,9 @@ impl LocalKeyStore {
         KeystoreAccess::open_from_anchored_home_required(&home, owner).map(|access| Self { access })
     }
 
-    /// Create or reuse a restricted keystore directory.
-    pub fn create(root: impl Into<PathBuf>) -> Result<Self> {
-        KeystoreAccess::create(root).map(|access| Self { access })
+    /// Open a restricted keystore directory, creating it when it is absent.
+    pub fn ensure(root: impl Into<PathBuf>) -> Result<Self> {
+        KeystoreAccess::ensure(root).map(|access| Self { access })
     }
 
     /// Return the keystore root directory.
@@ -158,7 +157,7 @@ impl LocalKeyStore {
             request.kid.as_ref().map(Kid::as_str),
         )?;
         let fingerprint = resolve_ssh_fingerprint(&private_key)?;
-        let ssh = resolve_ssh_signing_context(&request.ssh, fingerprint)?;
+        let ssh = resolve_ssh_signing_context_for_fingerprint(&request.ssh, fingerprint, false)?;
         let key_ctx = load_crypto_context_from_keystore_with_selected_kid(
             self.access.clone(),
             request.member_handle,
@@ -274,7 +273,7 @@ impl KeyContext {
         password: SecretString,
         workspace_path: PathBuf,
     ) -> Result<Self> {
-        let result = crate::feature::context::env_key::load_private_key(
+        let result = crate::feature::context::env_key::parse_env_key(
             encoded.into_inner(),
             password.into_inner(),
         )?;
@@ -330,7 +329,7 @@ fn resolve_ssh_fingerprint(private_key: &PrivateKey) -> Result<&str> {
 }
 
 fn build_environment_crypto_context(
-    result: crate::feature::context::env_key::EnvKeyLoadResult,
+    result: crate::feature::context::env_key::EnvKeyParseResult,
     workspace_path: PathBuf,
 ) -> Result<CryptoContext> {
     let kid = Kid::try_from(result.verified_key.proof().kid().to_string())?;

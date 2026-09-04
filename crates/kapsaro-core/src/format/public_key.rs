@@ -46,5 +46,5 @@ pub fn build_attestation_body_bytes(input: &AttestationBodyInput<'_>) -> Result<
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/internal/format_context_test.rs"]
-mod format_context_test;
+#[path = "../../tests/unit/internal/format_public_key_test.rs"]
+mod format_public_key_test;

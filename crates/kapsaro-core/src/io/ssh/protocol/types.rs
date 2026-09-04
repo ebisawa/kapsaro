@@ -13,5 +13,5 @@ pub use blob::SshSignatureBlob;
 pub use signature::Ed25519RawSignature;
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/internal/ssh_protocol_types_test.rs"]
-mod ssh_protocol_types_test;
+#[path = "../../../../tests/unit/internal/io_ssh_protocol_types_test.rs"]
+mod io_ssh_protocol_types_test;

@@ -292,4 +292,4 @@ fn format_member_show_field_lines(label: &str, value: &str) -> Vec<String> {
 
 #[cfg(test)]
 #[path = "../../../../../tests/unit/internal/cli_common_output_text_member_test.rs"]
-mod tests;
+mod cli_common_output_text_member_test;

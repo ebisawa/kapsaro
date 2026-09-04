@@ -7,8 +7,8 @@ use kapsaro_core::api::diagnostics::{
     LocalStateDiagnostic,
 };
 use kapsaro_core::api::doctor::{
-    execute_doctor_command, DoctorCiReadiness, DoctorRequest, DoctorWorkspaceResolution,
-    DoctorWorkspaceSource,
+    execute_doctor_command, DoctorCiReadiness, DoctorRequest, DoctorStrictKeyChecking,
+    DoctorWorkspaceResolution, DoctorWorkspaceSource,
 };
 use kapsaro_core::api::file::encrypt::{resolve_encrypt_file_command, EncryptFileCommand};
 use kapsaro_core::api::file::{
@@ -17,8 +17,9 @@ use kapsaro_core::api::file::{
 };
 use kapsaro_core::api::key::generate::KeyGenerationHome;
 use kapsaro_core::api::key::{
-    save_private_export_text, validate_environment_key, KeyContext, KeyContextOptions, Kid,
-    LocalKeyContextRequest, LocalKeyStore, MemberHandle, RecipientKeys,
+    format_kid_display, format_kid_display_lossy, load_environment_key, save_private_export_text,
+    validate_github_login, KeyContext, KeyContextOptions, Kid, LocalKeyContextRequest,
+    LocalKeyStore, MemberHandle, RecipientKeys,
 };
 use kapsaro_core::api::kv::mutation::{resolve_mutation_write_plan, MutationWriteTrustPlan};
 use kapsaro_core::api::kv::{
@@ -30,6 +31,7 @@ use kapsaro_core::api::online::{
     GitHubAccount, GitHubOnlineVerifier, OnlineVerificationStatus, VerifiedGitHubEvidence,
 };
 use kapsaro_core::api::operation::OperationOptions;
+use kapsaro_core::api::process::remove_parent_kapsaro_env_vars;
 use kapsaro_core::api::rewrap::{
     AuthorizedRewrapInput, RewrapDirectories, RewrapOptions, RewrapPromotionReview, RewrapReview,
     RewrapSession, RewrapTarget, RewrapTargetListing,
@@ -49,7 +51,7 @@ use kapsaro_core::api::trust::{
     VerifiedLocalTrustStore, VerifiedLocalTrustStoreLoadResult, WorkspaceReadDirectories,
     WorkspaceReadSession,
 };
-use kapsaro_core::api::workspace::WorkspaceWriteDirectories;
+use kapsaro_core::api::workspace::{WorkspaceWriteDirectories, SECRETS_DIR_NAME};
 use kapsaro_core::{Error, ErrorKind, Result};
 use std::error::Error as StdError;
 use zeroize::Zeroizing;
@@ -87,7 +89,7 @@ impl SshSignatureBackend for StubSshBackend {
 fn api_exposes_use_case_modules() {
     let temp = local_state_tempdir();
     let member_handle = MemberHandle::try_from("alice@example.com").expect("valid member handle");
-    let key_store = LocalKeyStore::create(temp.path().join("keys")).expect("create keystore");
+    let key_store = LocalKeyStore::ensure(temp.path().join("keys")).expect("create keystore");
     let trust_store = LocalTrustStore::open(temp.path(), member_handle).expect("open trust store");
     let _signature = kapsaro_core::api::ssh::SshRawSignature::new([3u8; 64]);
     let _secret = kapsaro_core::api::secret::SecretString::new("secret".to_string());
@@ -130,10 +132,48 @@ fn test_doctor_request_exposes_caller_resolved_workspace() {
 }
 
 #[test]
+fn test_doctor_strict_key_checking_states_are_public() {
+    let _states = [
+        DoctorStrictKeyChecking::Enabled,
+        DoctorStrictKeyChecking::Disabled,
+        DoctorStrictKeyChecking::Invalid("value cannot be read".to_string()),
+    ];
+    let _readiness = DoctorCiReadiness::Active {
+        strict_key_checking: DoctorStrictKeyChecking::Enabled,
+        private_key_error: None,
+    };
+}
+
+#[test]
+fn test_kid_display_and_github_login_validation_are_public() {
+    let _format: fn(&str) -> Result<String> = format_kid_display;
+    let _lossy: fn(&str) -> String = format_kid_display_lossy;
+    let _validate: fn(&str) -> Result<()> = validate_github_login;
+
+    assert_eq!(
+        format_kid_display("0123456789ABCDEFGHJKMNPQRSTVWXYZ").expect("valid kid"),
+        "0123-4567-89AB-CDEF-GHJK-MNPQ-RSTV-WXYZ"
+    );
+    validate_github_login("alice-example").expect("valid GitHub login");
+}
+
+#[test]
+fn test_child_process_environment_isolation_is_public() {
+    let _remove: fn(&mut std::process::Command) = remove_parent_kapsaro_env_vars;
+}
+
+#[test]
+fn test_secrets_directory_name_is_public() {
+    let _name: &str = SECRETS_DIR_NAME;
+
+    assert_eq!(SECRETS_DIR_NAME, "secrets");
+}
+
+#[test]
 fn test_local_state_facade_debug_names_only_the_facade() {
     let temp = local_state_tempdir();
     let member_handle = MemberHandle::try_from("alice@example.com").expect("valid member handle");
-    let key_store = LocalKeyStore::create(temp.path().join("keys")).expect("create keystore");
+    let key_store = LocalKeyStore::ensure(temp.path().join("keys")).expect("create keystore");
     let trust_store = LocalTrustStore::open(temp.path(), member_handle).expect("open trust store");
 
     assert_eq!(format!("{key_store:?}"), "LocalKeyStore { .. }");
@@ -155,7 +195,7 @@ fn key_context_options_group_runtime_inputs() {
     let _load_selected_key_context = LocalKeyStore::load_selected_key_context;
     let _resolve_signing_context = LocalKeyStore::resolve_signing_context;
     let _load_environment_key = KeyContext::load_environment_key;
-    let _validate_environment_key = validate_environment_key;
+    let _load_environment_key = load_environment_key;
     assert!(std::any::type_name::<LocalKeyContextRequest>().contains("LocalKeyContextRequest"));
     assert!(std::any::type_name::<SshSigningInputs>().contains("SshSigningInputs"));
     let _ssh_inputs = SshSigningInputs::new(
@@ -193,7 +233,7 @@ fn trust_store_exposes_verified_opaque_load_names() {
     let _open: fn(std::path::PathBuf, MemberHandle) -> Result<LocalTrustStore> =
         LocalTrustStore::open;
     let _create: fn(std::path::PathBuf, MemberHandle) -> Result<LocalTrustStore> =
-        LocalTrustStore::create;
+        LocalTrustStore::ensure;
     let _load_verified = LocalTrustStore::load_verified;
 
     assert!(std::any::type_name::<TrustApproval>().contains("TrustApproval"));
@@ -203,7 +243,7 @@ fn trust_store_exposes_verified_opaque_load_names() {
 fn missing_trust_store_loads_as_none() {
     let temp = local_state_tempdir();
     let member_handle = MemberHandle::try_from("alice@example.com").expect("valid member handle");
-    let key_store = LocalKeyStore::create(temp.path().join("keys")).expect("create keystore");
+    let key_store = LocalKeyStore::ensure(temp.path().join("keys")).expect("create keystore");
     let trust_store = LocalTrustStore::open(temp.path(), member_handle).expect("open trust store");
 
     assert!(trust_store
@@ -421,10 +461,6 @@ fn trust_evaluator_exposes_operation_bound_decisions() {
     let _apply_rewrap_review_approval = RewrapSession::apply_review_approval;
     let _begin_rewrap = RewrapSession::begin_rewrap;
     let _resume_rewrap = RewrapSession::resume_rewrap;
-    let _begin_file_rewrap = RewrapSession::begin_file_rewrap;
-    let _resume_file_rewrap = RewrapSession::resume_file_rewrap;
-    let _begin_kv_rewrap = RewrapSession::begin_kv_rewrap;
-    let _resume_kv_rewrap = RewrapSession::resume_kv_rewrap;
     let _accept_non_member_rewrap = RewrapReview::accept_non_member;
     let _rewrap_signer_first = RewrapReview::first_request_is_signer;
     assert!(std::any::type_name::<RewrapDirectories>().contains("RewrapDirectories"));
@@ -490,7 +526,7 @@ fn test_kv_artifact_io_methods_pinned() {
 fn test_local_key_store_methods_pinned() {
     // Pin construction and member-handle-bound method shapes.
     let _open: fn(std::path::PathBuf) -> Result<LocalKeyStore> = LocalKeyStore::open;
-    let _create: fn(std::path::PathBuf) -> Result<LocalKeyStore> = LocalKeyStore::create;
+    let _create: fn(std::path::PathBuf) -> Result<LocalKeyStore> = LocalKeyStore::ensure;
     let _list_members: fn(&LocalKeyStore) -> Result<Vec<MemberHandle>> =
         LocalKeyStore::list_members;
     let _list_kids: fn(&LocalKeyStore, &MemberHandle) -> Result<Vec<Kid>> =
@@ -501,7 +537,7 @@ fn test_local_key_store_methods_pinned() {
         LocalKeyStore::set_active_kid;
     // load_recipient_keys is generic; call the monomorphised version via a concrete iterator.
     let temp = local_state_tempdir();
-    let ks = LocalKeyStore::create(temp.path().join("keys")).expect("create keystore");
+    let ks = LocalKeyStore::ensure(temp.path().join("keys")).expect("create keystore");
     let _ = ks.load_recipient_keys(std::iter::empty::<MemberHandle>());
 }
 
@@ -597,7 +633,7 @@ fn test_diagnostics_batch_past_the_bound_reports_what_it_left_behind() {
 
     let temp = local_state_tempdir();
     let keystore_root = temp.path().join("keys");
-    let key_store = LocalKeyStore::create(&keystore_root).expect("create keystore");
+    let key_store = LocalKeyStore::ensure(&keystore_root).expect("create keystore");
     let member_handles = (0..MEMBER_COUNT)
         .map(|index| {
             let handle = MemberHandle::try_from(format!("member{index:03}@example.com"))
@@ -693,6 +729,11 @@ fn test_trust_review_request_accessors_pinned() {
     let _recipient_kids_fn: fn(&TrustReviewRequest) -> &[Kid] = TrustReviewRequest::recipient_kids;
     let _recipient_handle_hints_fn: fn(&TrustReviewRequest) -> &[TrustRecipientHandleHint] =
         TrustReviewRequest::recipient_handle_hints;
+    let _approved_recipient_set_fn: fn(
+        &TrustReviewRequest,
+    ) -> Option<
+        &kapsaro_core::api::trust::enforcement::ArtifactRecipientSetSnapshot,
+    > = TrustReviewRequest::approved_recipient_set;
 }
 
 #[test]
@@ -882,4 +923,180 @@ fn test_error_kind_all_variants_pinned() {
         }
     }
     assert_eq!(all_kinds.len(), 10);
+}
+
+/// Every name the `api` facade re-exports, imported anonymously.
+///
+/// The imports are the assertion: drop one `pub use` from `api` and this
+/// module stops compiling, so the facade cannot shrink unnoticed.
+#[allow(unused_imports)]
+mod every_public_name {
+    use kapsaro_core::api::config::{
+        list_config as _, resolve_config_value as _, set_config as _, unset_config as _,
+        ConfigScope as _, ConfigSetResult as _, ConfigUnsetResult as _, LocalStateSession as _,
+    };
+    use kapsaro_core::api::diagnostics::{
+        take_local_state_warnings as _, DiagnosticBatch as _, DiagnosticCode as _,
+        DiagnosticCompleteness as _, DiagnosticTruncation as _, LocalStateDiagnostic as _,
+    };
+    use kapsaro_core::api::doctor::types::{
+        DoctorCategory as _, DoctorCheck as _, DoctorReason as _, DoctorReport as _,
+        DoctorStatus as _, DoctorSubject as _,
+    };
+    use kapsaro_core::api::doctor::{
+        execute_doctor_command as _, DoctorCiReadiness as _, DoctorRequest as _,
+        DoctorStrictKeyChecking as _, DoctorWorkspaceResolution as _, DoctorWorkspaceSource as _,
+    };
+    use kapsaro_core::api::file::encrypt::{
+        execute_encrypt_file_command_with_recipient_set_confirmation as _,
+        resolve_encrypt_file_command as _, EncryptFileCommand as _,
+    };
+    use kapsaro_core::api::file::{
+        load_plaintext_bytes as _, save_decrypted_bytes as _, save_encrypted_text as _,
+        FileEncArtifact as _, FileReadOperation as _, TrustedFileEncArtifact as _,
+        VerifiedFileEncArtifact as _,
+    };
+    use kapsaro_core::api::inspect::{
+        inspect_file as _, AeadAlgorithmMetadata as _, ArtifactSignatureMetadata as _,
+        AttestationMetadata as _, BindingClaimsMetadata as _, FileEncHeaderMetadata as _,
+        FileEncInspectMetadata as _, FilePayloadMetadata as _, FilePayloadProtectedMetadata as _,
+        GithubAccountMetadata as _, IdentityKeysMetadata as _, InspectMetadata as _,
+        InspectResult as _, JwkPublicKeyMetadata as _, KvEncInspectMetadata as _,
+        KvEntryMetadata as _, KvHeaderMetadata as _, KvSummaryMetadata as _,
+        OnlineVerificationMetadata as _, PayloadCiphertextMetadata as _,
+        RemovedRecipientMetadata as _, SignatureVerificationMetadata as _,
+        SignerPublicKeyMetadata as _, SignerPublicKeyProtectedMetadata as _, WrapDataMetadata as _,
+        WrapItemMetadata as _,
+    };
+    use kapsaro_core::api::key::generate::{
+        generate_key_command as _, KeyExpiryRequest as _, KeyGenerationHome as _,
+    };
+    use kapsaro_core::api::key::manage::{
+        activate_key_command as _, export_key_command as _, export_private_key_command as _,
+        list_keys_command as _, remove_key_command as _,
+    };
+    use kapsaro_core::api::key::types::{
+        KeyActivateResult as _, KeyExportPrivateResult as _, KeyExportResult as _,
+        KeyGenerationResult as _, KeyInfo as _, KeyListResult as _, KeyRemoveResult as _,
+        MissingKeyDocument as _,
+    };
+    use kapsaro_core::api::key::{
+        build_missing_member_handle_error as _, format_kid_display as _,
+        format_kid_display_lossy as _, load_environment_key as _,
+        parse_relative_duration_days as _, save_private_export_text as _,
+        validate_github_login as _, KeyContext as _, KeyContextOptions as _, Kid as _,
+        LocalKeyContextRequest as _, LocalKeyStore as _, MemberHandle as _, RecipientKeys as _,
+    };
+    use kapsaro_core::api::kv::mutation::{
+        import_kv_command_with_recipient_set_confirmation as _,
+        reevaluate_mutation_write_plan_after_review as _, resolve_mutation_write_plan as _,
+        set_kv_command_with_recipient_set_confirmation as _,
+        unset_kv_command_with_recipient_set_confirmation as _, MutationWriteTrustPlan as _,
+    };
+    use kapsaro_core::api::kv::{
+        is_missing_key_error as _, load_import_text as _, resolve_kv_store_file_name as _,
+        AuthorizedKvMutation as _, KvDisclosedEntry as _, KvEncArtifact as _, KvGetResult as _,
+        KvInputEntry as _, KvMutationOperation as _, KvReadOperation as _,
+        TrustedKvEncArtifact as _, VerifiedKvEncArtifact as _,
+    };
+    use kapsaro_core::api::member::approval::{
+        evaluate_members_for_approval as _, save_member_approvals as _,
+        MemberApprovalEvaluation as _, MemberApprovalResult as _, MemberApprovalSession as _,
+    };
+    use kapsaro_core::api::member::mutation::{
+        add_member as _, evaluate_member_removal as _, remove_member as _,
+    };
+    use kapsaro_core::api::member::query::{list_members as _, load_member_show_result as _};
+    use kapsaro_core::api::member::types::{
+        MemberDocumentStatus as _, MemberDocumentView as _, MemberGithubClaim as _,
+        MemberListEntry as _, MemberListResult as _, MemberRemovalReport as _,
+        MemberRemoveResult as _, MemberShowResult as _, MemberVerificationResult as _,
+        MembershipStatus as _,
+    };
+    use kapsaro_core::api::member::verification::evaluate_members_online as _;
+    use kapsaro_core::api::online::{
+        GitHubAccount as _, GitHubOnlineVerifier as _, OnlineVerificationStatus as _,
+        VerifiedGitHubEvidence as _,
+    };
+    use kapsaro_core::api::operation::OperationOptions as _;
+    use kapsaro_core::api::process::remove_parent_kapsaro_env_vars as _;
+    use kapsaro_core::api::registration::command::{
+        evaluate_registration_decision as _, execute_registration_decision as _,
+        resolve_registration_command as _, RegistrationDecision as _,
+    };
+    use kapsaro_core::api::registration::key_plan::{
+        open_registration_local_state as _, RegistrationLocalState as _,
+    };
+    use kapsaro_core::api::registration::types::{
+        MemberKeySetupResult as _, RegistrationCommand as _, RegistrationKeyPlan as _,
+        RegistrationMode as _, RegistrationOutcome as _, RegistrationResult as _,
+        RegistrationTarget as _,
+    };
+    use kapsaro_core::api::registration::{
+        ensure_init_workspace_structure as _, evaluate_init_workspace_status as _,
+        InitWorkspaceState as _,
+    };
+    use kapsaro_core::api::rewrap::promotion::{
+        PromotionReviewFailure as _, PromotionReviewPrompt as _, PromotionReviewView as _,
+    };
+    use kapsaro_core::api::rewrap::{
+        AuthorizedRewrapInput as _, RewrapAcceptance as _, RewrapDirectories as _,
+        RewrapNonMemberReview as _, RewrapOptions as _, RewrapPromotionOutcome as _,
+        RewrapPromotionReview as _, RewrapReview as _, RewrapSession as _,
+        RewrapSessionDecision as _, RewrapTarget as _, RewrapTargetListing as _,
+    };
+    use kapsaro_core::api::secret::{SecretBytes as _, SecretString as _};
+    use kapsaro_core::api::ssh::{
+        build_ssh_signing_context as _, resolve_ssh_agent_socket as _,
+        resolve_ssh_key_candidates as _, SshDeterminismStatus as _, SshKeyCandidateView as _,
+        SshRawSignature as _, SshSignatureBackend as _, SshSigningContextResolution as _,
+        SshSigningInputs as _, SshSigningMethod as _,
+    };
+    use kapsaro_core::api::trust::enforcement::{
+        ArtifactRecipientHandleHint as _, ArtifactRecipientSetReview as _,
+        ArtifactRecipientSetSnapshot as _,
+    };
+    use kapsaro_core::api::trust::list::{
+        list_known_keys_command as _, list_recipient_sets_command as _,
+        resolve_trust_list_command as _, RecipientSetListItem as _, RecipientSetListResult as _,
+        TrustListCommand as _, TrustListItem as _, TrustListResult as _,
+    };
+    use kapsaro_core::api::trust::management::{
+        execute_purge as _, execute_recipient_set_purge as _, list_purge_candidates as _,
+        list_recipient_set_purge_candidates as _, remove_known_key_command as _,
+        remove_recipient_set_command as _, PurgeOutcome as _, ReviewedPurgeCandidates as _,
+    };
+    use kapsaro_core::api::trust::recovery::{
+        build_trust_store_reset_plan_from_list_command as _,
+        build_trust_store_reset_plan_from_session as _, evaluate_trust_store_reset as _,
+        execute_trust_store_reset as _, observe_trust_store_recovery_from_list_command as _,
+        observe_trust_store_recovery_from_session as _, TrustStoreRecoveryToken as _,
+        TrustStoreResetCause as _, TrustStoreResetLoss as _, TrustStoreResetPlan as _,
+    };
+    use kapsaro_core::api::trust::resign::{
+        resign_trust_store_command as _, TrustStoreResignResult as _,
+    };
+    use kapsaro_core::api::trust::review::{
+        execute_read_with_signer_trust as _, review_write_recipient_trust as _,
+        ReadSignerTrustReviewPlan as _, ReadTrustConfirmations as _, SignerTrustLabels as _,
+        TrustReviewContext as _, WriteRecipientTrustReviewPlan as _,
+    };
+    use kapsaro_core::api::trust::{
+        ApprovalConflictHandling as _, ArtifactRecipientTrustOutcome as _, AuthorizedRead as _,
+        CurrentMemberSnapshot as _, FileReadTarget as _, KnownKeyApprovalEvidence as _,
+        KnownKeyReview as _, KnownKeyReviewCandidate as _, LocalTrustStore as _,
+        NonMemberReadReview as _, ReadAcceptance as _, ReadReview as _, ReadSessionDecision as _,
+        ReadTrustExceptions as _, RecipientSetSubject as _, RecipientTrustOutcome as _,
+        SignerTrustOutcome as _, StrictKeyChecking as _, StrictKeyCheckingResolution as _,
+        StrictKeyCheckingSource as _, TrustApproval as _, TrustApprovalCandidate as _,
+        TrustApprovalOutcome as _, TrustCommandSession as _, TrustDecision as _,
+        TrustPolicyEvaluator as _, TrustRecipientHandleHint as _, TrustReviewKind as _,
+        TrustReviewRequest as _, VerifiedLocalTrustStore as _,
+        VerifiedLocalTrustStoreLoadResult as _, WorkspaceReadDirectories as _,
+        WorkspaceReadSession as _, WriteTrustOptions as _,
+    };
+    use kapsaro_core::api::workspace::{
+        detect_workspace_path as _, resolve_workspace_path as _,
+        select_workspace_creation_path as _, WorkspaceWriteDirectories as _, SECRETS_DIR_NAME as _,
+    };
 }

@@ -3,25 +3,23 @@
 
 //! Integration tests for trust commands.
 
-use std::collections::BTreeMap;
 use std::fs;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 
 use crate::cli::common::{
     cmd, copy_dir_all, save_trust_store_signed_by_active_key, ALICE_MEMBER_HANDLE,
+    TRUST_STORE_STORED_AT,
 };
 #[cfg(unix)]
 use crate::cli::common::{kapsaro_std_cmd, run_command_with_pty_script_at_prompt};
 use crate::test_utils::member_handle;
 use assert_cmd::cargo;
-use kapsaro_core::test_support::domain::trust_store::{
-    KnownKey, KnownKeyApprovalVia, RecipientSetApprovalVia, RecipientSetRecord,
-};
+use kapsaro_core::test_support::domain::trust_store::RecipientSetRecord;
 use kapsaro_core::test_support::helpers::time::format_timestamp_rfc3339;
-use kapsaro_core::test_support::operations::trust::recipient_sets::compute_recipient_set_hash;
 use kapsaro_core::test_support::storage::trust::paths::get_trust_store_file_path;
 use kapsaro_test_support::fixture::setup_test_keystore_from_fixtures;
+use kapsaro_test_support::trust_store_state::{build_known_key, build_recipient_set};
 use predicates::prelude::*;
 use serde_json::Value;
 use tempfile::TempDir;
@@ -33,36 +31,6 @@ const BOB_MEMBER_HANDLE: &str = "bob@example.com";
 const CHARLIE_MEMBER_HANDLE: &str = "charlie@example.com";
 const SID_OLD: &str = "00000000-0000-4000-8000-000000000201";
 const SID_NEW: &str = "00000000-0000-4000-8000-000000000202";
-
-fn build_known_key(kid: &str, member_handle: &str, approved_at: &str) -> KnownKey {
-    KnownKey {
-        kid: kid.to_string(),
-        subject_handle: member_handle.to_string(),
-        approved_at: approved_at.to_string(),
-        approved_via: KnownKeyApprovalVia::ManualReview,
-        evidence: None,
-        extra: BTreeMap::new(),
-    }
-}
-
-fn build_recipient_set(
-    sid: &str,
-    recipient_kids: &[&str],
-    approved_at: &str,
-) -> RecipientSetRecord {
-    let recipient_kids = recipient_kids
-        .iter()
-        .map(|kid| (*kid).to_string())
-        .collect::<Vec<_>>();
-    RecipientSetRecord {
-        sid: sid.to_string(),
-        recipient_set_hash: compute_recipient_set_hash(&recipient_kids).unwrap(),
-        recipient_kids,
-        approved_at: approved_at.to_string(),
-        approved_via: RecipientSetApprovalVia::ManualReview,
-        recipient_handle_hints: None,
-    }
-}
 
 fn save_signed_trust_store(home: &TempDir) -> String {
     save_signed_trust_store_with_recipient_sets(home, Vec::new())
@@ -85,9 +53,14 @@ fn save_signed_trust_store_with_recipient_sets(
     save_trust_store_signed_by_active_key(
         home,
         ALICE_MEMBER_HANDLE,
+        TRUST_STORE_STORED_AT,
         vec![
-            build_known_key(KID_BOB, BOB_MEMBER_HANDLE, "2026-03-29T12:40:00Z"),
-            build_known_key(KID_CHARLIE, CHARLIE_MEMBER_HANDLE, "2026-03-29T12:41:00Z"),
+            build_known_key(KID_BOB, BOB_MEMBER_HANDLE, Some("2026-03-29T12:40:00Z")),
+            build_known_key(
+                KID_CHARLIE,
+                CHARLIE_MEMBER_HANDLE,
+                Some("2026-03-29T12:41:00Z"),
+            ),
         ],
         recipient_sets,
     )
@@ -555,6 +528,54 @@ fn test_trust_purge_with_force() {
         .stderr(predicate::str::contains("No known keys in trust store"));
 }
 
+/// `--older-than` shares the relative duration format `--valid-for` uses, so a
+/// month is one of the units it accepts.
+#[test]
+fn test_trust_purge_accepts_a_duration_in_months() {
+    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
+    save_signed_trust_store(&home);
+
+    cmd()
+        .arg("trust")
+        .arg("keys")
+        .arg("purge")
+        .arg("--older-than")
+        .arg("1m")
+        .arg("--force")
+        .arg("--home")
+        .arg(home.path())
+        .arg("--ssh-identity")
+        .arg(home.path().join(".ssh").join("test_ed25519"))
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("Purged 2 entry(ies)"));
+}
+
+/// Weeks are outside the accepted unit set, and the message names the units
+/// that are accepted so the operator can correct the argument.
+#[test]
+fn test_trust_purge_rejects_a_duration_in_weeks() {
+    let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
+    save_signed_trust_store(&home);
+
+    cmd()
+        .arg("trust")
+        .arg("keys")
+        .arg("purge")
+        .arg("--older-than")
+        .arg("1w")
+        .arg("--force")
+        .arg("--home")
+        .arg(home.path())
+        .arg("--ssh-identity")
+        .arg(home.path().join(".ssh").join("test_ed25519"))
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "Invalid duration '1w'. Expected <number><unit> with unit d, m or y",
+        ));
+}
+
 #[test]
 fn test_trust_purge_accepts_member_handle_when_keystore_is_ambiguous() {
     let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
@@ -668,10 +689,11 @@ fn test_trust_purge_reports_a_conflict_when_the_reviewed_store_is_replaced_by_a_
             save_trust_store_signed_by_active_key(
                 &home,
                 ALICE_MEMBER_HANDLE,
+                TRUST_STORE_STORED_AT,
                 vec![build_known_key(
                     KID_CHARLIE,
                     CHARLIE_MEMBER_HANDLE,
-                    "2026-03-29T12:41:00Z",
+                    Some("2026-03-29T12:41:00Z"),
                 )],
                 Vec::new(),
             );

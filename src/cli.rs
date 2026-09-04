@@ -31,7 +31,7 @@ mod unset;
 mod config;
 
 #[cfg(test)]
-#[path = "../tests/unit/internal/stderr_color_guard.rs"]
+#[path = "../tests/test_utils/stderr_color_guard.rs"]
 pub(crate) mod stderr_color_guard;
 
 use config::ConfigArgs;
@@ -268,4 +268,4 @@ impl Commands {
 
 #[cfg(test)]
 #[path = "../tests/unit/internal/cli_args_test.rs"]
-mod args_tests;
+mod cli_args_test;

@@ -72,8 +72,9 @@ impl KeystoreAccess {
         Ok(Self::from_opened(opened))
     }
 
-    pub(crate) fn create(root: impl Into<PathBuf>) -> Result<Self> {
-        let opened = AnchoredDir::create(root.into(), DirectoryScope::LocalState, "keystore root")?;
+    /// Open a keystore root, creating the directory when it is not there yet.
+    pub(crate) fn ensure(root: impl Into<PathBuf>) -> Result<Self> {
+        let opened = AnchoredDir::ensure(root.into(), DirectoryScope::LocalState, "keystore root")?;
         Ok(Self::from_opened(opened))
     }
 
@@ -112,10 +113,10 @@ impl KeystoreAccess {
         owner: &MemberHandle,
     ) -> Result<Self> {
         Self::open_from_anchored_home(home)
-            .map_err(|error| map_missing_keystore_error(error, home, owner))
+            .map_err(|error| build_keystore_open_error(error, home, owner))
     }
 
-    pub(crate) fn create_from_anchored_home(home: &AnchoredDir) -> Result<Self> {
+    pub(crate) fn ensure_from_anchored_home(home: &AnchoredDir) -> Result<Self> {
         home.ensure_child(KEYSTORE_DIR_NAME).map(|root| Self {
             root,
             home: Some(home.clone()),
@@ -240,7 +241,7 @@ pub(crate) fn build_missing_keystore_error(keystore_path: &Path, owner: &MemberH
 
 /// Replace the not-found error of an absent `keys` directory with the
 /// actionable local-keystore rule, leaving every other failure untouched.
-fn map_missing_keystore_error(error: Error, home: &AnchoredDir, owner: &MemberHandle) -> Error {
+fn build_keystore_open_error(error: Error, home: &AnchoredDir, owner: &MemberHandle) -> Error {
     if error.kind() != ErrorKind::NotFound {
         return error;
     }
@@ -309,7 +310,7 @@ fn canonical_directory_type(is_canonical: bool) -> Option<ChildType> {
 /// Regular files and symlinks are never members or keys, so an entry under a
 /// name the keystore does not store is skipped. An entry of any other
 /// unexpected type is rejected, and so is one an unfinished write left staged.
-pub(super) fn read_keystore_child_directories<D>(
+pub(super) fn list_keystore_child_directories<D>(
     dir: &D,
     level: KeystoreLevel,
 ) -> Result<Vec<String>>
@@ -369,7 +370,7 @@ pub(super) fn ensure_member_namespace_safe<D>(member_dir: &D) -> Result<()>
 where
     D: DirectoryFd,
 {
-    read_keystore_child_directories(member_dir, KeystoreLevel::Member).map(|_| ())
+    list_keystore_child_directories(member_dir, KeystoreLevel::Member).map(|_| ())
 }
 
 /// Complete a member mutation and re-check the namespace it changed.
@@ -452,9 +453,9 @@ pub(super) fn ensure_key_directory_safe(dir: &OpenDir) -> Result<()> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/internal/keystore_access_permission_test.rs"]
-mod keystore_access_permission_test;
+#[path = "../../../tests/unit/internal/io_keystore_access_permission_test.rs"]
+mod io_keystore_access_permission_test;
 
 #[cfg(test)]
-#[path = "../../../tests/unit/internal/keystore_access_security_test.rs"]
-mod keystore_access_security_test;
+#[path = "../../../tests/unit/internal/io_keystore_access_security_test.rs"]
+mod io_keystore_access_security_test;

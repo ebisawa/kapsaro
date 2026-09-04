@@ -3,7 +3,7 @@
 
 //! Integration tests for `key new` command
 
-use crate::cli::common::{cmd, generate_temp_ssh_keypair, make_secret_home, TEST_MEMBER_HANDLE};
+use crate::cli::common::{cmd, generate_temp_ssh_keypair, setup_secret_home, TEST_MEMBER_HANDLE};
 #[cfg(unix)]
 use crate::cli::common::{kapsaro_std_cmd, run_command_with_pty_script};
 use crate::cli::key::find_kid_in_member_dir;
@@ -42,7 +42,7 @@ fn build_auto_key_new_command(
 #[cfg(unix)]
 #[test]
 fn test_key_new_writes_through_an_explicit_home_symlink() {
-    let temp_dir = make_secret_home();
+    let temp_dir = setup_secret_home();
     let outside = temp_dir.path().join("outside");
     let home = temp_dir.path().join("home");
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
@@ -69,7 +69,7 @@ fn test_key_new_writes_through_an_explicit_home_symlink() {
 #[cfg(unix)]
 #[test]
 fn test_key_new_writes_through_an_environment_home_symlink() {
-    let temp_dir = make_secret_home();
+    let temp_dir = setup_secret_home();
     let outside = temp_dir.path().join("outside");
     let home = temp_dir.path().join("home");
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
@@ -94,7 +94,7 @@ fn test_key_new_writes_through_an_environment_home_symlink() {
 
 #[test]
 fn test_key_new_requires_member_handle_before_ssh_resolution() {
-    let temp_dir = make_secret_home();
+    let temp_dir = setup_secret_home();
 
     cmd()
         .arg("key")
@@ -116,7 +116,7 @@ fn test_key_new_requires_member_handle_before_ssh_resolution() {
 
 #[test]
 fn test_key_new_invalid_github_user_before_ssh_resolution_fails() {
-    let home = make_secret_home();
+    let home = setup_secret_home();
     let missing_identity = home.path().join("missing-identity");
     let member_dir = home.path().join("keys").join(TEST_MEMBER_HANDLE);
 
@@ -149,8 +149,8 @@ fn test_key_new_invalid_github_user_before_ssh_resolution_fails() {
 
 #[test]
 fn test_key_new_auto_selects_identity_agent() {
-    let local_home = make_secret_home();
-    let process_home = make_secret_home();
+    let local_home = setup_secret_home();
+    let process_home = setup_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
     let socket_path = process_home.path().join("missing-identity-agent.sock");
     let ssh_dir = process_home.path().join(".ssh");
@@ -174,8 +174,8 @@ fn test_key_new_auto_selects_identity_agent() {
 
 #[test]
 fn test_key_new_auto_selects_ssh_auth_sock() {
-    let local_home = make_secret_home();
-    let process_home = make_secret_home();
+    let local_home = setup_secret_home();
+    let process_home = setup_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
     let socket_path = process_home.path().join("missing-environment-agent.sock");
 
@@ -193,8 +193,8 @@ fn test_key_new_auto_selects_ssh_auth_sock() {
 
 #[test]
 fn test_key_new_auto_selects_ssh_keygen_without_agent() {
-    let local_home = make_secret_home();
-    let process_home = make_secret_home();
+    let local_home = setup_secret_home();
+    let process_home = setup_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     build_auto_key_new_command(local_home.path(), process_home.path(), &ssh_priv)
@@ -215,7 +215,7 @@ fn test_key_new_auto_selects_ssh_keygen_without_agent() {
 #[cfg(unix)]
 #[test]
 fn test_key_new_prompts_for_member_handle_when_unconfigured() {
-    let temp_dir = make_secret_home();
+    let temp_dir = setup_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     let mut command = kapsaro_std_cmd();
@@ -225,7 +225,6 @@ fn test_key_new_prompts_for_member_handle_when_unconfigured() {
         .arg("-i")
         .arg(ssh_priv.to_str().unwrap())
         .env("KAPSARO_HOME", temp_dir.path())
-        .env_remove("CI")
         .env_remove("KAPSARO_GITHUB_USER")
         .env_remove("KAPSARO_MEMBER_HANDLE");
 
@@ -265,7 +264,7 @@ fn test_key_new_prompts_for_member_handle_when_unconfigured() {
 
 #[test]
 fn test_key_new_generates_private_key() {
-    let temp_dir = make_secret_home();
+    let temp_dir = setup_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     let member_handle = TEST_MEMBER_HANDLE;
@@ -338,7 +337,7 @@ fn test_key_new_generates_private_key() {
 
 #[test]
 fn test_key_new_expires_at_option() {
-    let temp_dir = make_secret_home();
+    let temp_dir = setup_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     let member_handle = TEST_MEMBER_HANDLE;
@@ -386,7 +385,7 @@ fn test_key_new_expires_at_option() {
 
 #[test]
 fn test_key_new_valid_for_1y() {
-    let temp_dir = make_secret_home();
+    let temp_dir = setup_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     let member_handle = TEST_MEMBER_HANDLE;
@@ -437,7 +436,7 @@ fn test_key_new_valid_for_1y() {
 
 #[test]
 fn test_key_new_valid_for_6m() {
-    let temp_dir = make_secret_home();
+    let temp_dir = setup_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     let member_handle = TEST_MEMBER_HANDLE;
@@ -488,7 +487,7 @@ fn test_key_new_valid_for_6m() {
 
 #[test]
 fn test_key_new_valid_for_30d() {
-    let temp_dir = make_secret_home();
+    let temp_dir = setup_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     let member_handle = TEST_MEMBER_HANDLE;
@@ -539,7 +538,7 @@ fn test_key_new_valid_for_30d() {
 
 #[test]
 fn test_key_new_no_activate_option() {
-    let temp_dir = make_secret_home();
+    let temp_dir = setup_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     let member_handle = TEST_MEMBER_HANDLE;
@@ -578,7 +577,7 @@ fn test_key_new_no_activate_option() {
 
 #[test]
 fn test_key_new_default_activate() {
-    let temp_dir = make_secret_home();
+    let temp_dir = setup_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     let member_handle = TEST_MEMBER_HANDLE;

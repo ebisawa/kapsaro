@@ -77,5 +77,5 @@ Alternative: Set config 'ssh_signing_method: ssh-keygen'",
 mod io_ssh_agent_validation_test;
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/internal/ssh_agent_validation_test.rs"]
-mod ssh_agent_validation_test;
+#[path = "../../../../tests/unit/internal/io_ssh_agent_validation_key_match_test.rs"]
+mod io_ssh_agent_validation_key_match_test;

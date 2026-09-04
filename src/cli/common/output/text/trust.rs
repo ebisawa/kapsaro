@@ -212,4 +212,4 @@ pub(crate) fn print_recipient_set_purge_reset_to_empty() {
 
 #[cfg(test)]
 #[path = "../../../../../tests/unit/internal/cli_common_output_text_trust_test.rs"]
-mod tests;
+mod cli_common_output_text_trust_test;

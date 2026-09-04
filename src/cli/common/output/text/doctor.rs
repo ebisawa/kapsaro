@@ -127,4 +127,4 @@ fn color_status(status: DoctorStatus) -> String {
 
 #[cfg(test)]
 #[path = "../../../../../tests/unit/internal/cli_common_output_text_doctor_test.rs"]
-mod tests;
+mod cli_common_output_text_doctor_test;

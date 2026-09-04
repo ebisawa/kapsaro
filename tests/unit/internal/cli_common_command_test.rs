@@ -64,7 +64,6 @@ fn setup_swapped_workspace_session() -> SwappedWorkspaceFixture {
 
     let session = resolve_cli_write_session(
         &context,
-        &options,
         directories,
         Some(ALICE_MEMBER_HANDLE.to_string()),
         false,
@@ -135,7 +134,6 @@ fn test_cli_write_session_reuses_opened_workspace_for_repeated_kv_plans() {
                 key.to_string(),
                 SecretString::new(value.to_string()),
             )],
-            None,
             |_, _| Ok(true),
         )
         .unwrap();

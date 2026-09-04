@@ -21,10 +21,7 @@
           "type": "array",
           "items": { "$ref": "kapsaro_common_schema.json#/$defs/kid" }
         },
-        "recipient_set_hash": {
-          "type": "string",
-          "pattern": "^[A-Za-z0-9_-]{43}$"
-        },
+        "recipient_set_hash": { "$ref": "kapsaro_common_schema.json#/$defs/b64url_32" },
         "approved_at": { "$ref": "kapsaro_common_schema.json#/$defs/rfc3339_utc" },
         "approved_via": { "$ref": "kapsaro_common_schema.json#/$defs/approved_via" },
         "recipient_handle_hints": {
@@ -75,9 +72,12 @@
     "signature": {
       "type": "object",
       "properties": {
-        "alg": { "type": "string" },
+        "alg": { "$ref": "kapsaro_common_schema.json#/$defs/sig_alg" },
         "kid": { "$ref": "kapsaro_common_schema.json#/$defs/kid" },
-        "sig": { "type": "string" }
+        "sig": {
+          "$ref": "kapsaro_common_schema.json#/$defs/b64url_64",
+          "description": "Ed25519 raw signature 64 bytes encoded as base64url (no padding, 86 characters)"
+        }
       },
       "additionalProperties": false,
       "required": ["alg", "kid", "sig"]

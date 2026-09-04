@@ -9,9 +9,9 @@ pub mod private_key;
 pub mod public_key;
 pub mod recipients;
 
-pub mod key_loader;
 pub(crate) mod report;
 pub(crate) mod signature;
+pub mod verifying_key;
 
 use crate::feature::context::expiry::enforce_expired_key_usage;
 use crate::model::public_key::PublicKey;

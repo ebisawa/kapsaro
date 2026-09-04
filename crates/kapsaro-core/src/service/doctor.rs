@@ -205,9 +205,5 @@ fn log_doctor_count(category: &str, count: usize) {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/internal/app_doctor_workspace_test.rs"]
-mod tests;
-
-#[cfg(test)]
-#[path = "../../tests/unit/internal/app_doctor_diagnostics_test.rs"]
-mod diagnostics_tests;
+#[path = "../../tests/unit/internal/service_doctor_test.rs"]
+mod service_doctor_test;

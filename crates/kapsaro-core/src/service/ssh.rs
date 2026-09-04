@@ -20,7 +20,7 @@ use crate::{Error, Result};
 pub use crate::config::types::SshSigningMethod;
 pub use crate::model::ssh::SshDeterminismStatus;
 
-/// CLI-resolved inputs for locating and using an SSH signing key.
+/// Caller-resolved inputs for locating and using an SSH signing key.
 #[derive(Debug, Clone)]
 pub struct SshSigningInputs {
     method: SshSigningMethod,
@@ -44,11 +44,6 @@ pub struct SshSigningContextResolution {
     pub fingerprint: String,
     pub backend: Box<dyn InternalSignatureBackend>,
     pub determinism: SshDeterminismStatus,
-}
-
-pub(crate) struct ResolvedSshSigningContext {
-    pub(crate) public_key: String,
-    pub(crate) backend: Box<dyn InternalSignatureBackend>,
 }
 
 /// SSHSIG-compatible Ed25519 raw signature returned by caller-supplied backends.
@@ -87,7 +82,7 @@ impl SshRawSignature {
 }
 
 impl SshSigningInputs {
-    /// Build SSH inputs after CLI, environment, and configuration resolution.
+    /// Build SSH inputs the caller has already resolved to a method and paths.
     pub fn new(
         method: SshSigningMethod,
         identity: Option<PathBuf>,
@@ -155,18 +150,6 @@ pub fn build_ssh_signing_context(
         fingerprint,
         backend,
         determinism,
-    })
-}
-
-pub(crate) fn resolve_ssh_signing_context(
-    inputs: &SshSigningInputs,
-    expected_fingerprint: &str,
-) -> Result<ResolvedSshSigningContext> {
-    let resolved =
-        resolve_ssh_signing_context_for_fingerprint(inputs, expected_fingerprint, false)?;
-    Ok(ResolvedSshSigningContext {
-        public_key: resolved.public_key,
-        backend: resolved.backend,
     })
 }
 
@@ -240,7 +223,7 @@ fn check_determinism_status(
     if !enabled {
         return Ok(SshDeterminismStatus::Skipped);
     }
-    match backend.check_sshsig_determinism(
+    match backend.enforce_sshsig_determinism(
         crate::io::ssh::protocol::constants::KEY_PROTECTION_NAMESPACE,
         public_key,
         SSHSIG_MESSAGE_DETERMINISM_CHECK_V1,

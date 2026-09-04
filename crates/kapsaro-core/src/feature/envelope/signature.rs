@@ -12,7 +12,7 @@ use crate::feature::envelope::key_possession::{
 use crate::format::signature::{
     build_artifact_signature_input, build_file_artifact_body_bytes, build_kv_artifact_body_bytes,
     build_kv_artifact_body_bytes_from_unsigned, decode_ed25519_signature, encode_ed25519_signature,
-    verify_signature_algorithm,
+    validate_signature_algorithm,
 };
 use crate::format::token::TokenCodec;
 use crate::model::file_enc::FileEncDocumentProtected;
@@ -63,14 +63,14 @@ pub fn verify_file_signature(
         &body_bytes,
         signature.mac.as_str(),
     )?;
-    verify_signature_algorithm(&signature.alg, algorithm::SIGNATURE_ED25519)?;
+    validate_signature_algorithm(&signature.alg, algorithm::SIGNATURE_ED25519)?;
     let signature_bytes = decode_ed25519_signature(&signature.sig)?;
     verify_detached_bytes(&sig_input, verifying_key, &signature_bytes)
 }
 
 #[cfg(test)]
 #[path = "../../../tests/unit/internal/feature_envelope_signature_test.rs"]
-mod tests;
+mod feature_envelope_signature_test;
 
 pub(crate) fn sign_kv_document(
     unsigned: &str,
@@ -126,7 +126,7 @@ pub fn verify_kv_signature(
         &body_bytes,
         signature.mac.as_str(),
     )?;
-    verify_signature_algorithm(&signature.alg, algorithm::SIGNATURE_ED25519)?;
+    validate_signature_algorithm(&signature.alg, algorithm::SIGNATURE_ED25519)?;
     let signature_bytes = decode_ed25519_signature(&signature.sig)?;
     verify_detached_bytes(&sig_input, verifying_key, &signature_bytes)
 }

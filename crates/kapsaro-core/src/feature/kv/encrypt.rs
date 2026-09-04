@@ -3,7 +3,7 @@
 
 //! KV encryption operations
 
-use crate::crypto::rng::fill_secret_array;
+use crate::crypto::rng::generate_secret_array;
 use crate::crypto::types::keys::MasterKey;
 use crate::feature::context::crypto::SigningContext;
 use crate::feature::envelope::entry::encrypt_entry;
@@ -28,7 +28,7 @@ pub(crate) fn build_kv_encryption(
     timestamp: &str,
 ) -> Result<(MasterKey, KvHeader, KvWrap)> {
     // Generate master key
-    let master_key_bytes = fill_secret_array::<32>()?;
+    let master_key_bytes = generate_secret_array::<32>()?;
     let master_key = MasterKey::from_zeroizing(master_key_bytes);
 
     // Create HEAD token
@@ -123,9 +123,9 @@ where
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/internal/feature_encrypt_kv_entry_test.rs"]
-mod feature_encrypt_kv_entry_test;
+#[path = "../../../tests/unit/internal/feature_kv_encrypt_entry_test.rs"]
+mod feature_kv_encrypt_entry_test;
 
 #[cfg(test)]
-#[path = "../../../tests/unit/internal/feature_kv_test.rs"]
-mod feature_kv_test;
+#[path = "../../../tests/unit/internal/feature_kv_encrypt_test.rs"]
+mod feature_kv_encrypt_test;

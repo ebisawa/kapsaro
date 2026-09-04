@@ -125,7 +125,7 @@ fn acquire_directory_lock(file: &File, path: &Path) -> Result<()> {
         Err(Errno::WOULDBLOCK) => {}
         Err(error) => return Err(lock_failure(path, error)),
     }
-    tracing::warn!("{}", describe_lock_contention(path));
+    tracing::warn!("{}", format_lock_contention(path));
     wait_for_directory_lock(file, path)
 }
 
@@ -160,7 +160,7 @@ fn lock_failure(path: &Path, error: Errno) -> Error {
     )
 }
 
-fn describe_lock_contention(path: &Path) -> String {
+fn format_lock_contention(path: &Path) -> String {
     format!(
         "Waiting for the lock on {} to be released",
         format_path_relative_to_cwd(path)
@@ -207,7 +207,7 @@ where
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/internal/support_fs_lock_test_support.rs"]
+#[path = "../../../tests/test_support/support_fs_lock_test_support.rs"]
 pub(crate) mod lock_test_support;
 
 #[cfg(test)]

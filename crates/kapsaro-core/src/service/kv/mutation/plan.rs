@@ -52,11 +52,11 @@ impl MutationWriteTrustPlan<'_> {
 
 struct ExistingSignerTrustEvaluation {
     signer_trust: Option<SignerTrustOutcome>,
-    selected_key_expiry: Option<SelectedDecryptionKeyExpiry>,
+    selected_key_expiry: Option<DecryptionKeyExpirySelection>,
     warnings: Vec<String>,
 }
 
-struct SelectedDecryptionKeyExpiry {
+struct DecryptionKeyExpirySelection {
     warning: Option<String>,
     key_identity: LocalKeyIdentity,
 }
@@ -256,7 +256,7 @@ fn evaluate_existing_signer_trust(
 
 fn collect_mutation_write_warnings(
     mut warnings: Vec<String>,
-    selected_key_expiry: Option<SelectedDecryptionKeyExpiry>,
+    selected_key_expiry: Option<DecryptionKeyExpirySelection>,
     signer_warnings: Vec<String>,
     recipient_warnings: &[String],
 ) -> Vec<String> {
@@ -272,7 +272,7 @@ fn evaluate_existing_decryption_key_expiry(
     reviewed_file: Option<&KvEncContent>,
     capabilities: &WorkspaceWriteCapabilities<'_>,
     allow_expired_key: bool,
-) -> Result<Option<SelectedDecryptionKeyExpiry>> {
+) -> Result<Option<DecryptionKeyExpirySelection>> {
     let Some(content) = reviewed_file else {
         return Ok(None);
     };
@@ -282,7 +282,7 @@ fn evaluate_existing_decryption_key_expiry(
         .key_context()
         .inner()
         .select_local_decryption_key(&wrap_set, capabilities.trust().owner().as_str())?;
-    Ok(Some(SelectedDecryptionKeyExpiry {
+    Ok(Some(DecryptionKeyExpirySelection {
         warning: selected
             .info()
             .key_expiry

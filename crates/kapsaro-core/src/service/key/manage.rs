@@ -1,12 +1,12 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Application orchestration for local key management commands.
-//! Resolves command context, keystore paths, and key I/O before feature calls.
+//! Service-layer orchestration for local key management operations.
+//! Resolves keystore paths and key I/O around the caller-supplied inputs before feature calls.
 
 use std::path::Path;
 
-use crate::feature::key::material::validate_private_key_material;
+use crate::feature::key::material::verify_private_key_material;
 use crate::feature::key::portable_export::{
     build_password_strength_warning, export_private_key_portable, validate_export_password,
     ExportPasswordPolicy, PortableExportOptions, PortableExportOutput,
@@ -36,7 +36,7 @@ use crate::service::key::types::{
 use crate::service::keystore::open_local_keystore;
 use crate::service::ssh::SshSigningContextResolution;
 use crate::service::trust::store::{
-    read_stored_trust_signer, LocalStateBinding, StoredTrustSigner,
+    load_stored_trust_signer, LocalStateBinding, TrustSignerRecord,
 };
 use crate::service::trust::TrustCommandSession;
 use crate::support::fs::anchor::AnchoredDir;
@@ -128,8 +128,8 @@ impl KeyCommandCapabilities {
     /// The keystore this command opened is handed over rather than left to be
     /// resolved again, so the signature is verified against the keys the
     /// removal was decided against even if `keys` is replaced meanwhile.
-    pub(super) fn stored_trust_signer(&self, owner: &MemberHandle) -> StoredTrustSigner {
-        read_stored_trust_signer(
+    pub(super) fn stored_trust_signer(&self, owner: &MemberHandle) -> TrustSignerRecord {
+        load_stored_trust_signer(
             &self.home,
             self.trust_dir.as_ref(),
             owner,
@@ -172,7 +172,7 @@ pub fn activate_key_command(
     // operator learns the trust store still leans on another key without this
     // command needing an SSH signing context.
     let stored_signer = capabilities.stored_trust_signer(&member_handle);
-    let report = StoredTrustSignerReport::from(stored_signer);
+    let report = TrustSignerReport::from(stored_signer);
     Ok(KeyActivateResult {
         member_handle: member_handle.into_string(),
         kid: kid.into_string(),
@@ -189,23 +189,23 @@ pub fn activate_key_command(
 /// finding of its own: the approvals it holds are unusable until it is
 /// repaired, and reporting nothing would let the activation look complete while
 /// the trust state it reports on cannot be read at all.
-struct StoredTrustSignerReport {
+struct TrustSignerReport {
     signer_kid: Option<String>,
     warning: Option<String>,
 }
 
-impl From<StoredTrustSigner> for StoredTrustSignerReport {
-    fn from(signer: StoredTrustSigner) -> Self {
+impl From<TrustSignerRecord> for TrustSignerReport {
+    fn from(signer: TrustSignerRecord) -> Self {
         match signer {
-            StoredTrustSigner::Signer(kid) => Self {
+            TrustSignerRecord::Signer(kid) => Self {
                 signer_kid: Some(kid),
                 warning: None,
             },
-            StoredTrustSigner::Absent => Self {
+            TrustSignerRecord::Absent => Self {
                 signer_kid: None,
                 warning: None,
             },
-            StoredTrustSigner::Unreadable(error) => Self {
+            TrustSignerRecord::Unreadable(error) => Self {
                 signer_kid: None,
                 warning: Some(build_unreadable_trust_store_warning(&error)),
             },
@@ -563,7 +563,7 @@ fn load_private_key_export_material(
     verify_private_key_matches_public_key(&encrypted, verified_public_key.document())?;
 
     let plaintext = decrypt_private_key(&encrypted, backend, ssh_pubkey)?;
-    validate_private_key_material(&plaintext)?;
+    verify_private_key_material(&plaintext)?;
 
     Ok(PrivateKeyExportMaterial {
         plaintext,
@@ -619,5 +619,5 @@ fn validate_key_removal(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/internal/app_key_manage_security_test.rs"]
-mod app_key_manage_security_test;
+#[path = "../../../tests/unit/internal/service_key_manage_security_test.rs"]
+mod service_key_manage_security_test;

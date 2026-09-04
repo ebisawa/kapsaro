@@ -43,5 +43,5 @@ fn build_resign_result(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/internal/app_trust_resign_test.rs"]
-mod tests;
+#[path = "../../../tests/unit/internal/service_trust_resign_test.rs"]
+mod service_trust_resign_test;

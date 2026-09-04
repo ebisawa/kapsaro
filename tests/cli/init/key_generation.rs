@@ -134,6 +134,11 @@ fn test_init_with_verbose_option_does_not_log_crypto_trace() {
 
 #[test]
 fn test_init_uses_existing_key() {
+    // The guard is held for the lock, not the saved value: this test writes no
+    // environment variable itself, but it spawns children that assert success
+    // and then counts what they wrote, so a variable another test sets while
+    // this one runs would reach those children through the inherited
+    // environment and change what they do.
     let _guard = EnvGuard::new(&["KAPSARO_HOME"]);
     let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_init_env();
 
@@ -148,11 +153,9 @@ fn test_init_uses_existing_key() {
         .assert()
         .success();
 
-    std::env::set_var("KAPSARO_HOME", home_dir.path().to_str().unwrap());
-    let base_dir = kapsaro_core::test_support::storage::config::paths::get_base_dir().unwrap();
     let member_dir =
         kapsaro_core::test_support::storage::keystore::paths::get_keystore_root_from_base(
-            &base_dir,
+            home_dir.path(),
         )
         .join(TEST_MEMBER_HANDLE);
     let kids_before: Vec<_> = fs::read_dir(&member_dir)

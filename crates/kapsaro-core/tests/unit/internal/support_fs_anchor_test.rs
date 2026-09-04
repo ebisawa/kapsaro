@@ -22,7 +22,7 @@ fn create_makes_every_missing_ancestor_below_an_existing_root() {
     let temp = TempDir::new().unwrap();
     let target = temp.path().join("level1").join("level2").join("level3");
 
-    let anchored = AnchoredDir::create(&target, DirectoryScope::Generic, "test root").unwrap();
+    let anchored = AnchoredDir::ensure(&target, DirectoryScope::Generic, "test root").unwrap();
 
     assert!(temp.path().join("level1").is_dir());
     assert!(temp.path().join("level1").join("level2").is_dir());
@@ -31,7 +31,7 @@ fn create_makes_every_missing_ancestor_below_an_existing_root() {
 }
 
 /// A concurrent process can finish creating the whole tree between the probe
-/// `create` makes and the one `create_final_directory` makes internally, and
+/// `create` makes and the one `ensure_final_directory` makes internally, and
 /// the walk must absorb that by opening what is now there rather than trying
 /// to create a directory that already exists.
 #[test]
@@ -43,7 +43,7 @@ fn create_absorbs_a_full_tree_created_between_the_two_existence_checks() {
         fs::create_dir_all(&racing_target).unwrap();
     });
 
-    let anchored = AnchoredDir::create(&target, DirectoryScope::Generic, "test root").unwrap();
+    let anchored = AnchoredDir::ensure(&target, DirectoryScope::Generic, "test root").unwrap();
 
     assert_eq!(anchored.path(), target.as_path());
     assert!(target.is_dir());
@@ -68,7 +68,7 @@ fn create_reports_an_inspection_failure_it_cannot_classify_as_missing() {
     let target = blocked.join("child");
     fs::set_permissions(&blocked, fs::Permissions::from_mode(0o000)).unwrap();
 
-    let result = AnchoredDir::create(&target, DirectoryScope::Generic, "test root");
+    let result = AnchoredDir::ensure(&target, DirectoryScope::Generic, "test root");
     fs::set_permissions(&blocked, fs::Permissions::from_mode(0o755)).unwrap();
     let error = result.unwrap_err();
 

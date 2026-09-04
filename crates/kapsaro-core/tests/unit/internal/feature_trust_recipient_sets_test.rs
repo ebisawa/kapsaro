@@ -2,12 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::feature::trust::recipient_sets::{
-    compute_recipient_set_hash, judge_recipient_set, purge_recipient_sets, remove_recipient_set,
-    upsert_recipient_set, validate_recipient_set_record, ArtifactRecipientSet,
-    RecipientSetJudgment,
+    compute_recipient_set_hash, find_inactive_recipient_kid, judge_recipient_set,
+    purge_recipient_sets, remove_recipient_set, upsert_recipient_set,
+    validate_recipient_set_record, ArtifactRecipientSet, RecipientSetJudgment,
 };
 use crate::model::common::WrapItem;
+use crate::model::public_key::PublicKey;
 use crate::model::trust_store::{RecipientSetApprovalVia, RecipientSetRecord};
+use crate::test_utils::keygen_helpers::build_dummy_public_key;
+use std::collections::BTreeMap;
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 use uuid::Uuid;
@@ -286,4 +289,38 @@ fn wrap_item(recipient_handle: &str, kid: &str) -> WrapItem {
         enc: "enc".to_string(),
         ct: "ct".to_string(),
     }
+}
+
+/// The recipient an artifact was wrapped for can no longer open it once the
+/// workspace drops that key, so the kid itself is what a caller has to name.
+#[test]
+fn test_find_inactive_recipient_kid_names_the_dropped_recipient() {
+    let set = ArtifactRecipientSet::new(
+        Uuid::nil(),
+        vec![KID_ALICE.to_string(), KID_BOB.to_string()],
+    )
+    .unwrap();
+    let active = build_active_member_index(&[KID_ALICE]);
+
+    let inactive = find_inactive_recipient_kid(&set, &active);
+
+    assert_eq!(inactive, Some(KID_BOB));
+}
+
+#[test]
+fn test_find_inactive_recipient_kid_accepts_a_fully_active_set() {
+    let set = ArtifactRecipientSet::new(
+        Uuid::nil(),
+        vec![KID_ALICE.to_string(), KID_BOB.to_string()],
+    )
+    .unwrap();
+    let active = build_active_member_index(&[KID_ALICE, KID_BOB]);
+
+    assert!(find_inactive_recipient_kid(&set, &active).is_none());
+}
+
+fn build_active_member_index(kids: &[&str]) -> BTreeMap<String, PublicKey> {
+    kids.iter()
+        .map(|kid| ((*kid).to_string(), build_dummy_public_key(kid)))
+        .collect()
 }

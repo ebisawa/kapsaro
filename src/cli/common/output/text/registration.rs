@@ -67,4 +67,4 @@ fn format_init_noop_summary_lines(workspace_path: &Path) -> Vec<String> {
 
 #[cfg(test)]
 #[path = "../../../../../tests/unit/internal/cli_common_output_text_registration_test.rs"]
-mod tests;
+mod cli_common_output_text_registration_test;

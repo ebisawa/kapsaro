@@ -10,6 +10,7 @@ use crate::feature::envelope::unwrap::unwrap_master_key;
 use crate::feature::envelope::wrap_set::WrapSet;
 use crate::format::codec::base64_public::encode_base64url_nopad;
 use crate::model::file_enc::VerifiedFileEncDocument;
+use crate::model::identity::{Kid, MemberHandle};
 use crate::model::private_key::{IdentityKeysPrivate, JwkOkpPrivateKey, PrivateKeyPlaintext};
 use crate::model::public_key::{
     Attestation, IdentityKeys, JwkOkpPublicKey, PublicKey, PublicKeyProtected, VerifiedRecipientKey,
@@ -48,7 +49,12 @@ pub(super) fn decrypt_file_document_for_test(
     let protected = &verified_doc.document().protected;
     let wrap_set = WrapSet::parse(&protected.wrap, "Document").unwrap();
     let master_key = unwrap_master_key(
-        wrap_set.find_by_kid_for_member(kid, member_handle).unwrap(),
+        wrap_set
+            .find_by_kid_for_member(
+                &Kid::new(kid).unwrap(),
+                &MemberHandle::new(member_handle).unwrap(),
+            )
+            .unwrap(),
         &protected.sid,
         &kem_secret_key,
         build_file_wrap_info,

@@ -16,8 +16,8 @@ use crate::Result;
 use ed25519_dalek::VerifyingKey;
 
 #[cfg(test)]
-#[path = "../../../tests/unit/internal/ssh_verify_test.rs"]
-mod ssh_verify_test;
+#[path = "../../../tests/unit/internal/io_ssh_verify_test.rs"]
+mod io_ssh_verify_test;
 
 /// Build signed data for PublicKey attestation verification.
 pub fn build_attestation_signed_data(input: &AttestationBodyInput<'_>) -> Result<Vec<u8>> {

@@ -232,7 +232,7 @@ fn build_unscanned_ancestor_owner_check(base_dir: &Path) -> DoctorCheck {
 }
 
 fn build_ancestor_owner_check(finding: &AncestorOwnerFinding) -> DoctorCheck {
-    DoctorCheck::warn_with_reason_and_next_action(
+    DoctorCheck::build_warning_with_reason_and_next_action(
         ANCESTOR_OWNER_CHECK_ID,
         DoctorCategory::LocalState,
         DoctorSubject::Path(format_finding_path(finding.path())),
@@ -339,5 +339,5 @@ fn violation_next_action(kind: PermissionViolationKind) -> &'static str {
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/internal/app_doctor_local_state_permissions_test.rs"]
-mod tests;
+#[path = "../../../../tests/unit/internal/service_doctor_local_state_permissions_test.rs"]
+mod service_doctor_local_state_permissions_test;

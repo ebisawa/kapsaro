@@ -5,14 +5,14 @@
 //! Covers child-name validation and directory-bound read/write/remove.
 
 use super::{
-    classify_missing_child_dir, create_child_dir_restricted_at, create_text_noreplace_at,
-    ensure_child_dir_at, ensure_child_dir_restricted_at, ensure_text_file_content_matches_at,
+    build_directory_entry_error, build_missing_child_dir_error, ensure_child_dir_at,
+    ensure_child_dir_restricted_at, ensure_text_file_content_matches_at,
     fail_next_child_dir_creation_at, fail_next_parent_sync, file_exists_at, is_write_staging_name,
     list_child_entries_at, load_text_with_limit_at, open_child_dir, open_child_dir_following,
     open_dir_following, open_dir_nofollow, open_optional_child_dir, open_os_child_dir_nofollow,
-    open_scanned_child_dir, read_directory_entry_error, regular_file_exists_at,
-    remove_empty_child_dir_if_exists_at, remove_file_at, remove_file_if_exists_at,
-    rename_child_noreplace_unsynced_at, save_text_at, save_text_restricted_at,
+    open_scanned_child_dir, regular_file_exists_at, remove_empty_child_dir_if_exists_at,
+    remove_file_at, remove_file_if_exists_at, rename_child_noreplace_unsynced_at,
+    save_child_dir_restricted_at, save_text_at, save_text_noreplace_at, save_text_restricted_at,
     scan_child_entries_at, scan_one_child, vanish_next_scanned_child, ChildDirectoryCreationStep,
     ChildName, ChildType, DirectoryFd, DirectoryScope, RemovedEntry, ScanBudget,
 };
@@ -293,10 +293,10 @@ fn test_open_optional_child_dir_returns_none_for_missing_entry() {
 
 #[cfg(unix)]
 #[test]
-fn test_create_child_dir_restricted_at_uses_0700() {
+fn test_save_child_dir_restricted_at_uses_0700() {
     let temp_dir = TempDir::new().unwrap();
     with_locked_workspace_dir(temp_dir.path(), |dir| {
-        create_child_dir_restricted_at(dir, "child").map(|_| ())
+        save_child_dir_restricted_at(dir, "child").map(|_| ())
     })
     .unwrap();
 
@@ -309,12 +309,12 @@ fn test_create_child_dir_restricted_at_uses_0700() {
 }
 
 #[test]
-fn test_create_child_dir_restricted_at_refuses_an_existing_entry() {
+fn test_save_child_dir_restricted_at_refuses_an_existing_entry() {
     let temp_dir = TempDir::new().unwrap();
     fs::create_dir(temp_dir.path().join("child")).unwrap();
 
     let error = with_locked_workspace_dir(temp_dir.path(), |dir| {
-        create_child_dir_restricted_at(dir, "child").map(|_| ())
+        save_child_dir_restricted_at(dir, "child").map(|_| ())
     })
     .unwrap_err();
 
@@ -351,7 +351,7 @@ fn test_a_failure_before_the_publish_leaves_the_directory_unstaged() {
         fail_next_child_dir_creation_at(failure);
 
         let error = with_locked_workspace_dir(temp_dir.path(), |dir| {
-            create_child_dir_restricted_at(dir, "child").map(|_| ())
+            save_child_dir_restricted_at(dir, "child").map(|_| ())
         })
         .unwrap_err();
 
@@ -378,7 +378,7 @@ fn test_a_failure_after_the_publish_keeps_the_published_directory() {
 
     fail_next_child_dir_creation_at(ChildDirectoryCreationStep::ParentSync);
     let error = with_locked_workspace_dir(temp_dir.path(), |dir| {
-        create_child_dir_restricted_at(dir, "child").map(|_| ())
+        save_child_dir_restricted_at(dir, "child").map(|_| ())
     })
     .unwrap_err();
 
@@ -410,7 +410,7 @@ fn test_a_failed_creation_leaves_the_directory_a_concurrent_caller_holds() {
 
     fail_next_child_dir_creation_at(ChildDirectoryCreationStep::ChildSync);
     let staging_failed = with_locked_workspace_dir(temp_dir.path(), |dir| {
-        create_child_dir_restricted_at(dir, "child").map(|_| ())
+        save_child_dir_restricted_at(dir, "child").map(|_| ())
     })
     .unwrap_err();
     assert!(
@@ -423,7 +423,7 @@ fn test_a_failed_creation_leaves_the_directory_a_concurrent_caller_holds() {
     );
 
     let name_taken = with_locked_workspace_dir(temp_dir.path(), |dir| {
-        create_child_dir_restricted_at(dir, "child").map(|_| ())
+        save_child_dir_restricted_at(dir, "child").map(|_| ())
     })
     .unwrap_err();
     assert_eq!(name_taken.kind(), crate::ErrorKind::InvalidOperation);
@@ -447,7 +447,7 @@ fn test_the_name_a_creation_publishes_never_holds_an_unfinished_directory() {
 
     fail_next_child_dir_creation_at(ChildDirectoryCreationStep::Publish);
     with_locked_workspace_dir(temp_dir.path(), |dir| {
-        create_child_dir_restricted_at(dir, "child").map(|_| ())
+        save_child_dir_restricted_at(dir, "child").map(|_| ())
     })
     .unwrap_err();
 
@@ -571,12 +571,12 @@ isolated_umask_test! {
     /// The creating path settles the mode the same way, so a key directory
     /// staged under a restrictive umask is one the command can go on to write.
     #[cfg(unix)]
-    fn test_create_child_dir_restricted_pins_0700_under_a_restrictive_umask() {
+    fn test_save_child_dir_restricted_pins_0700_under_a_restrictive_umask() {
         let temp_dir = TempDir::new().unwrap();
 
         with_restrictive_umask(|| {
             with_locked_workspace_dir(temp_dir.path(), |dir| {
-                create_child_dir_restricted_at(dir, "child").map(|_| ())
+                save_child_dir_restricted_at(dir, "child").map(|_| ())
             })
             .unwrap();
         });
@@ -675,11 +675,11 @@ fn test_rename_child_noreplace_preserves_existing_destination() {
 }
 
 #[test]
-fn test_create_text_noreplace_publishes_a_new_entry() {
+fn test_save_text_noreplace_publishes_a_new_entry() {
     let temp_dir = TempDir::new().unwrap();
 
     with_locked_workspace_dir(temp_dir.path(), |dir| {
-        create_text_noreplace_at(dir, "alice.json", "{}")
+        save_text_noreplace_at(dir, "alice.json", "{}")
     })
     .unwrap();
 
@@ -690,12 +690,12 @@ fn test_create_text_noreplace_publishes_a_new_entry() {
 }
 
 #[test]
-fn test_create_text_noreplace_preserves_an_entry_that_already_stands() {
+fn test_save_text_noreplace_preserves_an_entry_that_already_stands() {
     let temp_dir = TempDir::new().unwrap();
     fs::write(temp_dir.path().join("alice.json"), "existing").unwrap();
 
     let error = with_locked_workspace_dir(temp_dir.path(), |dir| {
-        create_text_noreplace_at(dir, "alice.json", "{}")
+        save_text_noreplace_at(dir, "alice.json", "{}")
     })
     .unwrap_err();
 
@@ -710,12 +710,12 @@ fn test_create_text_noreplace_preserves_an_entry_that_already_stands() {
 /// write is publishable. A caller that staged under a name of its own and then
 /// saved that name paid the suffix twice and lost the top of the allowed range.
 #[test]
-fn test_create_text_noreplace_accepts_the_longest_writable_target_name() {
+fn test_save_text_noreplace_accepts_the_longest_writable_target_name() {
     let temp_dir = TempDir::new().unwrap();
     let name = "a".repeat(MAX_ATOMIC_WRITE_TARGET_NAME_LENGTH);
 
     with_locked_workspace_dir(temp_dir.path(), |dir| {
-        create_text_noreplace_at(dir, &name, "{}")
+        save_text_noreplace_at(dir, &name, "{}")
     })
     .unwrap();
 
@@ -726,12 +726,12 @@ fn test_create_text_noreplace_accepts_the_longest_writable_target_name() {
 }
 
 #[test]
-fn test_create_text_noreplace_rejects_a_target_name_past_the_atomic_write_bound() {
+fn test_save_text_noreplace_rejects_a_target_name_past_the_atomic_write_bound() {
     let temp_dir = TempDir::new().unwrap();
     let name = "a".repeat(MAX_ATOMIC_WRITE_TARGET_NAME_LENGTH + 1);
 
     let error = with_locked_workspace_dir(temp_dir.path(), |dir| {
-        create_text_noreplace_at(dir, &name, "{}")
+        save_text_noreplace_at(dir, &name, "{}")
     })
     .unwrap_err();
 
@@ -744,12 +744,12 @@ fn test_create_text_noreplace_rejects_a_target_name_past_the_atomic_write_bound(
 /// A failed publish leaves the directory as it found it, so the next caller
 /// does not have to tell a staged entry from a document.
 #[test]
-fn test_create_text_noreplace_leaves_no_staged_entry_behind() {
+fn test_save_text_noreplace_leaves_no_staged_entry_behind() {
     let temp_dir = TempDir::new().unwrap();
     fs::write(temp_dir.path().join("alice.json"), "existing").unwrap();
 
     with_locked_workspace_dir(temp_dir.path(), |dir| {
-        create_text_noreplace_at(dir, "alice.json", "{}").unwrap_err();
+        save_text_noreplace_at(dir, "alice.json", "{}").unwrap_err();
         Ok(())
     })
     .unwrap();
@@ -1099,7 +1099,7 @@ fn test_anchored_dir_permission_warning_names_the_selected_symlink_path() {
     symlink(&real, &alias).unwrap();
 
     let guard = LocalStateWarningGuard::new();
-    AnchoredDir::create(&alias, DirectoryScope::LocalState, "test local state root").unwrap();
+    AnchoredDir::ensure(&alias, DirectoryScope::LocalState, "test local state root").unwrap();
     let warnings = guard.take_reasons();
 
     let alias_display = alias.display().to_string();
@@ -1306,14 +1306,14 @@ fn test_load_text_at_keeps_the_file_contents_out_of_the_error() {
 fn test_missing_child_dir_separates_an_absence_from_a_denied_inspection() {
     let path = Path::new("/local/state/keys");
 
-    let absent = classify_missing_child_dir(
+    let absent = build_missing_child_dir_error(
         Err(rustix::io::Errno::NOENT),
         DirectoryScope::LocalState,
         path,
     );
     assert_eq!(absent.kind(), crate::ErrorKind::NotFound);
 
-    let denied = classify_missing_child_dir(
+    let denied = build_missing_child_dir_error(
         Err(rustix::io::Errno::ACCESS),
         DirectoryScope::LocalState,
         path,
@@ -1325,7 +1325,7 @@ fn test_missing_child_dir_separates_an_absence_from_a_denied_inspection() {
         denied.format_user_message()
     );
 
-    let dangling = classify_missing_child_dir(Ok(()), DirectoryScope::LocalState, path);
+    let dangling = build_missing_child_dir_error(Ok(()), DirectoryScope::LocalState, path);
     assert_eq!(dangling.kind(), crate::ErrorKind::InvalidOperation);
     assert!(
         dangling
@@ -1664,7 +1664,7 @@ fn test_a_directory_read_failure_escapes_the_directory_it_names() {
     fs::create_dir(&directory).unwrap();
     let dir = open_dir_following(&directory, DirectoryScope::LocalState).unwrap();
 
-    let error = read_directory_entry_error(&dir, rustix::io::Errno::IO);
+    let error = build_directory_entry_error(&dir, rustix::io::Errno::IO);
 
     let message = error.format_user_message();
     assert!(message.contains("bad\\nname"), "{message}");

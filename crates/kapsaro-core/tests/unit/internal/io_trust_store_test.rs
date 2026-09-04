@@ -14,7 +14,7 @@ use crate::model::trust_store::{
 use crate::model::wire::format::LOCAL_TRUST_V1;
 use crate::support::limits::MAX_JSON_DEPTH;
 use crate::support::warning::LocalStateWarningGuard;
-use crate::test_utils::{create_local_state_dir, local_state_temp_dir, write_local_state_file};
+use crate::test_utils::{ensure_local_state_dir, local_state_temp_dir, save_local_state_file};
 use std::collections::BTreeMap;
 #[cfg(unix)]
 use std::os::unix::fs::{symlink, PermissionsExt};
@@ -63,7 +63,8 @@ fn build_test_document(owner: &str) -> TrustStoreDocument {
         signature: TrustStoreSignature {
             alg: "eddsa-ed25519".to_string(),
             kid: "9K4W2H7R1M5VX8DPT3QNC6JY0F1BRG4D".to_string(),
-            sig: "test_signature".to_string(),
+            sig: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+                .to_string(),
         },
     }
 }
@@ -84,7 +85,7 @@ fn deeply_nested_json(depth: usize) -> String {
 fn test_load_trust_store_nonexistent_returns_none() {
     let dir = local_state_temp_dir();
     let trust_dir = dir.path().join("trust");
-    create_local_state_dir(&trust_dir);
+    ensure_local_state_dir(&trust_dir);
     let path = trust_dir.join("nonexistent.json");
     let (base, opened_trust_dir) = open_trust_directory(dir.path());
     let result = load_trust_store_snapshot(&base, &opened_trust_dir, &path).unwrap();
@@ -147,7 +148,7 @@ fn test_validate_trust_directory_rejects_symlink_under_a_trust_store_name() {
     let dir = local_state_temp_dir();
     let trust_dir = dir.path().join("trust");
     let outside = dir.path().join("outside.json");
-    create_local_state_dir(&trust_dir);
+    ensure_local_state_dir(&trust_dir);
     std::fs::write(&outside, "outside").unwrap();
     symlink(&outside, trust_dir.join("unrelated.json")).unwrap();
     let anchored = AnchoredDir::open(
@@ -171,7 +172,7 @@ fn test_validate_trust_directory_allows_symlink_outside_trust_store_names() {
     let dir = local_state_temp_dir();
     let trust_dir = dir.path().join("trust");
     let outside = dir.path().join("outside.txt");
-    create_local_state_dir(&trust_dir);
+    ensure_local_state_dir(&trust_dir);
     std::fs::write(&outside, "outside").unwrap();
     symlink(&outside, trust_dir.join("notes.txt")).unwrap();
     let anchored = AnchoredDir::open(
@@ -189,7 +190,7 @@ fn test_validate_trust_directory_allows_symlink_outside_trust_store_names() {
 fn test_validate_trust_directory_ignores_leftover_staging_entry() {
     let dir = local_state_temp_dir();
     let trust_dir = dir.path().join("trust");
-    create_local_state_dir(&trust_dir);
+    ensure_local_state_dir(&trust_dir);
     std::fs::write(
         trust_dir.join(".alice@example.com.json.tmp.3f2504e0-4f89-41d3-9a0c-0305e82c3301"),
         "staged",
@@ -236,11 +237,11 @@ fn test_load_trust_store_filename_mismatch_fails() {
     let dir = local_state_temp_dir();
     let trust_dir = dir.path().join("trust");
     let path = trust_dir.join("wrong_name.json");
-    create_local_state_dir(&trust_dir);
+    ensure_local_state_dir(&trust_dir);
 
     let doc = build_test_document("alice@example.com");
     let json = serde_json::to_string_pretty(&doc).unwrap();
-    write_local_state_file(&path, json);
+    save_local_state_file(&path, json);
 
     let (base, opened_trust_dir) = open_trust_directory(dir.path());
     let result = load_trust_store_snapshot(&base, &opened_trust_dir, &path);
@@ -254,9 +255,9 @@ fn test_load_trust_store_invalid_json_fails() {
     let dir = local_state_temp_dir();
     let trust_dir = dir.path().join("trust");
     let path = trust_dir.join("alice@example.com.json");
-    create_local_state_dir(&trust_dir);
+    ensure_local_state_dir(&trust_dir);
 
-    write_local_state_file(&path, "not valid json");
+    save_local_state_file(&path, "not valid json");
 
     let (base, opened_trust_dir) = open_trust_directory(dir.path());
     let result = load_trust_store_snapshot(&base, &opened_trust_dir, &path);
@@ -268,7 +269,7 @@ fn test_load_trust_store_rejects_duplicate_top_level_member() {
     let dir = local_state_temp_dir();
     let trust_dir = dir.path().join("trust");
     let path = trust_dir.join("alice@example.com.json");
-    create_local_state_dir(&trust_dir);
+    ensure_local_state_dir(&trust_dir);
     let duplicate_signature = r#"{
         "protected": {
             "format": "kapsaro:format:local-trust@1",
@@ -289,7 +290,7 @@ fn test_load_trust_store_rejects_duplicate_top_level_member() {
             "sig": "second_signature"
         }
     }"#;
-    write_local_state_file(&path, duplicate_signature);
+    save_local_state_file(&path, duplicate_signature);
 
     let (base, opened_trust_dir) = open_trust_directory(dir.path());
     let result = load_trust_store_snapshot(&base, &opened_trust_dir, &path);
@@ -306,7 +307,7 @@ fn test_load_trust_store_rejects_duplicate_nested_member() {
     let dir = local_state_temp_dir();
     let trust_dir = dir.path().join("trust");
     let path = trust_dir.join("alice@example.com.json");
-    create_local_state_dir(&trust_dir);
+    ensure_local_state_dir(&trust_dir);
     let duplicate_owner = r#"{
         "protected": {
             "format": "kapsaro:format:local-trust@1",
@@ -323,7 +324,7 @@ fn test_load_trust_store_rejects_duplicate_nested_member() {
             "sig": "test_signature"
         }
     }"#;
-    write_local_state_file(&path, duplicate_owner);
+    save_local_state_file(&path, duplicate_owner);
 
     let (base, opened_trust_dir) = open_trust_directory(dir.path());
     let result = load_trust_store_snapshot(&base, &opened_trust_dir, &path);
@@ -341,8 +342,8 @@ fn test_load_trust_store_rejects_json_exceeding_depth_limit_before_parse() {
     let base_dir = dir.path().join("kapsaro");
     let trust_dir = base_dir.join("trust");
     let path = trust_dir.join("alice@example.com.json");
-    create_local_state_dir(&trust_dir);
-    write_local_state_file(&path, deeply_nested_json(MAX_JSON_DEPTH + 1));
+    ensure_local_state_dir(&trust_dir);
+    save_local_state_file(&path, deeply_nested_json(MAX_JSON_DEPTH + 1));
 
     let (base, opened_trust_dir) = open_trust_directory(&base_dir);
     let result = load_trust_store_snapshot(&base, &opened_trust_dir, &path);
@@ -392,8 +393,8 @@ fn test_load_trust_store_rejects_oversized_document_before_parse() {
     let base_dir = dir.path().join("kapsaro");
     let trust_dir = base_dir.join("trust");
     let path = trust_dir.join("alice@example.com.json");
-    create_local_state_dir(&trust_dir);
-    write_local_state_file(&path, vec![b'A'; MAX_JSON_DOCUMENT_READ_SIZE + 1]);
+    ensure_local_state_dir(&trust_dir);
+    save_local_state_file(&path, vec![b'A'; MAX_JSON_DOCUMENT_READ_SIZE + 1]);
 
     let (base, opened_trust_dir) = open_trust_directory(&base_dir);
     let result = load_trust_store_snapshot(&base, &opened_trust_dir, &path);
@@ -440,7 +441,7 @@ fn test_save_trust_store_at_reports_a_completed_write_when_the_directory_turns_u
     let dir = local_state_temp_dir();
     let trust_dir = dir.path().join("trust");
     let outside = dir.path().join("outside.json");
-    create_local_state_dir(&trust_dir);
+    ensure_local_state_dir(&trust_dir);
     std::fs::write(&outside, "outside").unwrap();
     let path = trust_dir.join("alice@example.com.json");
     let document = build_test_document("alice@example.com");

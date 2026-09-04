@@ -50,4 +50,4 @@ fn build_rewrap_batch_result_output(outcome: &RewrapBatchView) -> RewrapBatchRes
 
 #[cfg(test)]
 #[path = "../../../../../tests/unit/internal/cli_common_output_json_rewrap_test.rs"]
-mod tests;
+mod cli_common_output_json_rewrap_test;

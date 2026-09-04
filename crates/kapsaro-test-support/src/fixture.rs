@@ -1,8 +1,8 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-// Runtime test fixture builders for keystores, workspaces, and SSH key pairs.
-// All fixtures are generated at runtime; no static fixture data files are used.
+//! Runtime test fixture builders for keystores, workspaces, and SSH key pairs.
+//! All fixtures are generated at runtime; no static fixture data files are used.
 
 use std::collections::HashMap;
 use std::fs;
@@ -38,7 +38,7 @@ static SHARED_FIXTURE: LazyLock<SharedFixture> = LazyLock::new(build_shared_fixt
 /// require. `fs::create_dir` honours the process umask, so a directory made
 /// that way is group-readable under the usual 022 and local state warns about
 /// it.
-pub fn create_local_state_dir(path: &Path) {
+pub fn ensure_local_state_dir(path: &Path) {
     ensure_restricted_dir(path);
 }
 
@@ -70,7 +70,7 @@ fn restrict_dir_mode(path: &Path) {
 #[cfg(not(unix))]
 fn restrict_dir_mode(_path: &Path) {}
 
-fn create_secret_home() -> TempDir {
+fn ensure_secret_home() -> TempDir {
     local_state_temp_dir()
 }
 
@@ -142,7 +142,7 @@ fn build_member_fixture(
 /// Local state warns about any file group or other can reach, so a fixture
 /// written under the developer's umask would add noise before the test reached
 /// its subject.
-pub fn write_local_state_file(path: &Path, contents: impl AsRef<[u8]>) {
+pub fn save_local_state_file(path: &Path, contents: impl AsRef<[u8]>) {
     fs::write(path, contents).expect("write local state fixture file");
     restrict_local_state_file(path);
 }
@@ -225,12 +225,12 @@ fn install_fixture_member(
         .unwrap();
     }
 
-    write_member_document(workspace_dir, member_handle, &member.public_key);
+    save_member_document(workspace_dir, member_handle, &member.public_key);
 }
 
 /// Setup test keystore from shared fixture (no ssh-keygen calls)
 pub fn setup_test_keystore_from_fixtures(member_handle: &str) -> TempDir {
-    let temp_dir = create_secret_home();
+    let temp_dir = ensure_secret_home();
     save_ssh_keys(&temp_dir);
 
     let keystore_root = temp_dir.path().join("keys");
@@ -242,7 +242,7 @@ pub fn setup_test_keystore_from_fixtures(member_handle: &str) -> TempDir {
         .unwrap_or_else(|| panic!("No fixture for member: {}", member_handle));
 
     let workspace_dir = temp_dir.path().join("workspace");
-    create_workspace_dirs(&workspace_dir);
+    ensure_workspace_dirs(&workspace_dir);
 
     install_fixture_member(member_handle, &keystore_root, None, &workspace_dir);
     set_active_kid(member_handle, &member.kid, &keystore_root).unwrap();
@@ -250,15 +250,49 @@ pub fn setup_test_keystore_from_fixtures(member_handle: &str) -> TempDir {
     temp_dir
 }
 
+/// Generate one more member key inside a fixture home and store it, returning
+/// the new kid.
+///
+/// The stored key is not made active, so the member the home was set up for
+/// stays the one a key context loads by default.
+pub fn add_member_to_keystore(home: &Path, member_handle: &str) -> String {
+    let keystore_root = home.join("keys");
+    let ssh_pub_content = fs::read_to_string(home.join(".ssh/test_ed25519.pub"))
+        .expect("read fixture SSH public key")
+        .trim()
+        .to_string();
+    let ssh_priv = home.join(".ssh/test_ed25519");
+    let (private_key, public_key) =
+        keygen_test(member_handle, &ssh_priv, &ssh_pub_content).unwrap();
+    let kid = public_key.protected.kid.clone();
+    let private_key_doc = build_test_private_key(
+        &private_key,
+        &public_key.protected.subject_handle,
+        &public_key.protected.kid,
+        &ssh_priv,
+        &ssh_pub_content,
+    )
+    .unwrap();
+    save_key_pair_atomic(
+        &keystore_root,
+        member_handle,
+        &kid,
+        &private_key_doc,
+        &public_key,
+    )
+    .unwrap();
+    kid
+}
+
 /// Setup test workspace from shared fixture (no ssh-keygen calls)
 pub fn setup_test_workspace_from_fixtures(member_handles: &[&str]) -> (TempDir, PathBuf) {
-    let temp_dir = create_secret_home();
+    let temp_dir = ensure_secret_home();
     save_ssh_keys(&temp_dir);
 
     let workspace_dir = temp_dir.path().join("workspace");
     let workspace_keystore = workspace_dir.join("keystore");
     ensure_restricted_dir(&workspace_keystore);
-    create_workspace_dirs(&workspace_dir);
+    ensure_workspace_dirs(&workspace_dir);
 
     let base_keystore = temp_dir.path().join("keys");
     ensure_restricted_dir(&base_keystore);
@@ -327,13 +361,13 @@ pub fn generate_temp_ssh_keypair_in_dir(temp_dir: &TempDir) -> (PathBuf, PathBuf
 
 /// Setup test workspace with members directory and public keys
 pub fn setup_test_workspace(member_handles: &[&str]) -> (TempDir, PathBuf) {
-    let temp_dir = create_secret_home();
+    let temp_dir = ensure_secret_home();
     let (ssh_priv, _ssh_pub, ssh_pub_content) = generate_temp_ssh_keypair_in_dir(&temp_dir);
 
     let workspace_dir = temp_dir.path().join("workspace");
     let workspace_keystore = workspace_dir.join("keystore");
     ensure_restricted_dir(&workspace_keystore);
-    create_workspace_dirs(&workspace_dir);
+    ensure_workspace_dirs(&workspace_dir);
 
     let base_keystore = temp_dir.path().join("keys");
     ensure_restricted_dir(&base_keystore);
@@ -348,16 +382,16 @@ pub fn setup_test_workspace(member_handles: &[&str]) -> (TempDir, PathBuf) {
             &public_key,
         )
         .unwrap();
-        write_member_document(&workspace_dir, member_handle, &public_key);
+        save_member_document(&workspace_dir, member_handle, &public_key);
     }
 
-    write_member_handle_config(&temp_dir, member_handles);
+    save_member_handle_config(&temp_dir, member_handles);
     (temp_dir, workspace_dir)
 }
 
 /// Setup test environment with keystore and test keys
 pub fn setup_test_keystore(member_handle: &str) -> TempDir {
-    let temp_dir = create_secret_home();
+    let temp_dir = ensure_secret_home();
     let (ssh_priv, _ssh_pub, ssh_pub_content) = generate_temp_ssh_keypair_in_dir(&temp_dir);
 
     let keystore_root = temp_dir.path().join("keys");
@@ -365,13 +399,13 @@ pub fn setup_test_keystore(member_handle: &str) -> TempDir {
     let public_key = install_member_key(&keystore_root, member_handle, &ssh_priv, &ssh_pub_content);
 
     let workspace_dir = temp_dir.path().join("workspace");
-    create_workspace_dirs(&workspace_dir);
-    write_member_document(&workspace_dir, member_handle, &public_key);
+    ensure_workspace_dirs(&workspace_dir);
+    save_member_document(&workspace_dir, member_handle, &public_key);
 
     temp_dir
 }
 
-fn create_workspace_dirs(workspace_dir: &Path) {
+fn ensure_workspace_dirs(workspace_dir: &Path) {
     ensure_restricted_dir(&workspace_dir.join("members/active"));
     ensure_restricted_dir(&workspace_dir.join("members/incoming"));
     ensure_restricted_dir(&workspace_dir.join("secrets"));
@@ -414,7 +448,7 @@ fn install_member_key(
 }
 
 /// Publish a member into the workspace as an active member document.
-fn write_member_document(workspace_dir: &Path, member_handle: &str, public_key: &PublicKey) {
+fn save_member_document(workspace_dir: &Path, member_handle: &str, public_key: &PublicKey) {
     let member_file = workspace_dir
         .join("members/active")
         .join(format!("{}.json", member_handle));
@@ -426,9 +460,9 @@ fn write_member_document(workspace_dir: &Path, member_handle: &str, public_key: 
 }
 
 /// Write config.toml with the first member handle for auto-resolution
-fn write_member_handle_config(temp_dir: &TempDir, member_handles: &[&str]) {
+fn save_member_handle_config(temp_dir: &TempDir, member_handles: &[&str]) {
     if let Some(first_member_handle) = member_handles.first() {
-        write_local_state_file(
+        save_local_state_file(
             &temp_dir.path().join("config.toml"),
             format!("member_handle = \"{}\"\n", first_member_handle),
         );

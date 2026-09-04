@@ -3,7 +3,9 @@
 
 //! Recipient-related encryption tests
 //!
-//! encrypt は常に workspace の全 active メンバーを recipients とする。
+//! Covers how the encrypt command behaves for a workspace with several active
+//! members. The recipient set an artifact ends up with is fixed by the unit
+//! tests instead, which can read the document without parsing CLI output.
 
 use crate::cli::common::{
     cmd, encrypt_file_with_member_set_review, ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE,
@@ -15,7 +17,7 @@ use kapsaro_test_support::fixture::setup_test_workspace;
 use std::fs;
 
 #[test]
-fn test_encrypt_recipients_are_all_active_members() {
+fn test_encrypt_with_all_active_members_approved() {
     let (temp_dir, workspace_dir) =
         setup_test_workspace(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, CAROL_MEMBER_HANDLE]);
 
@@ -42,15 +44,7 @@ fn test_encrypt_recipients_are_all_active_members() {
         ALICE_MEMBER_HANDLE,
     );
 
-    let content = fs::read_to_string(&output_path).unwrap();
-    let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
-    let wrap = parsed["protected"]["wrap"].as_array().unwrap();
-    assert_eq!(wrap.len(), 3, "All 3 active members should be recipients");
-
-    let recipient_handles: Vec<&str> = wrap.iter().map(|w| w["rh"].as_str().unwrap()).collect();
-    assert!(recipient_handles.contains(&ALICE_MEMBER_HANDLE));
-    assert!(recipient_handles.contains(&BOB_MEMBER_HANDLE));
-    assert!(recipient_handles.contains(&CAROL_MEMBER_HANDLE));
+    assert!(output_path.exists());
 }
 
 #[test]

@@ -53,8 +53,7 @@ pub(crate) fn run(args: RewrapArgs) -> Result<()> {
     let workspace = context.workspace_path()?;
     let allow_expired_key = context.allow_expired_key(args.allow_expired_key.allow_expired_key)?;
     let allow_non_member = context.allow_non_member(args.allow_non_member.allow_non_member)?;
-    let trust_session =
-        load_trust_command_session(&context, &args.common, args.member.member_handle.clone())?;
+    let trust_session = load_trust_command_session(&context, args.member.member_handle.clone())?;
     let session = RewrapSession::from_trust_command(&workspace, &trust_session)?;
     let operation = OperationOptions::new().with_allow_expired_key(allow_expired_key);
 
@@ -70,7 +69,7 @@ pub(crate) fn run(args: RewrapArgs) -> Result<()> {
 }
 
 fn enforce_rewrap_strict_key_checking(context: &CliContext) -> Result<()> {
-    if context.strict_key_checking() {
+    if !context.strict_key_checking()?.is_disabled() {
         return Ok(());
     }
     Err(Error::build_invalid_operation_error(

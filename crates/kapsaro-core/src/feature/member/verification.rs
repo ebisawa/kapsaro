@@ -169,4 +169,4 @@ pub(crate) fn has_github_claim(public_key: &PublicKey) -> bool {
 
 #[cfg(test)]
 #[path = "../../../tests/unit/internal/feature_member_verification_test.rs"]
-mod tests;
+mod feature_member_verification_test;

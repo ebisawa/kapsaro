@@ -35,6 +35,7 @@ CLI 引数、環境変数、設定値など、ユーザーが指定するメン�
 | `get_*` | パス・設定値の取得（I/O なし） | ファイル読み込みに使用不可 |
 | `load_*` | ファイル・ストレージからの読み込み | |
 | `save_*` | ファイル・ストレージへの書き込み | |
+| `stage_*` | 公開前の一時ファイル・一時ディレクトリを作る。`support/fs` の staging 経路に限る | 公開済みの名前への書き込みは `save_*` |
 | `parse_*` | バイト列・文字列から構造体への変換 | |
 | `encode_*` / `decode_*` | base64、token、SSH blob など明確なエンコード仕様に基づく符号化と復号 | `parse_*` と混用しない |
 | `serialize_*` / `deserialize_*` | serde JSON など、内部データ構造と保存・送信用バイト列の相互変換 | 外部入力の妥当性検証や schema validation を含む処理には `parse_*` を使う |
@@ -64,9 +65,11 @@ CLI 引数、環境変数、設定値など、ユーザーが指定するメン�
 | `append_*` | 既存の文字列・バイト列・ドキュメント末尾へ、SIG 行などの構造化要素を追記 | domain collection への追加は `add_*`、ファイル保存は `save_*` |
 | `promote_*` | incoming など一時状態の domain object を正式状態へ昇格 | |
 | `export_*` / `import_*` | 内部状態と外部ファイル・portable 表現のあいだの操作 | `save_*` / `load_*` と混用しない |
-| `execute_*` | `app` / `io` 層で副作用を含む一連の処理を実行 | CLI エントリポイントには `run_*` を使う |
-| `judge_*` | `feature` 層で信頼状態などを純粋に判定し、判定結果を返す | `app` 層の文脈付き評価には使用しない |
-| `evaluate_*` | `app` 層で proof、context、policy を組み合わせて評価する | 純粋な domain 判定には使用しない |
+| `execute_*` | `service` / `io` 層で副作用を含む一連の処理を実行 | CLI エントリポイントには `run_*` を使う |
+| `judge_*` | `feature` 層で信頼状態などを純粋に判定し、判定結果を返す | `service` 層の文脈付き評価には使用しない |
+| `evaluate_*` | `service` 層で proof、context、policy を組み合わせて評価する | 純粋な domain 判定には使用しない |
+| `observe_*` | trust store など、後の比較のために現在状態を読み取り snapshot を返す | 状態を変える処理には使用しない |
+| `take_*` | 蓄積された診断や警告を取り出し、蓄積側を空にする | 破壊を伴わない取得には `extract_*` や単純 accessor を使う |
 | `review_*` | 人間の承認・確認を含む review 処理 | 単なる判定には使用しない |
 | `*_with_confirmation` | 確認コールバックを受け取る review・approval 処理 | `*_with_handler` を使わない |
 | `rewrite_*` | 既存データやファイル内容を意味を保ちながら書き換える | 単なる保存には使用しない |
@@ -127,6 +130,8 @@ CLI 引数、環境変数、設定値など、ユーザーが指定するメン�
 | `classify_*` / `match_*` | 分類済みデータの構築は `build_*`、判定は `judge_*`、探索は `find_*`、選択は `select_*` |
 | `warn_*` | 警告値の生成は `build_*_warning`、CLI 出力は `print_*`。logging macro は helper で隠さず呼び出し側で直接使う |
 | `build_*_display()` | 文字列整形は `format_*` |
+| `describe_*` | 文字列を返すなら `format_*`、`Error` を返すなら `build_*_error` |
+| `render_*` | view を組み立てるなら `build_*_view`、文字列整形は `format_*` |
 | `*_with_handler` | 確認コールバックを受けるなら `*_with_confirmation`、それ以外は具体的な責務名 |
 | `*_flow()` サフィックス | 全レイヤーで廃止。外して意味が通るならそのまま、不明瞭ならドメイン名詞を補う |
 | `verify_and_decrypt_*` | `decrypt_*` に統合 |
@@ -170,6 +175,15 @@ security state を表す opaque capability では、暗号学的に検証済み�
 
 仕様で定義された domain state を表す `Active`、`Incoming`、`Known` は型名の修飾語として使ってよい。`Verified*` は検証済みラッパー型の規則に従う。
 
+過去分詞プレフィックスの禁止には、次の例外がある。いずれも既存の型で、指摘の対象にしない。
+
+| 例外 | 理由 |
+| --- | --- |
+| `AnchoredDir`、`FreshXChaChaNonce` | 型が保持する不変条件そのものを名前が表す capability 型 |
+| `RemovedRecipient` などの `Removed*` | 仕様上の用語に対応する |
+| `MissingDecryptionKey` などの `Missing*` | 状態ではなくドメイン名詞として使っている |
+| `ApprovedKnownKey` | 仕様で定義された承認状態を表す |
+
 ## モジュールとファイル名
 
 - モジュール名は単数形の名詞、または動詞の名詞形
@@ -196,9 +210,13 @@ security state を表す opaque capability では、暗号学的に検証済み�
 
 | テスト対象ソース | テストファイル名 |
 | --- | --- |
-| `feature/encrypt/wrap.rs` | `feature_encrypt_wrap_test.rs` |
-| `io/keystore/resolver.rs` | `io_keystore_resolver_test.rs` |
-| `support/recipients.rs` | `support_recipients_test.rs` |
-| `crypto/sign/ed25519.rs` | `crypto_sign_ed25519_test.rs` |
+| `feature/envelope/wrap.rs` | `feature_envelope_wrap_test.rs` |
+| `io/keystore/paths.rs` | `io_keystore_paths_test.rs` |
+| `format/kv/dotenv.rs` | `format_kv_dotenv_test.rs` |
+| `crypto/aead/xchacha.rs` | `crypto_aead_xchacha_test.rs` |
 
-登録時の module 宣言名はファイル名（拡張子を除く）と一致させる。配置と登録の手順は `kapsaro-testing` skill にある。
+1 つのソースから複数のテストファイルを登録する場合は、検証対象を表すサフィックスで区別する。`feature/envelope/unwrap.rs` から登録している `feature_envelope_unwrap_test.rs` と `feature_envelope_unwrap_validation_test.rs` がこの形。
+
+特定のモジュールに対応しないテストは、この規則の対象外。過去バージョンとの互換コーパスを固定する `golden_v0_99_compat_test.rs` のように、何を固定しているかを表す名前を付ける。
+
+登録時の module 宣言名はファイル名（拡張子を除く）と一致させる。複数のテストバイナリから登録する共有 helper ツリーの root module だけは、参照側が使う名前を宣言名にしてよい。`src/main.rs` が `tests/test_utils/internal_cli.rs` を `mod test_utils;` として登録しているのがこの形。配置と登録の手順は `kapsaro-testing` skill にある。

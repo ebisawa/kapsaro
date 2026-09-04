@@ -26,7 +26,7 @@ description: kapsaro にテストを追加・移動・削除するときの規�
 | --- | --- |
 | `--help` の出力順、フラグ名、終了コード | CLI E2E |
 | JSON 出力が CLI 表示用の形に整形されること | CLI E2E |
-| `cli_api::app` の request が特定の result DTO を返すこと | 外部ユニット |
+| `api` の操作が特定の result を返すこと | 外部ユニット |
 | `kapsaro_core::api` の公開面のシグネチャと振る舞い | 外部ユニット |
 | 署名検証で同じ `ErrorKind` に到達する複数の改ざんパターン | 内部ユニット |
 | JSON ドキュメントの正規化バイト列が仕様どおり組み立てられること | 内部ユニット |
@@ -35,7 +35,7 @@ description: kapsaro にテストを追加・移動・削除するときの規�
 
 CLI E2E は、プロセスとして起動した CLI が利用者から見て期待どおりに振る舞うかを見る。引数解釈、必須引数、排他フラグ、`--help`、終了コード、stdout と stderr の文言と順序と色、対話プロンプトと PTY、non-interactive と `--force`、stdin と stdout の配管、出力先パス解決、CLI 整形後の JSON 構造。各コマンドにつき happy-path roundtrip を 1 本以上置く。
 
-外部ユニットは、crate 外部または first-party テスト用の境界から見た契約を見る。`api` と `cli_api` の public surface を固定したい場合はここ。下位実装の private item へ入らずに検証できるなら、内部ユニットより外部ユニットを選ぶ。
+外部ユニットは、crate 外部または first-party テスト用の境界から見た契約を見る。`api` の public surface を固定したい場合はここ。下位実装の private item へ入らずに検証できるなら、内部ユニットより外部ユニットを選ぶ。
 
 内部ユニットは、ドメインアルゴリズムと実装の細部を見る。エッジケース、改ざん検出のバリエーション、wrap と署名検証の細部、ドキュメントのバイトレベル検証、同一エラーへ到達する入力バリエーション、crate-private item の不変条件。`crate::` 直接アクセスが必要な検証はここ。
 
@@ -81,7 +81,9 @@ root crate には外部ユニットのツリーがない。root crate 側で契�
 
 ### 登録の確認
 
-`.claude/hooks/pre-stop-checks.sh` が未登録と二重登録を検出する。手で確認するときは、モジュール名ではなく `#[path]` 属性そのものを grep する。モジュール名は `mod tests;` のような総称名とファイル名と同名のものが混在しており、名前からは追えない。
+`scripts/check-repo-conventions.sh` が、登録漏れ、実体のないファイルを指す stale な登録、同じテストバイナリへの二重登録を検出する。登録時の module 宣言名はファイル名（拡張子を除く）と一致させるので、ファイル名でも `#[path]` 属性でも grep で追える。
+
+共有 helper ツリーを 2 つのテストバイナリへ登録するのは意図された形で、検査も許容する。`crates/kapsaro-core/tests/test_support/mod.rs` は lib テストバイナリと `unit` ターゲットの両方から、`tests/test_utils/internal_cli.rs` は bin 内部テストと `cli_integration` の両方から登録されている。
 
 ## 書いてはいけないテスト
 

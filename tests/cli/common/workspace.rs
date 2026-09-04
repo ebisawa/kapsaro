@@ -65,7 +65,7 @@ pub fn append_common_command_args(command: &mut StdCommand, common_opts: &Common
 /// Returns (workspace_dir, home_dir, ssh_temp_dir, ssh_priv_path).
 pub fn setup_workspace() -> (TempDir, TempDir, TempDir, PathBuf) {
     let workspace_dir = TempDir::new().unwrap();
-    let home_dir = make_secret_home();
+    let home_dir = setup_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     std::fs::create_dir_all(workspace_dir.path().join("members")).unwrap();
@@ -127,7 +127,7 @@ pub fn generate_temp_ssh_keypair() -> (TempDir, PathBuf, PathBuf, String) {
 }
 
 /// Creates a temporary directory with restricted permissions suitable for a secret home.
-pub fn make_secret_home() -> TempDir {
+pub fn setup_secret_home() -> TempDir {
     let home_dir = TempDir::new().unwrap();
     set_secret_home_permissions(&home_dir);
     home_dir

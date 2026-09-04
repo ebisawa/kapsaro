@@ -51,21 +51,15 @@ pub fn generate_key(opts: KeyGenerationOptions) -> Result<KeyGenerationResult> {
     );
     ensure_determinism(&ssh_binding.determinism)?;
     debug!("[KEYGEN] ssh determinism verified");
-    let key_material = material::generate_keypairs()?;
-    let request = KeyDocumentParams {
-        member_handle: &member_handle,
-        created_at: &created_at,
-        expires_at: &expires_at,
-        github_account,
-    };
-    let public_key = build_public_key_document(&request, &key_material, &ssh_binding)?;
-    let derived_kid = public_key.protected.kid.clone();
-    debug!(
-        "[KEYGEN] derived public key id kid={}",
-        format_kid_display_lossy(&derived_kid)
-    );
-    let private_key =
-        encrypt_private_key_document(&request, &key_material, &derived_kid, &ssh_binding)?;
+    let documents = build_key_documents(
+        &KeyDocumentParams {
+            member_handle: &member_handle,
+            created_at: &created_at,
+            expires_at: &expires_at,
+            github_account,
+        },
+        &ssh_binding,
+    )?;
     debug!(
         "[KEYGEN] generated key pair member_handle={}",
         member_handle
@@ -73,12 +67,43 @@ pub fn generate_key(opts: KeyGenerationOptions) -> Result<KeyGenerationResult> {
 
     Ok(KeyGenerationResult {
         member_handle,
-        kid: derived_kid,
+        kid: documents.kid,
         expires_at,
-        private_key,
-        public_key,
+        private_key: documents.private_key,
+        public_key: documents.public_key,
         ssh_fingerprint: ssh_binding.fingerprint,
         ssh_determinism: ssh_binding.determinism,
+    })
+}
+
+/// The two documents one generated key pair is stored as.
+struct KeyDocumentSet {
+    kid: String,
+    private_key: PrivateKey,
+    public_key: PublicKey,
+}
+
+/// Generate the key material and write both documents that carry it.
+///
+/// The key id is derived from the public document and then names the private
+/// one, so both are built here rather than from two separate readings of the
+/// same material.
+fn build_key_documents(
+    request: &KeyDocumentParams<'_>,
+    ssh_binding: &SshBindingContext,
+) -> Result<KeyDocumentSet> {
+    let key_material = material::generate_keypairs()?;
+    let public_key = build_public_key_document(request, &key_material, ssh_binding)?;
+    let kid = public_key.protected.kid.clone();
+    debug!(
+        "[KEYGEN] derived public key id kid={}",
+        format_kid_display_lossy(&kid)
+    );
+    let private_key = encrypt_private_key_document(request, &key_material, &kid, ssh_binding)?;
+    Ok(KeyDocumentSet {
+        kid,
+        private_key,
+        public_key,
     })
 }
 
@@ -148,7 +173,7 @@ fn encrypt_private_key_document(
 
 #[cfg(test)]
 #[path = "../../../tests/unit/internal/feature_key_generate_internal_test.rs"]
-mod internal_tests;
+mod feature_key_generate_internal_test;
 
 #[cfg(test)]
 #[path = "../../../tests/unit/internal/feature_key_generate_test.rs"]

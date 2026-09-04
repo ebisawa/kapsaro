@@ -1305,7 +1305,7 @@ SSH 鍵が同じ入力に対して 2 回連続で異なる署名を生成した�
 | `kapsaro encrypt [-m <handle>] --stdin (--out <path> \| --stdout)` | 標準入力をファイル暗号化形式（file-enc）として暗号化 |
 | `kapsaro decrypt [-m <handle>] [--kid <kid>] [--allow-expired-key] [--allow-non-member] <file> (--out <path> \| --stdout)` | ファイルを復号 |
 | `kapsaro decrypt [-m <handle>] [--kid <kid>] [--allow-expired-key] [--allow-non-member] --stdin (--out <path> \| --stdout)` | 標準入力からファイル暗号化 JSON（file-enc）を読み込んで復号 |
-| `kapsaro inspect <file> [--json] [--verbose]` | 暗号ファイルのメタデータを表示（復号不要） |
+| `kapsaro inspect <file> [--json]` | 暗号ファイルのメタデータを表示（復号不要） |
 
 ### 診断
 

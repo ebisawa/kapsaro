@@ -17,5 +17,5 @@ pub(super) fn save_exported_public_key(out: &Path, public_key: &PublicKey) -> Re
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/internal/app_key_export_test.rs"]
-mod app_key_export_test;
+#[path = "../../../tests/unit/internal/service_key_export_test.rs"]
+mod service_key_export_test;

@@ -259,4 +259,4 @@ fn verify_key_possession_tag(
 
 #[cfg(test)]
 #[path = "../../../tests/unit/internal/feature_envelope_key_possession_test.rs"]
-mod tests;
+mod feature_envelope_key_possession_test;

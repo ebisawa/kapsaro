@@ -135,14 +135,6 @@ impl ReviewedTextFile {
         )))
     }
 
-    pub(crate) fn save_replacement_at<D>(&self, dir: &D, content: &str) -> Result<()>
-    where
-        D: DirectoryFd,
-    {
-        self.ensure_bound_directory(dir)?;
-        relative::save_text_at(dir, self.name(), content)
-    }
-
     #[cfg(test)]
     pub(crate) fn save_replacement_if_current_at<D>(&self, dir: &D, content: &str) -> Result<()>
     where
@@ -174,5 +166,5 @@ impl ReviewedTextFile {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/internal/app_context_review_test.rs"]
-mod tests;
+#[path = "../../../tests/unit/internal/service_artifact_review_test.rs"]
+mod service_artifact_review_test;

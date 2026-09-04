@@ -12,7 +12,7 @@ use crate::support::fs::anchor::AnchoredDir;
 use crate::support::fs::relative::DirectoryScope;
 use crate::support::limits::MAX_CONFIG_FILE_SIZE;
 use crate::support::warning::LocalStateWarningGuard;
-use crate::test_utils::{create_local_state_dir, local_state_temp_dir, write_local_state_file};
+use crate::test_utils::{ensure_local_state_dir, local_state_temp_dir, save_local_state_file};
 use std::fs;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
@@ -26,7 +26,7 @@ fn open_home(path: &Path) -> AnchoredDir {
 
 /// Create a home directory holding the given config file content.
 fn home_with_config(tmp: &TempDir, content: &str) -> AnchoredDir {
-    write_local_state_file(&tmp.path().join("config.toml"), content);
+    save_local_state_file(&tmp.path().join("config.toml"), content);
     open_home(tmp.path())
 }
 
@@ -91,7 +91,7 @@ fn test_load_config_file_rejects_symlinked_config_file() {
 
     let tmp = local_state_temp_dir();
     let target = tmp.path().join("target.toml");
-    write_local_state_file(&target, "member_handle = \"alice@example.com\"\n");
+    save_local_state_file(&target, "member_handle = \"alice@example.com\"\n");
     symlink(&target, tmp.path().join("config.toml")).unwrap();
     let home = open_home(tmp.path());
 
@@ -249,7 +249,7 @@ fn test_save_config_file_refuses_a_symlink_standing_in_its_place() {
 
     let tmp = local_state_temp_dir();
     let target = tmp.path().join("target.toml");
-    write_local_state_file(&target, "member_handle = \"alice@example.com\"\n");
+    save_local_state_file(&target, "member_handle = \"alice@example.com\"\n");
     symlink(&target, tmp.path().join("config.toml")).unwrap();
     let home = open_home(tmp.path());
 
@@ -308,8 +308,8 @@ fn test_unset_config_value_not_found() {
 fn test_load_config_file_warns_about_insecure_home_directory_permissions() {
     let tmp = local_state_temp_dir();
     let base_dir = tmp.path().join("kapsaro");
-    create_local_state_dir(&base_dir);
-    write_local_state_file(
+    ensure_local_state_dir(&base_dir);
+    save_local_state_file(
         &base_dir.join("config.toml"),
         "member_handle = \"alice@example.com\"\n",
     );

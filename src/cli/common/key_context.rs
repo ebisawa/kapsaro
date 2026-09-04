@@ -8,7 +8,6 @@ use std::path::Path;
 
 use crate::cli::common::command::require_member_handle;
 use crate::cli::common::context::CliContext;
-use crate::cli::options::{CommonOptions, ToCommonOptions};
 use kapsaro_core::api::key::{KeyContext, Kid, LocalKeyContextRequest, MemberHandle};
 use kapsaro_core::api::secret::SecretString;
 use kapsaro_core::api::trust::TrustCommandSession;
@@ -20,7 +19,6 @@ const ENV_KEY_PASSWORD: &str = "KAPSARO_KEY_PASSWORD";
 
 pub(crate) fn load_read_key_context(
     context: &CliContext,
-    common: &CommonOptions,
     workspace_path: &Path,
     member_handle: Option<String>,
     kid: Option<&str>,
@@ -30,35 +28,32 @@ pub(crate) fn load_read_key_context(
         return load_environment_key(workspace_path, member_handle, kid);
     }
     debug!("[CTX] execution mode=local-key");
-    load_local_key(context, common, workspace_path, member_handle, kid)
+    load_local_key(context, workspace_path, member_handle, kid)
 }
 
 /// Load a filesystem-backed signing key from explicit CLI-resolved inputs.
 pub(crate) fn load_signing_key_context(
     context: &CliContext,
-    common: &CommonOptions,
     member_handle: Option<String>,
     kid: Option<&str>,
 ) -> Result<KeyContext> {
     let member = require_member_handle(context.member_handle(member_handle)?, false)?;
     let member = MemberHandle::try_from(member)?;
     let store = context.local_state()?.require_key_store(&member)?;
-    let request = local_key_request(context, common, member, kid)?;
+    let request = local_key_request(context, member, kid)?;
     store.load_selected_key_context(request)
 }
 
 /// Bind one local signing key and its local-state home for a trust command.
 pub(crate) fn load_trust_command_session(
     context: &CliContext,
-    common: &impl ToCommonOptions,
     member_handle: Option<String>,
 ) -> Result<TrustCommandSession> {
-    let common = common.to_common_options();
     let member = require_member_handle(context.member_handle(member_handle)?, false)?;
     let member = MemberHandle::try_from(member)?;
     let local_state = context.local_state()?;
     let store = local_state.require_key_store(&member)?;
-    let request = local_key_request(context, &common, member.clone(), None)?;
+    let request = local_key_request(context, member.clone(), None)?;
     let key_context = store.load_selected_key_context(request)?;
     TrustCommandSession::open(local_state, member, key_context)
 }
@@ -80,7 +75,6 @@ fn load_environment_key(
 
 fn load_local_key(
     context: &CliContext,
-    common: &CommonOptions,
     workspace_path: &Path,
     member_handle: Option<String>,
     kid: Option<&str>,
@@ -88,14 +82,13 @@ fn load_local_key(
     let member = require_member_handle(context.member_handle(member_handle)?, false)?;
     let member = MemberHandle::try_from(member)?;
     let store = context.local_state()?.require_key_store(&member)?;
-    let request = local_key_request(context, common, member, kid)?
-        .with_workspace_path(workspace_path.to_path_buf());
+    let request =
+        local_key_request(context, member, kid)?.with_workspace_path(workspace_path.to_path_buf());
     store.load_selected_key_context(request)
 }
 
 fn local_key_request(
     context: &CliContext,
-    _common: &CommonOptions,
     member: MemberHandle,
     kid: Option<&str>,
 ) -> Result<LocalKeyContextRequest> {

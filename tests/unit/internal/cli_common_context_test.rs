@@ -9,7 +9,10 @@ use std::path::PathBuf;
 
 use crate::cli::options::CommonOptions;
 use crate::test_utils::EnvGuard;
-use kapsaro_test_support::fixture::{local_state_temp_dir, write_local_state_file};
+use kapsaro_core::api::trust::{
+    StrictKeyChecking, StrictKeyCheckingResolution, StrictKeyCheckingSource,
+};
+use kapsaro_test_support::fixture::{local_state_temp_dir, save_local_state_file};
 use serial_test::serial;
 
 use super::CliContext;
@@ -23,7 +26,7 @@ fn build_context(home: &std::path::Path) -> CliContext {
 }
 
 fn save_github_user_config(home: &std::path::Path, github_user: &str) {
-    write_local_state_file(
+    save_local_state_file(
         &home.join("config.toml"),
         format!("github_user = \"{github_user}\"\n"),
     );
@@ -122,7 +125,7 @@ fn test_member_handle_cli_value_precedes_invalid_config_file() {
     let _guard = EnvGuard::new(&["KAPSARO_MEMBER_HANDLE"]);
     let home = local_state_temp_dir();
     env::remove_var("KAPSARO_MEMBER_HANDLE");
-    write_local_state_file(&home.path().join("config.toml"), "member_handle = [\n");
+    save_local_state_file(&home.path().join("config.toml"), "member_handle = [\n");
 
     let result = build_context(home.path())
         .member_handle(Some("alice@example.com".to_string()))
@@ -137,13 +140,116 @@ fn test_member_handle_environment_value_precedes_invalid_config_file() {
     let _guard = EnvGuard::new(&["KAPSARO_MEMBER_HANDLE"]);
     let home = local_state_temp_dir();
     env::set_var("KAPSARO_MEMBER_HANDLE", "alice@example.com");
-    write_local_state_file(&home.path().join("config.toml"), "member_handle = [\n");
+    save_local_state_file(&home.path().join("config.toml"), "member_handle = [\n");
 
     let result = build_context(home.path())
         .member_handle(None)
         .expect("environment member handle must avoid unrelated config parsing");
 
     assert_eq!(result.as_deref(), Some("alice@example.com"));
+}
+
+#[test]
+#[serial]
+fn test_strict_key_checking_defaults_to_enabled_without_the_environment_variable() {
+    let _guard = EnvGuard::new(&["KAPSARO_STRICT_KEY_CHECKING"]);
+    let home = local_state_temp_dir();
+    env::remove_var("KAPSARO_STRICT_KEY_CHECKING");
+
+    let resolution = build_context(home.path())
+        .strict_key_checking()
+        .expect("an unset value should resolve");
+
+    assert_eq!(resolution.mode, StrictKeyChecking::Yes);
+    assert_eq!(resolution.source, StrictKeyCheckingSource::Default);
+}
+
+#[test]
+#[serial]
+fn test_strict_key_checking_reads_no_regardless_of_letter_case() {
+    let _guard = EnvGuard::new(&["KAPSARO_STRICT_KEY_CHECKING"]);
+    let home = local_state_temp_dir();
+    env::set_var("KAPSARO_STRICT_KEY_CHECKING", "NO");
+
+    let resolution = build_context(home.path())
+        .strict_key_checking()
+        .expect("an upper-case no should resolve");
+
+    assert_eq!(resolution.mode, StrictKeyChecking::No);
+    assert_eq!(resolution.source, StrictKeyCheckingSource::ExplicitEnv);
+}
+
+#[test]
+#[serial]
+fn test_strict_key_checking_reads_yes_regardless_of_letter_case() {
+    let _guard = EnvGuard::new(&["KAPSARO_STRICT_KEY_CHECKING"]);
+    let home = local_state_temp_dir();
+    env::set_var("KAPSARO_STRICT_KEY_CHECKING", "Yes");
+
+    let resolution = build_context(home.path())
+        .strict_key_checking()
+        .expect("a mixed-case yes should resolve");
+
+    assert_eq!(resolution.mode, StrictKeyChecking::Yes);
+    assert_eq!(resolution.source, StrictKeyCheckingSource::ExplicitEnv);
+}
+
+/// An explicit `yes` carries the same mode as the default, so only the source
+/// separates a caller that asked for strict checking from one that never set
+/// the variable.
+#[test]
+#[serial]
+fn test_strict_key_checking_reports_an_explicit_yes_as_environment_sourced() {
+    let _guard = EnvGuard::new(&["KAPSARO_STRICT_KEY_CHECKING"]);
+    let home = local_state_temp_dir();
+    env::set_var("KAPSARO_STRICT_KEY_CHECKING", "yes");
+
+    let resolution = build_context(home.path())
+        .strict_key_checking()
+        .expect("an explicit yes should resolve");
+
+    assert_eq!(
+        resolution,
+        StrictKeyCheckingResolution::explicit(StrictKeyChecking::Yes)
+    );
+}
+
+#[test]
+#[serial]
+fn test_strict_key_checking_rejects_a_value_that_is_neither_yes_nor_no() {
+    let _guard = EnvGuard::new(&["KAPSARO_STRICT_KEY_CHECKING"]);
+    let home = local_state_temp_dir();
+    env::set_var("KAPSARO_STRICT_KEY_CHECKING", "maybe");
+
+    let error = build_context(home.path())
+        .strict_key_checking()
+        .expect_err("a value outside yes and no should be rejected");
+
+    assert_eq!(error.rule(), Some("E_CONFIG_VALUE_INVALID"));
+    assert!(
+        error
+            .format_user_message()
+            .contains("KAPSARO_STRICT_KEY_CHECKING"),
+        "{error}"
+    );
+}
+
+#[test]
+#[serial]
+fn test_configured_member_handle_stops_before_the_single_member_keystore() {
+    let _guard = EnvGuard::new(&["KAPSARO_MEMBER_HANDLE"]);
+    let home = local_state_temp_dir();
+    env::remove_var("KAPSARO_MEMBER_HANDLE");
+    save_local_state_file(
+        &home.path().join("config.toml"),
+        "member_handle = \"alice@example.com\"\n",
+    );
+
+    let resolved = build_context(home.path())
+        .configured_member_handle(None)
+        .expect("the configured member handle should resolve");
+
+    assert_eq!(resolved.as_deref(), Some("alice@example.com"));
 }
 
 #[test]

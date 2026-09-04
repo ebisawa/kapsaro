@@ -35,7 +35,7 @@ fn test_backend_trait_determinism_check() {
     }
 
     let backend = DeterministicBackend;
-    let result = backend.check_sshsig_determinism(KEY_PROTECTION_NAMESPACE, "fake-key", b"test");
+    let result = backend.enforce_sshsig_determinism(KEY_PROTECTION_NAMESPACE, "fake-key", b"test");
     assert!(result.is_ok());
     let signature = backend
         .sign_sshsig_deterministic(KEY_PROTECTION_NAMESPACE, "fake-key", b"test")
@@ -68,7 +68,7 @@ fn test_backend_trait_non_deterministic_error() {
     let backend = NonDeterministicBackend {
         counter: Cell::new(0),
     };
-    let result = backend.check_sshsig_determinism(KEY_PROTECTION_NAMESPACE, "fake-key", b"test");
+    let result = backend.enforce_sshsig_determinism(KEY_PROTECTION_NAMESPACE, "fake-key", b"test");
     assert!(result.is_err());
     let err_msg = result.unwrap_err().to_string();
     assert!(

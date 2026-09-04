@@ -174,5 +174,5 @@ fn contains_key(lines: &[KvEncLine], key: &str) -> bool {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/internal/feature_kv_disclosed_test.rs"]
-mod feature_kv_disclosed_test;
+#[path = "../../../tests/unit/internal/feature_kv_mutate_test.rs"]
+mod feature_kv_mutate_test;

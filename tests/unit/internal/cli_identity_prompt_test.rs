@@ -3,16 +3,9 @@
 
 //! Tests for cli::identity_prompt
 
-use std::env;
-
-use crate::test_utils::EnvGuard;
 use kapsaro_core::api::ssh::SshKeyCandidateView;
-use serial_test::serial;
 
-use super::{
-    format_candidate, is_prompt_available, resolve_key_generation_github_user_with_prompt,
-    select_ssh_key,
-};
+use super::{format_candidate, resolve_key_generation_github_user_with_prompt, select_ssh_key};
 
 #[test]
 fn test_select_ssh_key_empty_candidates_fails() {
@@ -57,15 +50,6 @@ fn test_format_candidate_without_comment() {
     };
 
     assert_eq!(format_candidate(&candidate), "SHA256:abc123");
-}
-
-#[test]
-#[serial]
-fn test_is_prompt_available_rejects_ci_environment() {
-    let _guard = EnvGuard::new(&["CI"]);
-    env::set_var("CI", "true");
-
-    assert!(!is_prompt_available());
 }
 
 #[test]

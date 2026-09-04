@@ -130,4 +130,4 @@ fn build_member_approval_results_output<'a>(
 
 #[cfg(test)]
 #[path = "../../../../../tests/unit/internal/cli_common_output_json_member_test.rs"]
-mod tests;
+mod cli_common_output_json_member_test;

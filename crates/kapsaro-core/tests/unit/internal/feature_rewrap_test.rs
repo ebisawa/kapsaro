@@ -1,7 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Unit tests for core/usecase/rewrap module
+//! Unit tests for the feature/rewrap module.
 //!
 //! Tests for file-enc rewrap, including signature verification at entry.
 

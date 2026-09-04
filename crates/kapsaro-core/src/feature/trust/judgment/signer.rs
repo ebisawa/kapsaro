@@ -4,8 +4,9 @@
 //! Decides the overall trust judgment for a document's signer.
 //! Combines active-member and known-key matching into one Trusted/NeedsApproval/NonMember/anomaly outcome.
 
+use crate::feature::trust::known_keys::build_kid_integrity_anomaly_error;
 use crate::model::identity::{Kid, MemberHandle};
-use crate::Result;
+use crate::{Error, Result};
 
 use super::active_member::{ActiveMemberSnapshot, CurrentMemberMatch};
 use super::identity::TrustIdentity;
@@ -65,7 +66,7 @@ where
             return Ok(TrustJudgment::ActiveMemberMismatch {
                 member_handle: signer.member_handle_value().clone(),
                 kid: signer.kid_value().clone(),
-                active_member_handle,
+                active_member_handle: MemberHandle::try_from(active_member_handle)?,
             });
         }
         CurrentMemberMatch::Matched => {}
@@ -114,4 +115,73 @@ fn build_known_key_judgment(signer: &TrustIdentity, match_result: KnownKeyMatch)
 
 fn is_self_key(identity: &TrustIdentity, self_trust: &SelfTrustSet) -> Result<bool> {
     self_trust.contains_identity(identity)
+}
+
+/// What a signer judgment leaves for the caller to act on.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SignerAcceptance {
+    Trusted,
+    NeedsApproval {
+        member_handle: MemberHandle,
+        kid: Kid,
+    },
+}
+
+/// Turn one signer judgment into acceptance, or the error it states.
+///
+/// Every judgment that no review can answer is refused here, so a signer that
+/// is no member, that collides with an active member, or whose kid is already
+/// bound to another member reads the same way to every caller.
+pub fn enforce_signer_judgment(judgment: TrustJudgment) -> Result<SignerAcceptance> {
+    match judgment {
+        TrustJudgment::Trusted => Ok(SignerAcceptance::Trusted),
+        TrustJudgment::NeedsApproval { member_handle, kid } => {
+            Ok(SignerAcceptance::NeedsApproval { member_handle, kid })
+        }
+        TrustJudgment::NonMember { member_handle, kid } => {
+            Err(build_non_member_error(&member_handle, &kid))
+        }
+        TrustJudgment::ActiveMemberMismatch {
+            member_handle,
+            kid,
+            active_member_handle,
+        } => Err(build_active_member_mismatch_error(
+            &member_handle,
+            &kid,
+            &active_member_handle,
+        )),
+        TrustJudgment::KnownKeyIntegrityAnomaly {
+            member_handle,
+            kid,
+            known_member_handle,
+        } => Err(build_kid_integrity_anomaly_error(
+            kid.as_str(),
+            known_member_handle.as_str(),
+            member_handle.as_str(),
+        )),
+    }
+}
+
+fn build_non_member_error(member_handle: &MemberHandle, kid: &Kid) -> Error {
+    Error::build_verification_error(
+        "E_TRUST_NON_MEMBER".to_string(),
+        format!(
+            "Signer is not in active members.\nsigner: {}\nkid: {}",
+            member_handle, kid
+        ),
+    )
+}
+
+fn build_active_member_mismatch_error(
+    member_handle: &MemberHandle,
+    kid: &Kid,
+    active_member_handle: &MemberHandle,
+) -> Error {
+    Error::build_verification_error(
+        "E_TRUST_ACTIVE_MEMBER_MISMATCH".to_string(),
+        format!(
+            "Signer '{}' (kid: {}) does not match current active member '{}'",
+            member_handle, kid, active_member_handle
+        ),
+    )
 }

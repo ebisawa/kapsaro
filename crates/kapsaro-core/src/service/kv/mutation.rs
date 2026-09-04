@@ -1,7 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Application-layer KV mutation orchestration.
+//! Service-layer KV mutation orchestration.
 //! Keeps the public mutation entrypoints stable while splitting review and execution.
 
 mod execution;
@@ -25,5 +25,5 @@ pub use plan::{
 };
 
 #[cfg(test)]
-#[path = "../../../tests/unit/internal/app_kv_mutation_test.rs"]
-mod tests;
+#[path = "../../../tests/unit/internal/service_kv_mutation_test.rs"]
+mod service_kv_mutation_test;

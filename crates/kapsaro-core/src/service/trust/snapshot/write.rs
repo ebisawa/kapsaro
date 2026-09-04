@@ -82,7 +82,6 @@ impl WriteRecipientTrustPlan {
         let decision = trust_snapshot.evaluator().preflight_output_recipient_keys(
             trust_snapshot.workspace_members().active_members(),
             &trust_snapshot.trust_context().self_trust,
-            &[],
         )?;
         let recipient_trust = recipient_outcome_from_decision(
             decision,

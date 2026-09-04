@@ -234,7 +234,7 @@ fn test_encrypt_rejects_control_character_input_filename_for_default_output() {
         .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
         .assert()
         .failure()
-        .stderr(predicate::str::contains("E_NAME_INVALID"));
+        .stderr(predicate::str::contains("Invalid input filename"));
 }
 
 #[test]

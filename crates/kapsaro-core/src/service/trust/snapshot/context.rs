@@ -28,12 +28,11 @@ pub struct WriteTrustOptions {
 }
 
 impl WriteTrustOptions {
-    pub fn new(allow_expired_key: bool, review_available: bool, strict_key_checking: bool) -> Self {
-        let strict_key_checking = if strict_key_checking {
-            StrictKeyCheckingResolution::strict()
-        } else {
-            StrictKeyCheckingResolution::explicit(StrictKeyChecking::No)
-        };
+    pub fn new(
+        allow_expired_key: bool,
+        review_available: bool,
+        strict_key_checking: StrictKeyCheckingResolution,
+    ) -> Self {
         Self {
             allow_expired_key,
             review_available,

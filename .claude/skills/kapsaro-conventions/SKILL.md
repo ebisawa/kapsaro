@@ -9,9 +9,9 @@ description: kapsaro の Rust コードを実装・変更・移動するとき�
 
 ## 先に知っておくこと
 
-`cli -> cli_api -> app -> service` の経路は廃止予定である。CLI 用の内部 API である `cli_api` と、そのバックエンドの `app` レイヤーは、順次 `api` と `service` へ移管している。到達点は `cli -> api -> service` の一本。
+production の依存経路は `cli -> api -> service` の一本である。`service` / `feature` / `io` は kapsaro-core の crate-private なので、CLI は `api` が再公開した項目だけを使う。
 
-このため新しい責務は `service` に置き、外部へ出す必要があるものだけ `api` から再公開する。`app` と `cli_api` には新しいユースケースを追加しない。既存の `app` の処理に手を入れるときは、それが CLI 固有の入力解決なのか caller 共通の規則なのかを見直し、後者なら `service` へ移す。移行済みの処理を互換 wrapper として `app` や `cli_api` に残さない。
+新しい責務は `service` に置き、外部へ出す必要があるものだけ `api` から再公開する。`api` は allow-list の facade であり、実装、変換、fallback、CLI 固有の既定値、glob 再公開を持たない。
 
 詳細な表が必要になったら次を読む。
 
@@ -25,8 +25,8 @@ description: kapsaro の Rust コードを実装・変更・移動するとき�
 | 問い | Yes なら |
 | --- | --- |
 | ユーザーとの対話や出力が主目的か | `cli` |
+| CLI 引数・環境変数・設定・既定値から、どの入力で実行するかを決めているか | `cli` |
 | 明示的な入力と capability だけで、CLI 以外からも同じ意味で実行できるか | `service` |
-| 複数機能の呼び出し順を組み立てていて、CLI 固有の入力解決と不可分か | `app`（廃止予定。新設は避け、`service` へ寄せられないか先に検討する） |
 | 1 つのドメイン機能の正しさを実装しているか | `feature` |
 | 外部パス・プロセス・ネットワークに触れているか | `io`（手続きのみ。結果の解釈は上位） |
 | バイト列のエンコード・正規化・パースが主目的か | `format` |
@@ -41,17 +41,17 @@ description: kapsaro の Rust コードを実装・変更・移動するとき�
 - 共通化のために上位レイヤーへ引き上げない
 - UI 都合で下位レイヤーへ責務を押し込まない
 
-### app と service の切り分け
+### cli と service の切り分け
 
 同じ処理が両方に見えるときは、入力を誰が選ぶかで決める。
 
-- どの入力を選び、いつ、何を、どの順序で行うかは `app`
+- どの入力を選び、いつ、何を、どの順序で行うかは `cli`
 - 選択済みの入力と capability に対して、どの caller でも同じ規則を実行するのは `service`
-- review 後に何を再ロードして再試行するかは `app`、review candidate と証跡の整合や保存 transaction は `service`
+- review 後に何を再ロードして再試行するかは `cli`、review candidate と証跡の整合や保存 transaction は `service`
 
-`service` が環境変数、設定の優先順位、workspace 自動検出、TTY、CLI DTO に触れていたら、その部分は `app` にある。
+`service` が環境変数、設定の優先順位、workspace 自動検出、TTY、CLI DTO に触れていたら、その部分は `cli` へ移す。CLI 固有の入力解決は `src/cli/common/context.rs` に集約されている。
 
-`app` は縮小していく層なので、この切り分けは既存コードを読むときと、移管の粒度を決めるときに使う。迷ったら `service` 側に寄せる。
+判断に迷ったら `service` 側に寄せる。CLI 以外の caller からも同じ意味で使えるかが分かれ目になる。
 
 ## よくある逆流
 
@@ -59,13 +59,12 @@ description: kapsaro の Rust コードを実装・変更・移動するとき�
 
 ```bash
 K=crates/kapsaro-core/src
-rg -n "use crate::(io|feature)::" src/cli -g '*.rs'
-rg -n "println!|eprintln!|dialoguer" $K/app -g '*.rs'
-rg -n "crate::api" $K/app -g '*.rs'
-rg -n "crate::(app|api|cli_api)" $K/service -g '*.rs'
-rg -n "use crate::(feature|app|cli)::" $K/io -g '*.rs'
+rg -n "use kapsaro_core::(service|feature|io)::" src/cli -g '*.rs'
+rg -n "println!|eprintln!|dialoguer" $K/service -g '*.rs'
+rg -n "crate::(api|cli)" $K/service -g '*.rs'
+rg -n "use crate::(feature|cli)::" $K/io -g '*.rs'
 rg -n "use crate::feature::" $K/format -g '*.rs'
-rg -n "use crate::(app|cli|feature|io)::" $K/crypto -g '*.rs'
+rg -n "use crate::(cli|feature|io)::" $K/crypto -g '*.rs'
 ```
 
 ## 命名の要点
@@ -80,8 +79,8 @@ rg -n "use crate::(app|cli|feature|io)::" $K/crypto -g '*.rs'
 | `validate_*` と `verify_*` | 構造・形式の制約チェックは `validate_*`、暗号検証は `verify_*` |
 | `check_*` と `enforce_*` | 違反時に `Err` を返すなら `enforce_*`。`check_*` は判定結果を返すだけ |
 | `generate_*` と `derive_*` | 非決定的な生成は `generate_*`、決定的な導出は `derive_*` |
-| `judge_*` と `evaluate_*` | `feature` の純粋判定は `judge_*`、`app` の文脈付き評価は `evaluate_*` |
-| `execute_*` と `run_*` | `app` / `io` の副作用処理は `execute_*`、CLI エントリポイントは `run_*` |
+| `judge_*` と `evaluate_*` | `feature` の純粋判定は `judge_*`、`service` の文脈付き評価は `evaluate_*` |
+| `execute_*` と `run_*` | `service` / `io` の副作用処理は `execute_*`、CLI エントリポイントは `run_*` |
 | `find_*` と `select_*` | 条件に合う単一要素の探索は `find_*`、優先順位に基づく選択は `select_*` |
 | `parse_*` と `deserialize_*` | 外部入力の妥当性検証を含むなら `parse_*` |
 | `derive_*` と `compute_*` | 鍵・ID・暗号素材の仕様上の導出は `derive_*`、ハッシュや統計値は `compute_*` |
@@ -107,9 +106,9 @@ security state を表す opaque capability は、暗号学的検証済みが `Ve
 
 移動元に残った未使用の関数と import を確認する。
 
-`crates/kapsaro-core/src/lib.rs` の blanket allow は `cli-internal` feature が無効なときだけ効くため、lib 単体ビルドではデッドコードが報告されない。判定は `cargo clippy --workspace --all-targets` で行う。内部テストは production module から `#[cfg(test)] #[path]` で登録されており、lib 単体ビルドではコンパイルされないため、テストからのみ使われる項目が誤ってデッドに見える。
+判定は `cargo clippy --workspace --all-targets` で行う。内部テストは production module から `#[cfg(test)] #[path]` で登録されており、`cargo check -p kapsaro-core` のような lib 単体ビルドではコンパイルされない。このためテストからのみ使われる項目が、単体ビルドでは誤ってデッドに見える。
 
-production から使われず内部テストからのみ使われる項目は、削除せず `#[cfg(test)] pub(crate) use ...` にする。`crates/kapsaro-core/src/app/trust.rs` に既存の書き方がある。
+production から使われず内部テストからのみ使われる項目は、削除せず `#[cfg(test)] pub(crate) use ...` にする。`crates/kapsaro-core/src/service/kv/mutation.rs` と `crates/kapsaro-core/src/io/keystore/access.rs` に既存の書き方がある。
 
 ## 実装後に確認する
 

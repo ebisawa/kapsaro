@@ -13,7 +13,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 /// Name of the directory a workspace stands in inside a checkout.
-const WORKSPACE_DIR_NAME: &str = ".kapsaro";
+pub(super) const WORKSPACE_DIR_NAME: &str = ".kapsaro";
 
 /// Workspace root information
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -47,7 +47,7 @@ pub fn detect_workspace_root(start_path: &Path) -> Result<WorkspaceRoot> {
     let current = start_path.canonicalize().map_err(|e| {
         Error::build_io_error_with_source(format!("Failed to canonicalize path: {}", e), e)
     })?;
-    let Some(git_root) = find_git_root(&current) else {
+    let Some(git_root) = find_git_root(&current)? else {
         return detect_current_workspace_without_git(start_path, &current);
     };
     search_workspace_towards_git_root(start_path, current, &git_root)
@@ -103,7 +103,7 @@ fn detect_current_workspace_without_git(
         return Ok(workspace);
     }
 
-    if let Some(rejected) = describe_rejected_workspace_dir(current) {
+    if let Some(rejected) = build_rejected_workspace_dir_error(current) {
         return Err(rejected);
     }
 
@@ -119,7 +119,7 @@ fn detect_current_workspace_without_git(
 /// reason is the link and not the layout below it. Reporting missing directories
 /// would send an operator looking for a structure that is already there. `None`
 /// means nothing stands under that name at all.
-fn describe_rejected_workspace_dir(current: &Path) -> Option<Error> {
+fn build_rejected_workspace_dir_error(current: &Path) -> Option<Error> {
     let workspace_dir = current.join(WORKSPACE_DIR_NAME);
     let entry_type = fs::symlink_metadata(&workspace_dir).ok()?.file_type();
     if entry_type.is_symlink() {
@@ -140,15 +140,40 @@ fn describe_rejected_workspace_dir(current: &Path) -> Option<Error> {
     )))
 }
 
-pub(super) fn find_git_root(start: &Path) -> Option<PathBuf> {
-    let mut current = start.canonicalize().ok()?;
+pub(super) fn find_git_root(start: &Path) -> Result<Option<PathBuf>> {
+    let Ok(mut current) = start.canonicalize() else {
+        return Ok(None);
+    };
     loop {
-        if current.join(".git").exists() {
-            return Some(current);
+        if has_git_entry(&current)? {
+            return Ok(Some(current));
         }
         if !current.pop() {
-            return None;
+            return Ok(None);
         }
+    }
+}
+
+/// Whether a `.git` entry stands here, refusing to answer a denied lookup.
+///
+/// In a worktree `.git` is a file rather than a directory, so the entry counts
+/// whatever type it has, as long as it resolves: a symlink pointing nowhere is
+/// no repository. A lookup that could not be made is an error and not a
+/// `false`: reading a refusal as "no repository stands here" would carry the
+/// search up past that level and settle on whatever repository is above it.
+fn has_git_entry(current: &Path) -> Result<bool> {
+    let git_entry = current.join(".git");
+    match fs::metadata(&git_entry) {
+        Ok(_) => Ok(true),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(Error::build_io_error_with_source(
+            format!(
+                "Failed to inspect {}: {}",
+                format_path_relative_to_cwd(&git_entry),
+                error
+            ),
+            error,
+        )),
     }
 }
 
@@ -169,7 +194,7 @@ fn resolve_worktree_gitdir(worktree_root: &Path) -> Option<PathBuf> {
     if !dot_git.is_file() {
         return None;
     }
-    let content = read_git_metadata(&dot_git, ".git file")?;
+    let content = load_git_metadata(&dot_git, ".git file")?;
     let gitdir = content.strip_prefix("gitdir: ")?.trim();
     Some(resolve_against(worktree_root, Path::new(gitdir)))
 }
@@ -177,11 +202,11 @@ fn resolve_worktree_gitdir(worktree_root: &Path) -> Option<PathBuf> {
 /// The shared `.git` directory the worktree's private directory records.
 fn resolve_common_git_dir(gitdir: &Path) -> Option<PathBuf> {
     let commondir_file = gitdir.join("commondir");
-    let content = read_git_metadata(&commondir_file, "commondir")?;
+    let content = load_git_metadata(&commondir_file, "commondir")?;
     Some(resolve_against(gitdir, Path::new(content.trim())))
 }
 
-fn read_git_metadata(path: &Path, subject: &str) -> Option<String> {
+fn load_git_metadata(path: &Path, subject: &str) -> Option<String> {
     fs::read_to_string(path)
         .map_err(|e| tracing::debug!("Failed to read {} at {}: {}", subject, path.display(), e))
         .ok()

@@ -1,7 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::feature::context::env_key::{load_private_key, EnvKeyLoadResult};
+use crate::feature::context::env_key::{parse_env_key, EnvKeyParseResult};
 use crate::feature::key::material::{build_private_key_plaintext, generate_keypairs};
 use crate::feature::key::portable_export::{
     export_private_key_portable, ExportPasswordPolicy, PortableExportOptions,
@@ -24,14 +24,14 @@ fn is_env_key_mode() -> bool {
     std::env::var_os(ENV_PRIVATE_KEY).is_some()
 }
 
-fn load_private_key_from_env() -> crate::Result<EnvKeyLoadResult> {
+fn load_private_key_from_env() -> crate::Result<EnvKeyParseResult> {
     let encoded = std::env::var(ENV_PRIVATE_KEY)
         .map(SecretString::new)
         .map_err(|_| crate::Error::build_config_error("KAPSARO_PRIVATE_KEY is not set"))?;
     let password = std::env::var(ENV_KEY_PASSWORD)
         .map(SecretString::new)
         .map_err(|_| crate::Error::build_config_error("KAPSARO_KEY_PASSWORD is required"));
-    let result = password.and_then(|password| load_private_key(encoded, password));
+    let result = password.and_then(|password| parse_env_key(encoded, password));
     std::env::remove_var(ENV_PRIVATE_KEY);
     std::env::remove_var(ENV_KEY_PASSWORD);
     result

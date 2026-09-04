@@ -3,7 +3,7 @@
 
 //! Fixed-size cryptographic primitive types with type safety
 
-use crate::crypto::rng::fill_random_array;
+use crate::crypto::rng::generate_random_array;
 use crate::Result;
 
 /// XChaCha20-Poly1305 nonce (24 bytes)
@@ -32,7 +32,7 @@ pub struct FreshXChaChaNonce(XChaChaNonce);
 impl FreshXChaChaNonce {
     /// Generate a fresh nonce from the OS CSPRNG.
     pub(crate) fn generate() -> Result<Self> {
-        Ok(Self(XChaChaNonce(fill_random_array::<24>()?)))
+        Ok(Self(XChaChaNonce(generate_random_array::<24>()?)))
     }
 
     /// Get the nonce bytes.
@@ -89,6 +89,25 @@ impl HkdfSalt {
 }
 
 impl AsHkdfSalt for HkdfSalt {
+    fn as_hkdf_salt_bytes(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+/// Artifact key schedule salt: the domain-separating context bytes an artifact
+/// binds its key schedule to. Variable length, unlike the fixed 32-byte
+/// [`HkdfSalt`] a protected private key is derived with.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ArtifactKeyScheduleSalt(Vec<u8>);
+
+impl ArtifactKeyScheduleSalt {
+    /// Create an artifact key schedule salt from its context bytes.
+    pub fn new(bytes: Vec<u8>) -> Self {
+        Self(bytes)
+    }
+}
+
+impl AsHkdfSalt for ArtifactKeyScheduleSalt {
     fn as_hkdf_salt_bytes(&self) -> &[u8] {
         &self.0
     }

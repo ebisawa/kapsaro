@@ -14,9 +14,9 @@ pub(crate) use evidence::{
 };
 pub use mutation::{purge_recipient_sets, remove_recipient_set, upsert_recipient_set};
 pub use record::{
-    find_recipient_handle_mismatch, is_self_only_recipient_set, judge_recipient_set,
-    validate_recipient_set_record, ArtifactRecipientSet, RecipientHandleMismatch,
-    RecipientSetJudgment,
+    find_inactive_recipient_kid, find_recipient_handle_mismatch, is_self_only_recipient_set,
+    judge_recipient_set, validate_recipient_set_record, ArtifactRecipientSet,
+    RecipientHandleMismatch, RecipientSetJudgment,
 };
 // Crate code computes the hash inside `record`; this re-export exists so the
 // first-party test harness can reach it through the `cli-test-support`

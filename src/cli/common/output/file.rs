@@ -34,7 +34,19 @@ pub(crate) fn resolve_encrypted_output_path(
     let input_path = input_path.ok_or_else(|| {
         Error::build_invalid_argument_error("INPUT is required unless --stdin is used")
     })?;
+    build_default_encrypted_output_path(input_path).map(Some)
+}
 
+/// Place the artifact next to the invocation as `<cwd>/<input name>.encrypted`.
+fn build_default_encrypted_output_path(input_path: &Path) -> Result<PathBuf> {
+    let input_filename = extract_input_filename(input_path)?;
+    let current_dir = std::env::current_dir().map_err(|e| {
+        Error::build_io_error_with_source(format!("Failed to get current directory: {}", e), e)
+    })?;
+    Ok(current_dir.join(format!("{}.encrypted", input_filename)))
+}
+
+fn extract_input_filename(input_path: &Path) -> Result<&str> {
     let input_filename = input_path
         .file_name()
         .and_then(|name| name.to_str())
@@ -44,20 +56,13 @@ pub(crate) fn resolve_encrypted_output_path(
                 format_path_relative_to_cwd(input_path)
             ))
         })?;
-
     if input_filename.chars().any(|c| c.is_control()) {
         return Err(Error::build_invalid_argument_error(format!(
-            "E_NAME_INVALID: invalid input filename: {}",
+            "Invalid input filename: {}",
             input_filename
         )));
     }
-
-    let current_dir = std::env::current_dir().map_err(|e| {
-        Error::build_io_error_with_source(format!("Failed to get current directory: {}", e), e)
-    })?;
-    Ok(Some(
-        current_dir.join(format!("{}.encrypted", input_filename)),
-    ))
+    Ok(input_filename)
 }
 
 pub(crate) fn save_encrypted_output(
@@ -129,5 +134,5 @@ fn format_output_notice_lines(label: &str, output_path: &Path) -> Vec<String> {
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/internal/cli_common_output_text_file_test.rs"]
-mod tests;
+#[path = "../../../../tests/unit/internal/cli_common_output_file_test.rs"]
+mod cli_common_output_file_test;

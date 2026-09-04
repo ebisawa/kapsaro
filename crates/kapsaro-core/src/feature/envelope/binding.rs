@@ -4,6 +4,7 @@
 //! Kapsaro envelope binding bytes.
 
 use crate::crypto::types::data::{Aad, Info};
+use crate::crypto::types::primitives::ArtifactKeyScheduleSalt;
 use crate::format::jcs;
 use crate::model::file_enc::FilePayloadHeader;
 use crate::model::wire::context;
@@ -32,12 +33,14 @@ pub fn build_file_wrap_info(sid: &Uuid, kid: &str) -> Result<Info> {
     Ok(Info::from(bytes))
 }
 
-pub fn build_file_key_schedule_salt(sid: &Uuid) -> Result<Vec<u8>> {
-    build_sid_context_bytes(context::HKDF_SALT_FILE_V1, sid)
+pub fn build_file_key_schedule_salt(sid: &Uuid) -> Result<ArtifactKeyScheduleSalt> {
+    let bytes = build_sid_context_bytes(context::HKDF_SALT_FILE_V1, sid)?;
+    Ok(ArtifactKeyScheduleSalt::new(bytes))
 }
 
-pub fn build_kv_key_schedule_salt(sid: &Uuid) -> Result<Vec<u8>> {
-    build_sid_context_bytes(context::HKDF_SALT_KV_V1, sid)
+pub fn build_kv_key_schedule_salt(sid: &Uuid) -> Result<ArtifactKeyScheduleSalt> {
+    let bytes = build_sid_context_bytes(context::HKDF_SALT_KV_V1, sid)?;
+    Ok(ArtifactKeyScheduleSalt::new(bytes))
 }
 
 pub fn build_file_content_key_info(sid: &Uuid) -> Result<Info> {
@@ -98,4 +101,4 @@ fn normalize_context_json(value: serde_json::Value) -> Result<Vec<u8>> {
 
 #[cfg(test)]
 #[path = "../../../tests/unit/internal/feature_envelope_binding_test.rs"]
-mod tests;
+mod feature_envelope_binding_test;

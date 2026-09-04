@@ -67,7 +67,7 @@ pub trait SignatureBackend {
     /// # Errors
     ///
     /// Returns error if signatures differ or signing fails
-    fn check_sshsig_determinism(
+    fn enforce_sshsig_determinism(
         &self,
         namespace: &str,
         ssh_pubkey: &str,

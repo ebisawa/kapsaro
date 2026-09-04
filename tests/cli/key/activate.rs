@@ -4,8 +4,8 @@
 //! Integration tests for `key activate` command
 
 use crate::cli::common::{
-    cmd, generate_temp_ssh_keypair, make_secret_home, save_trust_store_signed_by_active_key,
-    ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, TEST_MEMBER_HANDLE,
+    cmd, generate_temp_ssh_keypair, save_trust_store_signed_by_active_key, setup_secret_home,
+    ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, TEST_MEMBER_HANDLE, TRUST_STORE_STORED_AT,
 };
 use crate::cli::key::install_secondary_member_fixture;
 use kapsaro_core::test_support::helpers::kid::format_kid_display;
@@ -15,7 +15,7 @@ use std::fs;
 
 #[test]
 fn test_key_activate_explicit_kid() {
-    let temp_dir = make_secret_home();
+    let temp_dir = setup_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     let member_handle = TEST_MEMBER_HANDLE;
@@ -77,7 +77,7 @@ fn test_key_activate_explicit_kid() {
 
 #[test]
 fn test_key_activate_latest() {
-    let temp_dir = make_secret_home();
+    let temp_dir = setup_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     let member_handle = TEST_MEMBER_HANDLE;
@@ -130,7 +130,7 @@ fn test_key_activate_latest() {
 
 #[test]
 fn test_key_activate_accepts_display_kid() {
-    let temp_dir = make_secret_home();
+    let temp_dir = setup_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
     let member_handle = TEST_MEMBER_HANDLE;
 
@@ -189,8 +189,13 @@ fn test_key_activate_accepts_display_kid() {
 fn test_key_activate_reports_a_trust_store_signed_by_another_key() {
     let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     install_secondary_member_fixture(&home, BOB_MEMBER_HANDLE);
-    let signer_kid =
-        save_trust_store_signed_by_active_key(&home, ALICE_MEMBER_HANDLE, Vec::new(), Vec::new());
+    let signer_kid = save_trust_store_signed_by_active_key(
+        &home,
+        ALICE_MEMBER_HANDLE,
+        TRUST_STORE_STORED_AT,
+        Vec::new(),
+        Vec::new(),
+    );
     cmd()
         .arg("key")
         .arg("new")

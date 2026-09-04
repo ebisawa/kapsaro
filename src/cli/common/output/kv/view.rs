@@ -40,19 +40,20 @@ pub(super) fn build_kv_entries(result: &KvReadResult) -> Vec<KvEntryView<'_>> {
         .collect()
 }
 
-pub(super) fn build_single_kv_entry<'a>(result: &'a KvReadResult, key: &'a str) -> KvEntryView<'a> {
-    KvEntryView {
+/// Build the view for one requested key, or report that the read did not carry it.
+pub(super) fn build_single_kv_entry<'a>(
+    result: &'a KvReadResult,
+    key: &'a str,
+) -> Option<KvEntryView<'a>> {
+    let value = result.values.get(key)?;
+    Some(KvEntryView {
         key,
-        value: result
-            .values
-            .get(key)
-            .map(|value| value.expose_secret())
-            .unwrap_or_default(),
+        value: value.expose_secret(),
         disclosed: result
             .disclosed
             .iter()
             .any(|entry| entry.key() == key && entry.disclosed()),
-    }
+    })
 }
 
 fn disclosed_lookup(disclosed: &[KvDisclosedEntry]) -> BTreeMap<&str, bool> {

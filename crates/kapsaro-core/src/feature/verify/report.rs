@@ -3,7 +3,7 @@
 
 //! Signature verification report generation
 
-use super::key_loader::SignatureVerificationKey;
+use super::verifying_key::SignatureVerificationKey;
 use super::SignatureVerificationReport;
 use crate::model::public_key::PublicKey;
 use crate::model::verification::VerifyingKeySource;

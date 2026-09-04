@@ -69,10 +69,6 @@ mod test_support_surface {
     }
 
     pub mod storage {
-        pub mod config {
-            pub use kapsaro_core::test_support::storage::config::paths::get_base_dir;
-        }
-
         pub mod keystore {
             pub use kapsaro_core::test_support::storage::keystore::active::{
                 load_active_kid, set_active_kid,

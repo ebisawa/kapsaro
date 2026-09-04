@@ -187,11 +187,11 @@ pub(crate) fn from_warning_batch(batch: warning::LocalStateWarningBatch) -> Diag
             .into_iter()
             .map(LocalStateDiagnostic::from)
             .collect(),
-        completeness: describe_completeness(batch.dropped),
+        completeness: evaluate_completeness(batch.dropped),
     }
 }
 
-fn describe_completeness(dropped: usize) -> DiagnosticCompleteness {
+fn evaluate_completeness(dropped: usize) -> DiagnosticCompleteness {
     if dropped == 0 {
         return DiagnosticCompleteness::Complete;
     }
@@ -200,3 +200,7 @@ fn describe_completeness(dropped: usize) -> DiagnosticCompleteness {
         retained_limit: MAX_LOCAL_STATE_WARNINGS,
     })
 }
+
+#[cfg(test)]
+#[path = "../../tests/unit/internal/service_diagnostics_test.rs"]
+mod service_diagnostics_test;

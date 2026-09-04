@@ -108,5 +108,5 @@ impl KvDocumentBuilder {
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/internal/feature_kv_builder_test.rs"]
-mod tests;
+#[path = "../../../../tests/unit/internal/format_kv_document_builder_test.rs"]
+mod format_kv_document_builder_test;

@@ -3,7 +3,6 @@
 
 //! Shared trust store approval persistence.
 
-use crate::feature::trust::known_keys::KnownKeyIdentity;
 use crate::feature::trust::recipient_sets::ArtifactRecipientSet;
 use crate::model::identity::{Kid, MemberHandle};
 use crate::service::diagnostics::restore_local_state_warnings;
@@ -26,6 +25,10 @@ pub struct ApprovedKnownKey {
 impl ApprovedKnownKey {
     pub(crate) fn kid(&self) -> &Kid {
         &self.kid
+    }
+
+    pub(crate) fn member_handle(&self) -> &MemberHandle {
+        &self.member_handle
     }
 
     pub(crate) fn from_candidate(candidate: &TrustApprovalCandidate) -> Result<Self> {
@@ -70,12 +73,6 @@ impl ApprovedKnownKey {
             kid,
             approval,
         }
-    }
-}
-
-impl From<&ApprovedKnownKey> for KnownKeyIdentity {
-    fn from(value: &ApprovedKnownKey) -> Self {
-        Self::new(value.member_handle.clone(), value.kid.clone())
     }
 }
 
@@ -169,5 +166,5 @@ fn complete_approval(outcome: TrustApprovalOutcome) -> usize {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/internal/app_trust_approval_test.rs"]
-mod tests;
+#[path = "../../../tests/unit/internal/service_trust_approval_test.rs"]
+mod service_trust_approval_test;

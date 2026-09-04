@@ -7,15 +7,16 @@
 use crate::feature::context::crypto::{build_signing_context, VerifiedSigningContext};
 use crate::feature::trust::store_mutation::{
     build_empty_trust_store, build_trust_store_not_found_error, TrustStoreMutation,
-    TrustStoreMutationMode, TrustStoreMutationTarget, TrustStoreState, TrustStoreWrite,
-};
-use crate::feature::trust::transaction::{
-    commit_trust_store_mutation, ObservedTrustStore, TrustStoreCommitGate, TrustStorePreparation,
+    TrustStoreState, TrustStoreWrite,
 };
 use crate::io::keystore::access::KeystoreAccess;
 use crate::io::trust::store::attach_trust_store_recovery;
 use crate::model::identity::{Kid, MemberHandle};
 use crate::model::trust_store::TrustStoreProtected;
+use crate::service::trust::persistence::{TrustStoreMutationMode, TrustStoreMutationTarget};
+use crate::service::trust::transaction::{
+    commit_trust_store_mutation, ObservedTrustStore, TrustStoreCommitGate, TrustStorePreparation,
+};
 use crate::service::trust::{
     LocalTrustStore, TrustCommandSession, VerifiedLocalTrustStoreLoadResult,
 };
@@ -26,7 +27,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 /// Capabilities one CLI trust store mutation resolved before taking any lock.
-struct ResolvedTrustMutation<'a> {
+struct TrustMutationResolution<'a> {
     base: AnchoredDir,
     trust_dir: Arc<OpenDir>,
     path: PathBuf,
@@ -35,7 +36,7 @@ struct ResolvedTrustMutation<'a> {
     mode: TrustStoreMutationMode,
 }
 
-impl ResolvedTrustMutation<'_> {
+impl TrustMutationResolution<'_> {
     /// Bind the resolved capabilities to the key that signs this mutation.
     fn target<'a>(
         &'a self,
@@ -115,7 +116,7 @@ pub(crate) fn trust_store_or_empty(
 /// Load and verify the local trust store through the public API facade.
 ///
 /// The facade verifies the store and reports a failure of the stored document as
-/// a condition of that store, so every app-layer read of a trust store ends up
+/// a condition of that store, so every read of a trust store ends up
 /// saying the same thing about the same file whichever entry point it came in by.
 ///
 /// The trust directory arrives as the descriptor the caller already holds rather
@@ -167,14 +168,14 @@ pub(crate) struct TrustStoreResignOutcome {
 /// a caller whose own conditions depend on them can refuse while the stored
 /// signature is still the one its decision was made against. A signature that
 /// has already moved cannot be put back by the command that fails afterwards.
-pub(crate) struct PlannedTrustStoreResign<'a> {
-    resolved: ResolvedTrustMutation<'a>,
+pub(crate) struct TrustStoreResignPlan<'a> {
+    resolved: TrustMutationResolution<'a>,
     signing: VerifiedSigningContext<'a>,
     observed: ObservedTrustStore,
     previous_signer_kid: Kid,
 }
 
-impl PlannedTrustStoreResign<'_> {
+impl TrustStoreResignPlan<'_> {
     /// The key the stored signature named when it was observed.
     pub(crate) fn previous_signer_kid(&self) -> &Kid {
         &self.previous_signer_kid
@@ -221,7 +222,7 @@ pub(crate) fn execute_trust_store_resign_with_session(
         .ok_or_else(|| build_trust_store_not_found_error(session.owner().as_str()))?
         .signer_kid
         .clone();
-    PlannedTrustStoreResign {
+    TrustStoreResignPlan {
         resolved,
         signing,
         observed,
@@ -307,7 +308,7 @@ fn build_rebound_local_state_error(subject: &str) -> Error {
 pub(crate) fn plan_trust_store_resign_bound_session<'a>(
     session: &'a TrustCommandSession,
     binding: &LocalStateBinding<'_>,
-) -> Result<PlannedTrustStoreResign<'a>> {
+) -> Result<TrustStoreResignPlan<'a>> {
     binding.ensure_session_matches(session)?;
     let resolved = resolve_session_trust_mutation(session)?;
     let signing = build_signing_context(session.key_ctx().inner())?;
@@ -317,7 +318,7 @@ pub(crate) fn plan_trust_store_resign_bound_session<'a>(
         .ok_or_else(|| build_trust_store_not_found_error(session.owner().as_str()))?
         .signer_kid
         .clone();
-    Ok(PlannedTrustStoreResign {
+    Ok(TrustStoreResignPlan {
         resolved,
         signing,
         observed,
@@ -330,7 +331,7 @@ pub(crate) fn plan_trust_store_resign_bound_session<'a>(
 /// Content that will not verify names no key and rules none out either, so it
 /// is reported apart from an absent store: a caller deciding whether a key may
 /// be removed has to tell the two cases apart.
-pub(crate) enum StoredTrustSigner {
+pub(crate) enum TrustSignerRecord {
     /// The stored document verified against this key.
     Signer(String),
     /// There is no stored trust store to carry a signature.
@@ -358,16 +359,16 @@ pub(crate) enum StoredTrustSigner {
 /// Every way the read can end is one of the three answers, so nothing is left
 /// for a caller to handle: a failure is the `Unreadable` answer rather than a
 /// failure of this call.
-pub(crate) fn read_stored_trust_signer(
+pub(crate) fn load_stored_trust_signer(
     base: &AnchoredDir,
     trust_dir: Option<&OpenDir>,
     owner: &MemberHandle,
     keystore: Option<&KeystoreAccess>,
-) -> StoredTrustSigner {
+) -> TrustSignerRecord {
     match load_optional_trust_store(base, trust_dir, owner, keystore) {
         Ok(Some(state)) => verified_trust_signer(state),
-        Ok(None) => StoredTrustSigner::Absent,
-        Err(error) => StoredTrustSigner::Unreadable(error),
+        Ok(None) => TrustSignerRecord::Absent,
+        Err(error) => TrustSignerRecord::Unreadable(error),
     }
 }
 
@@ -375,14 +376,14 @@ pub(crate) fn read_stored_trust_signer(
 ///
 /// Verification resolves the signer key before it accepts anything, so a state
 /// that came back verified always carries one.
-fn verified_trust_signer(state: TrustStoreState) -> StoredTrustSigner {
+fn verified_trust_signer(state: TrustStoreState) -> TrustSignerRecord {
     state.signer_kid.map_or_else(
         || {
-            StoredTrustSigner::Unreadable(Error::build_invalid_operation_error(
+            TrustSignerRecord::Unreadable(Error::build_invalid_operation_error(
                 "Verified local trust store carried no signer key".to_string(),
             ))
         },
-        |kid| StoredTrustSigner::Signer(kid.into_string()),
+        |kid| TrustSignerRecord::Signer(kid.into_string()),
     )
 }
 
@@ -440,12 +441,12 @@ where
 
 fn resolve_session_trust_mutation(
     session: &TrustCommandSession,
-) -> Result<ResolvedTrustMutation<'_>> {
+) -> Result<TrustMutationResolution<'_>> {
     let trust_dir = session
         .trust_dir()
         .cloned()
         .ok_or_else(|| build_trust_store_not_found_error(session.owner().as_str()))?;
-    Ok(ResolvedTrustMutation {
+    Ok(TrustMutationResolution {
         base: session.home().clone(),
         trust_dir,
         path: session.path().to_path_buf(),
@@ -456,5 +457,5 @@ fn resolve_session_trust_mutation(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/internal/app_trust_store_test.rs"]
-mod tests;
+#[path = "../../../tests/unit/internal/service_trust_store_test.rs"]
+mod service_trust_store_test;

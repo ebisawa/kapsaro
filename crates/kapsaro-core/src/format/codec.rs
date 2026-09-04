@@ -167,18 +167,38 @@ fn validate_base64url_chars(data: &str, field_name: &str) -> Result<()> {
     ))
 }
 
+/// Where the padding of a standard base64 string starts and how long it runs.
+struct Base64Padding {
+    /// Byte length of the encoded payload ahead of the first '='.
+    payload_len: usize,
+    /// Number of trailing '=' characters.
+    count: usize,
+}
+
 fn validate_standard_chars(data: &str, field_name: &str) -> Result<usize> {
+    let padding = validate_standard_char_set(data, field_name)?;
+    enforce_padding_shape(&padding, data.len(), field_name)?;
+    Ok(padding.payload_len)
+}
+
+/// Walk the string, rejecting symbols the alphabet does not hold.
+///
+/// Padding is only padding at the end, so a symbol appearing after the first
+/// '=' is refused rather than counted as payload.
+fn validate_standard_char_set(data: &str, field_name: &str) -> Result<Base64Padding> {
+    let mut padding = Base64Padding {
+        payload_len: data.len(),
+        count: 0,
+    };
     let mut padding_started = false;
-    let mut padding_count = 0usize;
-    let mut payload_len = data.len();
 
     for (idx, byte) in data.bytes().enumerate() {
         if byte == b'=' {
             if !padding_started {
-                payload_len = idx;
+                padding.payload_len = idx;
                 padding_started = true;
             }
-            padding_count += 1;
+            padding.count += 1;
             continue;
         }
 
@@ -197,32 +217,39 @@ fn validate_standard_chars(data: &str, field_name: &str) -> Result<usize> {
         }
     }
 
-    if padding_count > 2 {
+    Ok(padding)
+}
+
+/// Require the padding to be the one the payload length implies.
+///
+/// Base64 pads to a multiple of four, so a payload of a given remainder admits
+/// exactly one padding length. Any other combination encodes a length that the
+/// decoder would have to guess at.
+fn enforce_padding_shape(padding: &Base64Padding, data_len: usize, field_name: &str) -> Result<()> {
+    if padding.count > 2 {
         return Err(invalid_length_error(
             field_name,
             "Invalid base64 padding length (maximum 2 '=' characters)",
         ));
     }
-    if padding_count > 0 && !data.len().is_multiple_of(4) {
+    if padding.count > 0 && !data_len.is_multiple_of(4) {
         return Err(invalid_length_error(
             field_name,
             "Padded base64 length must be a multiple of 4",
         ));
     }
-    if padding_count == 1 && payload_len % 4 != 3 {
+    let expected_remainder = match padding.count {
+        1 => 3,
+        2 => 2,
+        _ => return Ok(()),
+    };
+    if padding.payload_len % 4 != expected_remainder {
         return Err(invalid_length_error(
             field_name,
             "Invalid base64 padding placement",
         ));
     }
-    if padding_count == 2 && payload_len % 4 != 2 {
-        return Err(invalid_length_error(
-            field_name,
-            "Invalid base64 padding placement",
-        ));
-    }
-
-    Ok(payload_len)
+    Ok(())
 }
 
 pub(crate) fn decode_into(
@@ -339,9 +366,9 @@ fn invalid_length_error(field_name: &str, detail: &str) -> Error {
 // Fixture encoder shared by the internal tests that build OpenSSH blobs. It
 // lives in the test tree and compiles out of production builds.
 #[cfg(test)]
-#[path = "../../tests/unit/internal/codec_base64_fixtures.rs"]
-pub(crate) mod codec_base64_fixtures;
+#[path = "../../tests/unit/internal/format_codec_base64_fixtures.rs"]
+pub(crate) mod format_codec_base64_fixtures;
 
 #[cfg(test)]
-#[path = "../../tests/unit/internal/support_codec_base64_test.rs"]
-mod support_codec_base64_test;
+#[path = "../../tests/unit/internal/format_codec_test.rs"]
+mod format_codec_test;

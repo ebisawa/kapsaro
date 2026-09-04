@@ -19,11 +19,15 @@ root="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "$0")/.." && pwd)}"
 # mod.rs files that predate the convention. Do not add to this list.
 allowed_mod_rs="crates/kapsaro-core/src/api/mod.rs"
 
+# Hook input arrives on stdin only when the agent harness runs this script, which
+# it signals with CLAUDE_PROJECT_DIR. A plain command may also have a non-tty
+# stdin that never closes, so the read is bounded instead of waiting for EOF.
 files=""
 if [ "$#" -gt 0 ]; then
   files="$*"
-elif [ ! -t 0 ]; then
-  input=$(cat)
+elif [ -n "${CLAUDE_PROJECT_DIR:-}" ] && [ ! -t 0 ]; then
+  input=""
+  IFS= read -r -t 3 -d '' input || true
   files=$(printf '%s' "$input" | jq -r '.tool_input.file_path // empty' 2>/dev/null)
   [ -n "$files" ] || exit 0
 else

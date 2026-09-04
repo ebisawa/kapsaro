@@ -5,20 +5,20 @@
 //! Lists members and keys, skipping entries that are neither.
 
 use super::{
-    ensure_keystore_entry_safe, read_keystore_child_directories, KeystoreAccess, KeystoreLevel,
+    ensure_keystore_entry_safe, list_keystore_child_directories, KeystoreAccess, KeystoreLevel,
 };
 use crate::model::identity::{Kid, MemberHandle};
 use crate::support::fs::relative::{list_child_entries_at, ChildType, DirectoryFd};
 use crate::Result;
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/internal/keystore_access_members_test.rs"]
-mod keystore_access_members_test;
+#[path = "../../../../tests/unit/internal/io_keystore_access_inspection_test.rs"]
+mod io_keystore_access_inspection_test;
 
 impl KeystoreAccess {
     pub(crate) fn list_members(&self) -> Result<Vec<MemberHandle>> {
         Ok(
-            read_keystore_child_directories(&self.root, KeystoreLevel::Root)?
+            list_keystore_child_directories(&self.root, KeystoreLevel::Root)?
                 .into_iter()
                 .filter_map(|name| parse_stored_member_handle(&name))
                 .collect(),
@@ -75,7 +75,7 @@ where
     D: DirectoryFd,
 {
     Ok(
-        read_keystore_child_directories(member_dir, KeystoreLevel::Member)?
+        list_keystore_child_directories(member_dir, KeystoreLevel::Member)?
             .into_iter()
             .filter_map(|name| Kid::from_canonical(name).ok())
             .collect(),

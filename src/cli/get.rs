@@ -122,4 +122,4 @@ fn resolve_get_read_mode(all: bool, key: Option<&str>) -> Result<KvReadMode<'_>>
 
 #[cfg(test)]
 #[path = "../../tests/unit/internal/cli_get_test.rs"]
-mod tests;
+mod cli_get_test;

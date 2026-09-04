@@ -1,8 +1,8 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-// RAII guards for the process-global current directory and environment.
-// Each test binary gets its own locks, which is what serialization needs.
+//! RAII guards for the process-global current directory and environment.
+//! Each test binary gets its own locks, which is what serialization needs.
 
 use std::path::Path;
 use std::path::PathBuf;

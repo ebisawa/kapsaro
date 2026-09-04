@@ -68,7 +68,8 @@ impl AnchoredDir {
         absent_as_none(Self::open(path, scope, subject))
     }
 
-    pub(crate) fn create(
+    /// Open a root, creating the directory when it is not there yet.
+    pub(crate) fn ensure(
         path: impl Into<PathBuf>,
         scope: DirectoryScope,
         subject: &str,
@@ -82,7 +83,7 @@ impl AnchoredDir {
         let (parent, opened) = match fs::symlink_metadata(&path) {
             Ok(_) => open_existing_root(&path, scope, subject)?,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                create_final_directory(&path, scope, subject)?
+                ensure_final_directory(&path, scope, subject)?
             }
             Err(error) => {
                 return Err(Error::build_io_error_with_source(
@@ -167,7 +168,7 @@ fn open_existing_root(
 /// The path is probed twice, so a concurrent first run can create it in
 /// between. That leaves nothing missing, which is a race to absorb by opening
 /// what is now there rather than a corrupt tree to report.
-fn create_final_directory(
+fn ensure_final_directory(
     path: &Path,
     scope: DirectoryScope,
     subject: &str,

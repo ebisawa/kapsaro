@@ -6,7 +6,7 @@
 //! HPKE Base mode: X25519-HKDF-SHA256 + ChaCha20-Poly1305
 
 use crate::crypto::build_crypto_operation_error;
-use crate::crypto::rng::{fill_secret_array, hpke_sender_setup_rng};
+use crate::crypto::rng::{generate_secret_array, hpke_sender_setup_rng};
 use crate::crypto::types::data::{Aad, Ciphertext, Enc, Info, Plaintext};
 use crate::Result;
 use hpke::{
@@ -66,7 +66,7 @@ fn serialize_public_key(public_key: &<Kem as KemTrait>::PublicKey) -> [u8; 32] {
 
 /// Generate a new X25519 key pair using the HPKE KEM implementation.
 pub fn generate_keypair() -> Result<(X25519SecretKey, X25519PublicKey)> {
-    let keying_material = fill_secret_array::<32>()?;
+    let keying_material = generate_secret_array::<32>()?;
     let (secret_key, public_key) = Kem::derive_keypair(keying_material.as_ref());
     Ok((
         X25519SecretKey::from_zeroizing(serialize_private_key(&secret_key)),

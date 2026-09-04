@@ -48,6 +48,7 @@ fn ssh_error(message: impl Into<String>) -> Error {
 /// Returns error if:
 /// - File cannot be read
 /// - File is empty or contains invalid UTF-8
+/// - File holds more than one key line
 /// - Key type is not ssh-ed25519
 pub fn load_ssh_public_key_file(pub_key_path: &Path) -> Result<String> {
     let content = load_text_with_limit(
@@ -64,7 +65,7 @@ pub fn load_ssh_public_key_file(pub_key_path: &Path) -> Result<String> {
         ssh_error(message)
     })?;
 
-    let pubkey = content.trim().to_string();
+    let pubkey = extract_single_key_line(&content, pub_key_path)?;
 
     // Validate key type is ssh-ed25519
     let key_type = pubkey.split_whitespace().next().ok_or_else(|| {
@@ -85,6 +86,24 @@ pub fn load_ssh_public_key_file(pub_key_path: &Path) -> Result<String> {
     }
 
     Ok(pubkey)
+}
+
+/// Take the one key line a `.pub` file is expected to hold.
+///
+/// A file holding a second key does not say which key the signer meant, and
+/// taking the first would sign with a key the operator never named. Blank lines
+/// carry no key, so they are ignored the way `collect_ed25519_keys_in_output`
+/// ignores everything that is not a key line.
+fn extract_single_key_line(content: &str, pub_key_path: &Path) -> Result<String> {
+    let mut key_lines = content.lines().filter(|line| !line.trim().is_empty());
+    let first = key_lines.next().unwrap_or_default().trim().to_string();
+    if key_lines.next().is_some() {
+        return Err(ssh_error(format!(
+            "SSH public key file must contain exactly one key line: {}",
+            format_path_relative_to_cwd(pub_key_path)
+        )));
+    }
+    Ok(first)
 }
 
 /// Load SSH public key using a key descriptor via the `SshKeygen` trait.
@@ -171,5 +190,5 @@ fn extract_comment(line: &str) -> String {
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/internal/ssh_external_pubkey_test.rs"]
-mod ssh_external_pubkey_test;
+#[path = "../../../../tests/unit/internal/io_ssh_external_pubkey_test.rs"]
+mod io_ssh_external_pubkey_test;

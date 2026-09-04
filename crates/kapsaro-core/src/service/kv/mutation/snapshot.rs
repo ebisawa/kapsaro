@@ -127,11 +127,29 @@ impl MutationReviewSnapshot {
         Ok(())
     }
 
-    pub(super) fn save_replacement_at<D>(&self, dir: &D, encrypted: &str) -> Result<()>
+    /// Replace the reviewed document, refusing one that moved before the rename.
+    ///
+    /// The replacement bytes are staged first and the name is repointed at them
+    /// last, and everything the write rests on is confirmed in between: the
+    /// member set, and the document itself by identity and content. It has to
+    /// happen here and not only earlier: the work that produced these bytes
+    /// re-read the artifact, derived the authorization from the trust store and
+    /// ran the mutation, and a writer ignoring the directory lock can replace
+    /// the target at any point of that. Checking only before the work would let
+    /// the bytes land on a document nobody reviewed.
+    pub(super) fn save_replacement_at<D>(
+        &self,
+        capabilities: &WorkspaceWriteCapabilities<'_>,
+        dir: &D,
+        encrypted: &str,
+    ) -> Result<()>
     where
         D: DirectoryFd,
     {
-        self.file_snapshot.save_replacement_at(dir, encrypted)
+        self.file_snapshot
+            .save_replacement_if_current_with_precondition_at(dir, encrypted, || {
+                self.ensure_target_current_at(capabilities, dir)
+            })
     }
 
     pub(super) fn encrypted_content(&self, encrypted: String) -> EncContent {

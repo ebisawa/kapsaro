@@ -46,4 +46,4 @@ fn format_rewrap_failure_lines(
 
 #[cfg(test)]
 #[path = "../../../../../tests/unit/internal/cli_common_output_text_rewrap_test.rs"]
-mod tests;
+mod cli_common_output_text_rewrap_test;

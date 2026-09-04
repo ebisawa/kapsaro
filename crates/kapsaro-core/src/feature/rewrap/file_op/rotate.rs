@@ -3,7 +3,7 @@
 
 //! Rotate content key for file-enc content.
 
-use crate::crypto::rng::fill_secret_array;
+use crate::crypto::rng::generate_secret_array;
 use crate::crypto::types::data::Plaintext;
 use crate::crypto::types::keys::MasterKey;
 use crate::feature::decrypt::file::decrypt_file_payload;
@@ -27,7 +27,7 @@ pub(in crate::feature::rewrap) fn rotate_file_key(
     let old_payload_key = old_schedule.derive_content_key()?;
     let plaintext_bytes = decrypt_file_payload(verified, &old_payload_key, "rotate_file_key")?;
     let plaintext_obj = Plaintext::from(plaintext_bytes.as_slice());
-    let new_content_key_bytes = fill_secret_array::<32>()?;
+    let new_content_key_bytes = generate_secret_array::<32>()?;
     let new_content_key = MasterKey::from_zeroizing(new_content_key_bytes);
     let new_schedule = FileKeySchedule::extract(&new_content_key, &protected.sid)?;
     let new_xchacha_key = new_schedule.derive_content_key()?;

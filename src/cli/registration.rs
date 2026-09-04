@@ -9,6 +9,7 @@ mod output;
 use crate::cli::common::command::require_member_handle;
 use crate::cli::common::context::CliContext;
 use crate::cli::common::output::text::registration::print_init_noop_summary;
+use crate::cli::common::presentation::tty;
 use crate::cli::common::ssh::resolve_ssh_context;
 use crate::cli::identity_prompt;
 use crate::cli::options::ToCommonOptions;
@@ -33,7 +34,7 @@ pub(crate) fn run_registration_command(
 ) -> Result<(), Error> {
     let context = CliContext::resolve(&common)?;
     let workspace_path = context.registration_workspace_path()?;
-    if handle_init_noop(&workspace_path, mode)? {
+    if run_init_noop(&workspace_path, mode)? {
         return Ok(());
     }
 
@@ -50,12 +51,9 @@ pub(crate) fn run_registration_command(
     Ok(())
 }
 
-/// Handle the `init` mode's no-op case, where the workspace already exists.
-/// Returns whether the command was fully handled here.
-fn handle_init_noop(
-    workspace_path: &std::path::Path,
-    mode: RegistrationMode,
-) -> Result<bool, Error> {
+/// Run the `init` mode's no-op case, where the workspace already exists.
+/// Returns whether the command was fully answered here.
+fn run_init_noop(workspace_path: &std::path::Path, mode: RegistrationMode) -> Result<bool, Error> {
     if let RegistrationMode::Init = mode {
         let init_workspace = evaluate_init_workspace_status(workspace_path)?;
         if init_workspace.state == InitWorkspaceState::NoOp {
@@ -101,8 +99,7 @@ fn resolve_registration_decision(
     command: &RegistrationCommand,
     force: bool,
 ) -> Result<RegistrationDecision, Error> {
-    let decision =
-        evaluate_registration_decision(command, force, identity_prompt::is_prompt_available())?;
+    let decision = evaluate_registration_decision(command, force, tty::is_interactive())?;
     match decision {
         RegistrationDecision::ConfirmOverwrite => {
             if identity_prompt::confirm_member_overwrite(&command.setup.member_handle)? {

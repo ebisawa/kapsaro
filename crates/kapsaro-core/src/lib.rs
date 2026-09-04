@@ -79,5 +79,5 @@ pub(crate) mod test_utils;
 
 #[cfg(test)]
 #[allow(dead_code, unused_imports)]
-#[path = "../tests/test_support/app_context.rs"]
-pub(crate) mod app_test_utils;
+#[path = "../tests/test_support/service_context.rs"]
+pub(crate) mod service_test_utils;

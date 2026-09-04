@@ -138,8 +138,7 @@ fn test_rewrap_accept_prompt_accepts_carriage_return_in_pty() {
             "KAPSARO_SSH_IDENTITY",
             temp_dir.path().join(".ssh").join("test_ed25519"),
         )
-        .env("KAPSARO_SSH_SIGNING_METHOD", "ssh-keygen")
-        .env_remove("CI");
+        .env("KAPSARO_SSH_SIGNING_METHOD", "ssh-keygen");
 
     let result = run_command_with_pty(&mut command, "Trust this member set", b"y\r");
 

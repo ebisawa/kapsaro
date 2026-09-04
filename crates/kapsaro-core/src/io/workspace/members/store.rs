@@ -21,5 +21,5 @@ pub(crate) use remove::{set_member_post_quarantine_hook, set_member_pre_quaranti
 pub(crate) use save::set_post_open_save_dirs_hook;
 pub use save::{save_member_content, save_member_content_keeping_existing, MemberDocumentWrite};
 pub(crate) use uniqueness::{
-    check_workspace_member_kid_uniqueness_in_open_dirs, MemberKidCandidate,
+    enforce_workspace_member_kid_uniqueness_in_open_dirs, MemberKidCandidate,
 };

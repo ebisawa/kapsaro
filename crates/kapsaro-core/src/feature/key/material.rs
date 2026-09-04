@@ -7,7 +7,7 @@ use crate::crypto::kem::{
     derive_public_key_from_secret, generate_keypair as generate_kem_keypair, X25519PublicKey,
     X25519SecretKey,
 };
-use crate::crypto::rng::fill_secret_array;
+use crate::crypto::rng::generate_secret_array;
 use crate::format::codec::base64_public::{decode_base64url_nopad_array, encode_base64url_nopad};
 use crate::format::codec::base64_secret::{
     decode_base64url_nopad_secret_32, encode_base64url_nopad_secret_32,
@@ -35,7 +35,7 @@ pub struct KeypairMaterial {
 pub fn generate_keypairs() -> Result<KeypairMaterial> {
     let (kem_sk, kem_pk) = generate_kem_keypair()?;
 
-    let sig_seed = fill_secret_array::<32>()?;
+    let sig_seed = generate_secret_array::<32>()?;
     let sig_sk = SigningKey::from_bytes(&sig_seed);
     let sig_pk: VerifyingKey = sig_sk.verifying_key();
 
@@ -94,7 +94,7 @@ pub fn build_private_key_plaintext(
 }
 
 /// Validate an OKP private/public key pair shape.
-pub fn validate_okp_key(
+pub fn parse_okp_key(
     kty: &str,
     crv: &str,
     expected_crv: &str,
@@ -122,7 +122,7 @@ pub fn validate_okp_key(
 /// Validate that an Ed25519 private key derives to the provided public key.
 ///
 /// The two public keys are compared in constant time, as key material is.
-pub fn validate_ed25519_consistency(
+pub fn verify_ed25519_consistency(
     sig_d_bytes: &SecretArray<32>,
     sig_x_bytes: &[u8; 32],
 ) -> Result<()> {
@@ -140,7 +140,7 @@ pub fn validate_ed25519_consistency(
 /// Validate that an X25519 private key derives to the provided public key.
 ///
 /// The two public keys are compared in constant time, as key material is.
-pub fn validate_x25519_consistency(
+pub fn verify_x25519_consistency(
     kem_d_bytes: &SecretArray<32>,
     kem_x_bytes: &[u8; 32],
 ) -> Result<()> {
@@ -160,14 +160,14 @@ pub fn validate_x25519_consistency(
 }
 
 /// Validate private key plaintext key material.
-pub(crate) fn validate_private_key_material(plaintext: &PrivateKeyPlaintext) -> Result<()> {
+pub(crate) fn verify_private_key_material(plaintext: &PrivateKeyPlaintext) -> Result<()> {
     let kem = &plaintext.keys.kem;
     let (kem_d_bytes, kem_x_bytes) =
-        validate_okp_key(&kem.kty, &kem.crv, jwk::CURVE_X25519, &kem.d, &kem.x, "KEM")?;
-    validate_x25519_consistency(&kem_d_bytes, &kem_x_bytes)?;
+        parse_okp_key(&kem.kty, &kem.crv, jwk::CURVE_X25519, &kem.d, &kem.x, "KEM")?;
+    verify_x25519_consistency(&kem_d_bytes, &kem_x_bytes)?;
 
     let sig = &plaintext.keys.sig;
-    let (sig_d_bytes, sig_x_bytes) = validate_okp_key(
+    let (sig_d_bytes, sig_x_bytes) = parse_okp_key(
         &sig.kty,
         &sig.crv,
         jwk::CURVE_ED25519,
@@ -175,7 +175,7 @@ pub(crate) fn validate_private_key_material(plaintext: &PrivateKeyPlaintext) -> 
         &sig.x,
         "Sig",
     )?;
-    validate_ed25519_consistency(&sig_d_bytes, &sig_x_bytes)?;
+    verify_ed25519_consistency(&sig_d_bytes, &sig_x_bytes)?;
 
     Ok(())
 }

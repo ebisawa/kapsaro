@@ -124,5 +124,5 @@ pub fn decrypt_file_document_with_context(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/internal/feature_decrypt_test.rs"]
-mod feature_decrypt_test;
+#[path = "../../../tests/unit/internal/feature_decrypt_file_test.rs"]
+mod feature_decrypt_file_test;

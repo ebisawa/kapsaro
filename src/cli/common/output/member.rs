@@ -84,4 +84,4 @@ pub(crate) fn print_member_show(json_output: bool, result: &MemberShowResult) ->
 
 #[cfg(test)]
 #[path = "../../../../tests/unit/internal/cli_common_output_member_test.rs"]
-mod tests;
+mod cli_common_output_member_test;

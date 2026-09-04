@@ -23,7 +23,7 @@ pub(super) fn review_candidate_for_confirmation<VerifyOnline>(
 where
     VerifyOnline: FnMut(&TrustApprovalCandidate) -> Result<TrustApprovalCandidate>,
 {
-    if !candidate.github_binding_configured() || candidate.is_github_verified() {
+    if !needs_online_verification(candidate) {
         return Ok(candidate.clone());
     }
 
@@ -53,7 +53,7 @@ where
 pub(super) fn verify_trust_candidate_online(
     candidate: &TrustApprovalCandidate,
 ) -> Result<TrustApprovalCandidate> {
-    if !candidate.github_binding_configured() || candidate.is_github_verified() {
+    if !needs_online_verification(candidate) {
         return Ok(candidate.clone());
     }
 
@@ -68,6 +68,15 @@ pub(super) fn verify_trust_candidate_online(
             .with_verified_service_evidence(evidence)
             .build(),
     )
+}
+
+/// Whether a candidate still has a GitHub binding left to check.
+///
+/// A candidate with no binding configured has nothing to verify, and one that
+/// already carries verified evidence must not be re-verified: a second lookup
+/// would replace the evidence the operator was shown.
+fn needs_online_verification(candidate: &TrustApprovalCandidate) -> bool {
+    candidate.github_binding_configured() && !candidate.is_github_verified()
 }
 
 fn build_online_verification_required_error(candidate: &TrustApprovalCandidate) -> Error {
@@ -85,5 +94,5 @@ fn build_online_verification_required_error(candidate: &TrustApprovalCandidate) 
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/internal/app_trust_review_online_verification_test.rs"]
-mod tests;
+#[path = "../../../../tests/unit/internal/service_trust_review_online_verification_test.rs"]
+mod service_trust_review_online_verification_test;

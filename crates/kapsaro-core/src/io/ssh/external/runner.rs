@@ -94,12 +94,10 @@ impl SshCommandRunner {
             .map_err(|e| Error::from(build_spawn_error(e)))?;
 
         if let Some(mut child_stdin) = child.stdin.take() {
-            child_stdin.write_all(stdin).map_err(|e| {
-                Error::from(SshError::build_operation_failed_error_with_source(
-                    "Failed to write to stdin",
-                    e,
-                ))
-            })?;
+            if let Err(error) = child_stdin.write_all(stdin) {
+                drop(child_stdin);
+                return Err(self.build_stdin_write_error(child, error, wait_error_context));
+            }
         }
 
         child.wait_with_output().map_err(|e| {
@@ -108,6 +106,42 @@ impl SshCommandRunner {
                 e,
             ))
         })
+    }
+
+    /// Report a failed stdin write with what the child said before it stopped.
+    ///
+    /// The write fails because the child is no longer reading, which it is
+    /// entitled to do only by having stopped: the account it left on stderr,
+    /// and the status it exited with, are the only description of why. Reaping
+    /// it here also keeps a child that already failed from being left behind.
+    fn build_stdin_write_error(
+        &self,
+        child: std::process::Child,
+        write_error: io::Error,
+        wait_error_context: &'static str,
+    ) -> Error {
+        let output = match child.wait_with_output() {
+            Ok(output) => output,
+            Err(wait_error) => {
+                return Error::from(SshError::build_operation_failed_error_with_source(
+                    format!(
+                        "Failed to write to stdin of {} ({write_error}), and \
+                         {wait_error_context}",
+                        self.program
+                    ),
+                    wait_error,
+                ))
+            }
+        };
+        Error::from(SshError::build_operation_failed_error_with_source(
+            format!(
+                "Failed to write to stdin: {} exited with {}: {}",
+                self.program,
+                output.status,
+                decode_lossy(&output.stderr).trim()
+            ),
+            write_error,
+        ))
     }
 
     /// Build the child command with the agent socket this policy allows.
@@ -161,5 +195,5 @@ pub(super) fn decode_stdout_utf8(
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/internal/ssh_external_runner_test.rs"]
-mod ssh_external_runner_test;
+#[path = "../../../../tests/unit/internal/io_ssh_external_runner_test.rs"]
+mod io_ssh_external_runner_test;

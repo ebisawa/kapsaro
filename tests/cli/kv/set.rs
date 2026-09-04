@@ -124,8 +124,7 @@ fn test_set_after_approving_recipient_key_in_same_command() {
         .arg("--workspace")
         .arg(&workspace_dir)
         .env("KAPSARO_HOME", home_dir.path())
-        .env("KAPSARO_SSH_IDENTITY", &ssh_identity)
-        .env_remove("CI");
+        .env("KAPSARO_SSH_IDENTITY", &ssh_identity);
     let result = run_command_with_pty(&mut command, "Approve this key?", b"y\r");
     assert!(
         result.status.success(),
@@ -228,8 +227,7 @@ fn existing_set_command(
         .arg("--workspace")
         .arg(workspace)
         .env("KAPSARO_HOME", home)
-        .env("KAPSARO_SSH_IDENTITY", ssh_identity)
-        .env_remove("CI");
+        .env("KAPSARO_SSH_IDENTITY", ssh_identity);
     command
 }
 

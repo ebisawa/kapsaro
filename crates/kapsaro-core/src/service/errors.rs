@@ -1,7 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Application-layer error helpers.
+//! Service-layer error helpers.
 
 use crate::feature::kv::error::is_key_not_found_error;
 use crate::support::path::format_path_relative_to_cwd;
@@ -9,8 +9,8 @@ use crate::Error;
 use std::path::Path;
 
 #[cfg(test)]
-#[path = "../../tests/unit/internal/app_errors_test.rs"]
-mod tests;
+#[path = "../../tests/unit/internal/service_errors_test.rs"]
+mod service_errors_test;
 
 /// Build a KV key-not-found error with file path context when applicable.
 pub fn build_kv_key_not_found_error(error: Error, input_path: &Path, key: &str) -> Error {
@@ -36,13 +36,4 @@ pub fn serialize_to_json_value<T: serde::Serialize>(value: &T) -> crate::Result<
             e,
         )
     })
-}
-
-/// Build the default missing KV file error shown by KV commands.
-#[cfg(test)]
-pub fn build_default_kv_file_not_found_error(file_path: &Path) -> Error {
-    Error::build_not_found_error(format!(
-        "Default kv file not found: {}. Use 'kapsaro set' to create it.",
-        format_path_relative_to_cwd(file_path)
-    ))
 }

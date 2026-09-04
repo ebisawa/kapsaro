@@ -29,42 +29,32 @@ pub fn setup_trust_store_for_workspace(
     owner_handle: &str,
     key_ctx: &kapsaro_core::test_support::operations::context::crypto::CryptoContext,
 ) {
-    use kapsaro_core::test_support::domain::trust_store::{
-        KnownKey, KnownKeyApprovalVia, TrustStoreProtected,
-    };
-    use kapsaro_core::test_support::domain::wire::format::LOCAL_TRUST_V1;
-    use kapsaro_core::test_support::operations::trust::signature::sign_trust_store;
-    use kapsaro_core::test_support::storage::trust::paths::get_trust_store_file_path;
-    use kapsaro_core::test_support::storage::trust::store::save_trust_store;
+    use super::trust_store_state::{build_known_key, save_trust_store_signed_by_key_context};
+    use kapsaro_core::test_support::domain::trust_store::KnownKey;
     use kapsaro_core::test_support::storage::workspace::members::load_active_member_files;
-    use std::collections::BTreeMap;
+
+    const WORKSPACE_TRUST_STORED_AT: &str = "2026-01-01T00:00:00Z";
 
     let active_members = load_active_member_files(workspace_path).unwrap();
     let known_keys: Vec<KnownKey> = active_members
         .iter()
-        .map(|pk| KnownKey {
-            kid: pk.protected.kid.clone(),
-            subject_handle: pk.protected.subject_handle.clone(),
-            approved_at: "2026-01-01T00:00:00Z".to_string(),
-            approved_via: KnownKeyApprovalVia::ManualReview,
-            evidence: None,
-            extra: BTreeMap::new(),
+        .map(|pk| {
+            build_known_key(
+                &pk.protected.kid,
+                &pk.protected.subject_handle,
+                Some(WORKSPACE_TRUST_STORED_AT),
+            )
         })
         .collect();
 
-    let now = "2026-01-01T00:00:00Z".to_string();
-    let protected = TrustStoreProtected {
-        format: LOCAL_TRUST_V1.to_string(),
-        owner_handle: owner_handle.to_string(),
-        created_at: now.clone(),
-        updated_at: now,
+    save_trust_store_signed_by_key_context(
+        home,
+        owner_handle,
+        WORKSPACE_TRUST_STORED_AT,
         known_keys,
-        recipient_sets: Vec::new(),
-    };
-
-    let doc = sign_trust_store(&protected, key_ctx.signing_key(), key_ctx.kid()).unwrap();
-    let path = get_trust_store_file_path(home, &member_handle(owner_handle));
-    save_trust_store(&path, &doc).unwrap();
+        Vec::new(),
+        key_ctx,
+    );
 }
 
 /// Generate and activate a new test key for a member with the requested expires_at.

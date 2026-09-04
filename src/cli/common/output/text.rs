@@ -16,13 +16,11 @@ pub(crate) mod registration;
 pub(crate) mod rewrap;
 pub(crate) mod trust;
 
-pub(crate) fn print_optional_status(message: Option<&str>, quiet: bool) {
+pub(crate) fn print_status(message: &str, quiet: bool) {
     if quiet {
         return;
     }
-    if let Some(message) = message {
-        eprintln!("{}", message);
-    }
+    eprintln!("{}", message);
 }
 
 pub(crate) fn format_warning_line(message: &str) -> String {
@@ -95,4 +93,4 @@ fn format_stderr_warning_lines(lines: Vec<String>) -> Vec<String> {
 
 #[cfg(test)]
 #[path = "../../../../tests/unit/internal/cli_common_output_text_test.rs"]
-mod tests;
+mod cli_common_output_text_test;

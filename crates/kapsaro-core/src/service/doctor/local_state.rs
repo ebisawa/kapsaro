@@ -99,7 +99,6 @@ pub(super) fn check_local_state(
         &keystore_root,
         member_handle,
         allow_owner_fallback,
-        &home,
         access.as_ref(),
     ) {
         OwnerResolution::Resolved(owner) => owner,
@@ -158,10 +157,9 @@ fn resolve_diagnostic_owner(
     keystore_root: &Path,
     member_handle: Option<&str>,
     allow_fallback: bool,
-    home: &LocalStateHome,
     access: Option<&KeystoreAccess>,
 ) -> OwnerResolution {
-    match resolve_owner(home.opened(), member_handle, allow_fallback, access) {
+    match resolve_owner(member_handle, allow_fallback, access) {
         Ok(Some(owner)) => OwnerResolution::Resolved(owner),
         Ok(None) => {
             log_unresolved_owner();
@@ -248,30 +246,30 @@ fn build_paths_resolved_check(keystore_root: &Path) -> DoctorCheck {
 }
 
 /// Outcome of opening the local state root, before the keystore under it.
-enum LocalStateHomeProbe {
+enum LocalStateHomeResolution {
     Opened(AnchoredDir),
     Reported(DoctorCheck, LocalStateHome),
 }
 
 /// Open the local state root, reporting a root that cannot be opened at all.
-fn probe_local_state_home(base_dir: &Path, subject: DoctorSubject) -> LocalStateHomeProbe {
+fn check_local_state_home(base_dir: &Path, subject: DoctorSubject) -> LocalStateHomeResolution {
     let home = match AnchoredDir::open(base_dir, DirectoryScope::LocalState, "local state root") {
         Ok(home) => home,
         Err(error) if error.kind() == ErrorKind::NotFound => {
-            return LocalStateHomeProbe::Reported(
+            return LocalStateHomeResolution::Reported(
                 build_missing_keystore_root_check(subject),
                 LocalStateHome::Missing,
             );
         }
         Err(error) => {
             let reason = error.format_user_message().to_string();
-            return LocalStateHomeProbe::Reported(
+            return LocalStateHomeResolution::Reported(
                 build_unsafe_keystore_root_check(subject, &reason),
                 LocalStateHome::Unavailable { reason },
             );
         }
     };
-    LocalStateHomeProbe::Opened(home)
+    LocalStateHomeResolution::Opened(home)
 }
 
 fn check_keystore_root(
@@ -281,9 +279,9 @@ fn check_keystore_root(
     // The probe opens the local state root, so a root that cannot be opened is
     // named by its own path rather than by the keystore under it.
     let home_subject = DoctorSubject::Path(format_path_relative_to_cwd(base_dir));
-    let home = match probe_local_state_home(base_dir, home_subject) {
-        LocalStateHomeProbe::Opened(home) => home,
-        LocalStateHomeProbe::Reported(check, home) => return (check, None, home),
+    let home = match check_local_state_home(base_dir, home_subject) {
+        LocalStateHomeResolution::Opened(home) => home,
+        LocalStateHomeResolution::Reported(check, home) => return (check, None, home),
     };
     let subject = DoctorSubject::Path(format_path_relative_to_cwd(keystore_root));
     let (check, access) = check_opened_keystore_root(&home, subject);
@@ -316,7 +314,7 @@ fn check_opened_keystore_root(
 }
 
 fn build_missing_keystore_root_check(subject: DoctorSubject) -> DoctorCheck {
-    DoctorCheck::warn_with_next_action(
+    DoctorCheck::build_warning_with_next_action(
         "keystore.root",
         DoctorCategory::LocalKeystore,
         subject,
@@ -438,7 +436,7 @@ fn build_owner_resolution_failure_check(base_dir: &Path, error: &Error) -> Docto
 }
 
 fn check_unresolved_keystore_owner(base_dir: &Path) -> DoctorCheck {
-    DoctorCheck::warn_with_next_action(
+    DoctorCheck::build_warning_with_next_action(
         "keystore.member",
         DoctorCategory::LocalKeystore,
         DoctorSubject::Path(format_path_relative_to_cwd(base_dir)),
@@ -485,7 +483,7 @@ pub(super) fn check_trust_store(
 }
 
 fn check_unresolved_trust_store_owner(base_dir: &Path) -> DoctorCheck {
-    DoctorCheck::warn_with_next_action(
+    DoctorCheck::build_warning_with_next_action(
         "trust_store.present",
         DoctorCategory::LocalTrustStore,
         DoctorSubject::Path(format_path_relative_to_cwd(&get_trust_store_dir(base_dir))),
@@ -503,7 +501,7 @@ fn log_trust_store_path(path: &Path, owner: &str) {
 }
 
 fn check_missing_trust_store(path: &Path) -> DoctorCheck {
-    DoctorCheck::warn_with_next_action(
+    DoctorCheck::build_warning_with_next_action(
         "trust_store.present",
         DoctorCategory::LocalTrustStore,
         DoctorSubject::Path(format_path_relative_to_cwd(path)),
@@ -538,7 +536,7 @@ fn load_trust_store_state(
     match loaded {
         Ok(Some(state)) => TrustStoreCheck::Loaded(state),
         Ok(None) => TrustStoreCheck::Missing,
-        Err(error) => TrustStoreCheck::Finding(classify_trust_store_failure(path, &error)),
+        Err(error) => TrustStoreCheck::Finding(build_trust_store_failure_check(path, &error)),
     }
 }
 
@@ -547,7 +545,7 @@ fn load_trust_store_state(
 /// The recovery route is what each condition is recognised by. It is a
 /// namespace of its own, so a code read here was attached as the route out of
 /// this failure and cannot be a validation rule that happens to share its name.
-fn classify_trust_store_failure(path: &Path, error: &Error) -> DoctorCheck {
+fn build_trust_store_failure_check(path: &Path, error: &Error) -> DoctorCheck {
     if error.recovery() == Some(LOCAL_KEYSTORE_MISSING_RECOVERY) {
         return build_missing_trust_store_keystore_check(path, error);
     }
@@ -621,8 +619,13 @@ fn check_verified_trust_store(path: &Path) -> DoctorCheck {
     )
 }
 
+/// Name the diagnosed owner from the handle the caller resolved, or from the
+/// keystore when it holds exactly one member.
+///
+/// The single-member fallback is a rule of the diagnosis itself: it has to read
+/// the keystore directory this run already opened safely, so it cannot be done
+/// by the caller. Every other source of the handle belongs to the caller.
 fn resolve_owner(
-    home: Option<&AnchoredDir>,
     member_handle: Option<&str>,
     allow_fallback: bool,
     keystore: Option<&KeystoreAccess>,
@@ -632,12 +635,6 @@ fn resolve_owner(
     }
     if !allow_fallback {
         return Ok(None);
-    }
-    if let Some(home) = home {
-        let config = crate::io::config::store::load_config_file_from_anchored_home(home)?;
-        if let Some(member_handle) = config.get("member_handle") {
-            return MemberHandle::try_from(member_handle.clone()).map(Some);
-        }
     }
     keystore
         .map(load_single_member_handle_from_keystore)
@@ -682,7 +679,7 @@ enum ActiveKidCheck {
 }
 
 fn check_missing_member_keystore(member_handle: &str) -> DoctorCheck {
-    DoctorCheck::warn_with_next_action(
+    DoctorCheck::build_warning_with_next_action(
         "keystore.member",
         DoctorCategory::LocalKeystore,
         DoctorSubject::Member(member_handle.to_string()),
@@ -718,7 +715,7 @@ fn check_active_kid(
 }
 
 fn check_missing_active_kid(member_handle: &str) -> DoctorCheck {
-    DoctorCheck::warn_with_next_action(
+    DoctorCheck::build_warning_with_next_action(
         "keystore.active_key",
         DoctorCategory::LocalKeystore,
         DoctorSubject::Member(member_handle.to_string()),
@@ -864,7 +861,7 @@ fn build_expiring_public_key_check(
     expires_at: String,
     days_remaining: i64,
 ) -> DoctorCheck {
-    DoctorCheck::warn_with_reason_and_next_action(
+    DoctorCheck::build_warning_with_reason_and_next_action(
         "keystore.expiry",
         DoctorCategory::LocalKeystore,
         DoctorSubject::Path(format_path_relative_to_cwd(path)),
@@ -960,7 +957,7 @@ fn check_active_member_approval(member: &PublicKey, known_keys: &[KnownKey]) -> 
             "Active member key is approved",
         );
     }
-    DoctorCheck::warn_with_next_action(
+    DoctorCheck::build_warning_with_next_action(
         "trust_store.active_approval",
         DoctorCategory::LocalTrustStore,
         DoctorSubject::Member(member.protected.subject_handle.clone()),

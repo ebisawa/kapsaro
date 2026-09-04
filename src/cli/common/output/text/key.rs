@@ -337,4 +337,4 @@ fn is_online_verification_verified(status: OnlineVerificationStatus) -> bool {
 
 #[cfg(test)]
 #[path = "../../../../../tests/unit/internal/cli_common_output_text_key_test.rs"]
-mod tests;
+mod cli_common_output_text_key_test;

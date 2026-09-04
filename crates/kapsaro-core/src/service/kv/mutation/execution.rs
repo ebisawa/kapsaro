@@ -15,13 +15,14 @@
 //! reached. A concurrent write is reported and the mutation abandoned.
 
 use crate::feature::artifact::artifact_recipient_evidence;
+use crate::feature::kv::import::parse_dotenv_entries;
 use crate::feature::kv::mutate::{
     set_kv_entry_with_recipients, unset_kv_entry_with_recipients, KvRecipientSnapshot,
     KvWriteContext,
 };
+use crate::feature::kv::types::KvInputEntry;
 use crate::feature::trust::recipient_sets::ArtifactRecipientSet;
 use crate::format::content::KvEncContent;
-use crate::format::kv::dotenv::{parse_dotenv, validate_dotenv_strict};
 use crate::service::errors::build_kv_key_not_found_error;
 use crate::service::key::RecipientKeys;
 use crate::service::kv::{AuthorizedKvMutation, KvEncArtifact, KvMutationOperation};
@@ -41,7 +42,6 @@ use crate::support::fs::lock::with_exclusive_locked_directory;
 use crate::support::fs::relative::DirectoryFd;
 use crate::{Error, Result};
 
-use super::super::types::{KvImportResult, KvWriteOutcome};
 use super::plan::{build_mutation_review_changed_error, MutationWriteTrustPlan};
 use super::snapshot::KV_TRUST_STORE_CHANGED_MESSAGE;
 
@@ -88,9 +88,8 @@ struct ExistingKvMutation<'a> {
 pub fn set_kv_command_with_recipient_set_confirmation<ConfirmRecipientSet>(
     plan: &MutationWriteTrustPlan<'_>,
     entries: Vec<crate::service::kv::KvInputEntry>,
-    success_message: Option<&str>,
     confirm_recipient_set: ConfirmRecipientSet,
-) -> Result<KvWriteOutcome>
+) -> Result<()>
 where
     ConfirmRecipientSet: FnMut(&ArtifactRecipientTrustOutcome, &str) -> Result<bool>,
 {
@@ -98,12 +97,27 @@ where
         .into_iter()
         .map(|entry| {
             let (key, value) = entry.into_secret_parts();
-            crate::feature::kv::types::KvInputEntry::new_secret(key, value.into_inner())
+            KvInputEntry::new_secret(key, value.into_inner())
         })
         .collect::<Vec<_>>();
+    set_kv_internal_entries_with_recipient_set_confirmation(plan, entries, confirm_recipient_set)
+}
+
+/// Write the entries a caller already holds in the feature's own input form.
+///
+/// The public entry point converts the standard input type into this one, and
+/// an import parses the document straight into it, so the write itself is
+/// stated once for both.
+fn set_kv_internal_entries_with_recipient_set_confirmation<ConfirmRecipientSet>(
+    plan: &MutationWriteTrustPlan<'_>,
+    entries: Vec<KvInputEntry>,
+    confirm_recipient_set: ConfirmRecipientSet,
+) -> Result<()>
+where
+    ConfirmRecipientSet: FnMut(&ArtifactRecipientTrustOutcome, &str) -> Result<bool>,
+{
     execute_kv_mutation(
         plan,
-        success_message,
         |existing_content, recipients, ctx| {
             let encrypted =
                 set_kv_entry_with_recipients(existing_content, &entries, recipients, ctx)?;
@@ -122,15 +136,13 @@ where
 pub fn unset_kv_command_with_recipient_set_confirmation<ConfirmRecipientSet>(
     plan: &MutationWriteTrustPlan<'_>,
     key: &str,
-    success_message: Option<&str>,
     confirm_recipient_set: ConfirmRecipientSet,
-) -> Result<KvWriteOutcome>
+) -> Result<()>
 where
     ConfirmRecipientSet: FnMut(&ArtifactRecipientTrustOutcome, &str) -> Result<bool>,
 {
     execute_kv_mutation(
         plan,
-        success_message,
         |existing_content, recipients, ctx| {
             let kv_content = existing_content
                 .ok_or_else(|| Error::build_config_error("File content is required".to_string()))?;
@@ -147,61 +159,28 @@ where
     )
 }
 
+/// Import a dotenv document and report how many entries it wrote.
 pub fn import_kv_command_with_recipient_set_confirmation<ConfirmRecipientSet>(
     plan: &MutationWriteTrustPlan<'_>,
     dotenv_content: &str,
-    success_message: Option<&str>,
     confirm_recipient_set: ConfirmRecipientSet,
-) -> Result<(KvWriteOutcome, usize)>
+) -> Result<usize>
 where
     ConfirmRecipientSet: FnMut(&ArtifactRecipientTrustOutcome, &str) -> Result<bool>,
 {
-    let result =
-        import_kv_command_result(plan, dotenv_content, success_message, confirm_recipient_set)?;
-    Ok((result.write_outcome, result.entry_count))
-}
-
-fn import_kv_command_result<ConfirmRecipientSet>(
-    plan: &MutationWriteTrustPlan<'_>,
-    dotenv_content: &str,
-    success_message: Option<&str>,
-    confirm_recipient_set: ConfirmRecipientSet,
-) -> Result<KvImportResult>
-where
-    ConfirmRecipientSet: FnMut(&ArtifactRecipientTrustOutcome, &str) -> Result<bool>,
-{
-    validate_dotenv_strict(dotenv_content)?;
-    let kv_map = parse_dotenv(dotenv_content)?;
-    let entries: Vec<crate::service::kv::KvInputEntry> = kv_map
-        .into_iter()
-        .map(|(key, value)| {
-            crate::service::kv::KvInputEntry::new(
-                key,
-                crate::service::secret::SecretString::from_inner(value),
-            )
-        })
-        .collect();
+    let entries = parse_dotenv_entries(dotenv_content)?;
     let entry_count = entries.len();
-    let write_outcome = set_kv_command_with_recipient_set_confirmation(
-        plan,
-        entries,
-        success_message,
-        confirm_recipient_set,
-    )?;
-    Ok(KvImportResult {
-        write_outcome,
-        entry_count,
-    })
+    set_kv_internal_entries_with_recipient_set_confirmation(plan, entries, confirm_recipient_set)?;
+    Ok(entry_count)
 }
 
 fn execute_kv_mutation<F, AuthorizedOperation>(
     plan: &MutationWriteTrustPlan<'_>,
-    success_message: Option<&str>,
     create_operation: F,
     operation: KvMutationOperation,
     authorized_operation: AuthorizedOperation,
     mut confirm_recipient_set: impl FnMut(&ArtifactRecipientTrustOutcome, &str) -> Result<bool>,
-) -> Result<KvWriteOutcome>
+) -> Result<()>
 where
     F: FnOnce(Option<&KvEncContent>, &KvRecipientSnapshot, &KvWriteContext<'_>) -> Result<String>,
     AuthorizedOperation: FnOnce(&AuthorizedKvMutation<'_>) -> Result<String>,
@@ -222,10 +201,7 @@ where
         let encrypted =
             commit_kv_mutation(plan, reviewed, authorized_operation, locked_secrets_dir)?;
         plan.review
-            .save_replacement_at(locked_secrets_dir, &encrypted)?;
-        Ok(KvWriteOutcome {
-            message: success_message.map(ToOwned::to_owned),
-        })
+            .save_replacement_at(&plan.capabilities, locked_secrets_dir, &encrypted)
     })
 }
 
@@ -263,9 +239,9 @@ where
 /// than taken from the decision the review reached. A trust store that no
 /// longer authorizes the mutation ends it here instead of prompting again.
 ///
-/// The target is confirmed again once the replacement bytes exist, because the
-/// work in between reads the artifact and produces the mutation from it. See
-/// [`enforce_final_snapshot`].
+/// The target is confirmed once more immediately before the replacement is
+/// published, because the work in between reads the artifact and produces the
+/// mutation from it. That check belongs to the write itself.
 fn commit_kv_mutation<D, AuthorizedOperation>(
     plan: &MutationWriteTrustPlan<'_>,
     reviewed: ReviewedKvMutation<'_>,
@@ -279,9 +255,9 @@ where
     plan.review
         .ensure_target_current_at(&plan.capabilities, locked_secrets_dir)?;
     match reviewed {
-        ReviewedKvMutation::New(new) => commit_new_kv_mutation(plan, new, locked_secrets_dir),
+        ReviewedKvMutation::New(new) => commit_new_kv_mutation(plan, new),
         ReviewedKvMutation::Existing(existing) => {
-            commit_existing_kv_mutation(plan, existing, authorized_operation, locked_secrets_dir)
+            commit_existing_kv_mutation(plan, existing, authorized_operation)
         }
     }
 }
@@ -306,14 +282,10 @@ where
     Ok(NewKvMutation { encrypted, sid })
 }
 
-fn commit_new_kv_mutation<D>(
+fn commit_new_kv_mutation(
     plan: &MutationWriteTrustPlan<'_>,
     reviewed: NewKvMutation,
-    locked_secrets_dir: &D,
-) -> Result<String>
-where
-    D: DirectoryFd,
-{
+) -> Result<String> {
     let NewKvMutation { encrypted, sid } = reviewed;
     let recipients = build_authorized_recipient_keys(plan)?;
     let current = load_mutation_authorization(plan, &recipients)?;
@@ -325,7 +297,7 @@ where
     if matches!(decision, TrustDecision::ReviewRequired(_)) {
         return Err(build_mutation_review_changed_error());
     }
-    enforce_final_snapshot(plan, locked_secrets_dir, &current.trust_store)?;
+    enforce_final_snapshot(plan, &current.trust_store)?;
     Ok(encrypted)
 }
 
@@ -355,28 +327,26 @@ where
     let TrustDecision::ReviewRequired(requests) = decision else {
         return Ok(());
     };
-    enforce_app_reviews_recipient_set(&requests, &plan.trust_context, &output)?;
-    let app_outcome = artifact_recipient_outcome_from_decision(
+    enforce_recipient_set_review_matches_output(&requests, &plan.trust_context, &output)?;
+    let recipient_outcome = artifact_recipient_outcome_from_decision(
         TrustDecision::<()>::ReviewRequired(requests.clone()),
         &plan.trust_context,
         &output,
     )?;
-    if matches!(app_outcome, ArtifactRecipientTrustOutcome::Accepted) {
+    if matches!(recipient_outcome, ArtifactRecipientTrustOutcome::Accepted) {
         return Err(build_mutation_review_changed_error());
     }
-    review_existing_recipient_set(plan, &app_outcome, confirm_recipient_set)?;
+    review_existing_recipient_set(plan, &recipient_outcome, confirm_recipient_set)?;
     run_post_recipient_approval_hook();
     Ok(())
 }
 
-fn commit_existing_kv_mutation<D, AuthorizedOperation>(
+fn commit_existing_kv_mutation<AuthorizedOperation>(
     plan: &MutationWriteTrustPlan<'_>,
     reviewed: ExistingKvMutation<'_>,
     authorized_operation: AuthorizedOperation,
-    locked_secrets_dir: &D,
 ) -> Result<String>
 where
-    D: DirectoryFd,
     AuthorizedOperation: FnOnce(&AuthorizedKvMutation<'_>) -> Result<String>,
 {
     let ExistingKvMutation {
@@ -398,7 +368,7 @@ where
         return Err(build_mutation_review_changed_error());
     };
     let encrypted = execute_authorized_operation(&authorized, authorized_operation)?;
-    enforce_final_snapshot(plan, locked_secrets_dir, &current.trust_store)?;
+    enforce_final_snapshot(plan, &current.trust_store)?;
     Ok(encrypted)
 }
 
@@ -486,7 +456,7 @@ fn build_output_recipient_set(
     ArtifactRecipientSet::from_public_keys(sid, &public_keys)
 }
 
-fn enforce_app_reviews_recipient_set(
+fn enforce_recipient_set_review_matches_output(
     requests: &[TrustReviewRequest],
     trust_context: &TrustContext,
     output: &ArtifactRecipientSet,
@@ -516,30 +486,20 @@ fn enforce_app_reviews_recipient_set(
     Err(build_mutation_review_changed_error())
 }
 
-/// Confirm nothing the write rests on moved while the write was being produced.
+/// Confirm the store the authorization was derived from has not moved.
 ///
-/// This repeats the target check the commit already ran when it took the lock,
-/// and the repetition is the point: the two calls sit either side of the work
-/// that turns the reviewed document into the bytes about to replace it. That
-/// work re-reads the artifact, derives the authorization from the trust store
-/// and, for an existing document, runs the authorized mutation itself, and the
-/// lock does not stop any of it from seeing a target that changed in between —
-/// a write of the file by anything that ignores the lock lands exactly there.
-/// Checking only once, at either end, would let those bytes be written over a
-/// document nobody reviewed.
+/// The trust store is read from outside the secrets directory lock, so holding
+/// that lock says nothing about it, and an authorization derived from a store
+/// that has since been rewritten is no longer one the operator granted.
 ///
-/// The member set and the trust store are read from outside the lock
-/// altogether, so they are confirmed here for the same reason.
-fn enforce_final_snapshot<D>(
+/// The target document is not checked here. It is checked immediately before
+/// the rename that publishes the replacement instead, which is the last moment
+/// anything can be stopped and is the only one that covers the whole of the
+/// work between the review and the write.
+fn enforce_final_snapshot(
     plan: &MutationWriteTrustPlan<'_>,
-    locked_secrets_dir: &D,
     trust_store: &ReviewedTrustStore,
-) -> Result<()>
-where
-    D: DirectoryFd,
-{
-    plan.review
-        .ensure_target_current_at(&plan.capabilities, locked_secrets_dir)?;
+) -> Result<()> {
     trust_store.ensure_current(plan.capabilities.trust())
 }
 

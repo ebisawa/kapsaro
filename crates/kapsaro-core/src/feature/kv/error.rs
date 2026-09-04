@@ -1,13 +1,20 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! KV error helpers shared by app and facade adapters.
-//! Centralizes missing-entry detection so unrelated operation errors pass through unchanged.
+//! Missing KV entry errors and the code that identifies them.
+//! Marks the errors this module builds so unrelated operation failures pass through unchanged.
 
-use crate::{Error, ErrorKind};
+use crate::error::KV_KEY_NOT_FOUND_RECOVERY;
+use crate::Error;
+
+/// The one message shape a missing KV entry is reported with.
+fn build_key_not_found_message(key: &str) -> String {
+    format!("Key '{key}' not found")
+}
 
 pub(crate) fn build_key_not_found_error(key: &str) -> Error {
-    Error::build_invalid_operation_error(format!("Key '{}' not found", key))
+    Error::build_invalid_operation_error(build_key_not_found_message(key))
+        .with_recovery(KV_KEY_NOT_FOUND_RECOVERY)
 }
 
 pub(crate) fn normalize_key_not_found_error(error: Error, key: &str) -> Error {
@@ -17,18 +24,14 @@ pub(crate) fn normalize_key_not_found_error(error: Error, key: &str) -> Error {
     error
 }
 
+/// Whether this error is the missing-entry refusal for `key`.
+///
+/// The code says the error came from this module, so a look-alike message
+/// raised elsewhere is not mistaken for a missing entry. The message still has
+/// to name the key, because the code alone cannot say which entry was asked for.
 pub(crate) fn is_key_not_found_error(error: &Error, key: &str) -> bool {
-    let message = error.format_user_message();
-    match error.kind() {
-        ErrorKind::InvalidOperation => is_invalid_operation_key_not_found(message, key),
-        _ => false,
-    }
-}
-
-fn is_invalid_operation_key_not_found(message: &str, key: &str) -> bool {
-    let quoted = format!("Key '{}' not found", key);
-    let unquoted = format!("Key not found: {}", key);
-    message == quoted || message == unquoted
+    error.recovery() == Some(KV_KEY_NOT_FOUND_RECOVERY)
+        && error.format_user_message() == build_key_not_found_message(key)
 }
 
 #[cfg(test)]

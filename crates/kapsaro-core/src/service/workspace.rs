@@ -10,7 +10,7 @@ use std::sync::Arc;
 use crate::io::workspace::detection::{
     detect_workspace_root, resolve_workspace, resolve_workspace_creation_path_from,
 };
-use crate::io::workspace::setup::SECRETS_DIR_NAME;
+pub use crate::io::workspace::setup::SECRETS_DIR_NAME;
 use crate::service::key::KeyContext;
 use crate::service::trust::TrustCommandSession;
 use crate::support::fs::anchor::AnchoredDir;
@@ -68,8 +68,8 @@ impl<'a> WorkspaceWriteCapabilities<'a> {
     }
 }
 
-/// Validate one caller-selected workspace and return its canonical root.
-pub fn validate_workspace_path(path: &Path) -> Result<PathBuf> {
+/// Resolve one caller-selected workspace to its canonical root.
+pub fn resolve_workspace_path(path: &Path) -> Result<PathBuf> {
     resolve_workspace(Some(path.to_path_buf())).map(|workspace| workspace.root_path)
 }
 

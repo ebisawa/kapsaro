@@ -4,12 +4,12 @@
 //! Interactive identity and registration prompts for CLI commands.
 
 use crate::cli::common::context::CliContext;
-use crate::cli::common::presentation as validation;
+use crate::cli::common::presentation::tty;
 use crate::cli::common::prompt::prompt_yes_no;
 use dialoguer::{Input, Select};
+use kapsaro_core::api::key::{validate_github_login, MemberHandle};
 use kapsaro_core::api::ssh::SshKeyCandidateView;
 use kapsaro_core::{Error, Result};
-use std::io::IsTerminal;
 
 pub(crate) fn confirm_member_overwrite(member_handle: &str) -> Result<bool> {
     prompt_yes_no(
@@ -39,7 +39,7 @@ pub(crate) fn select_ssh_key(candidates: &[SshKeyCandidateView]) -> Result<usize
         return Ok(0);
     }
 
-    if !is_prompt_available() {
+    if !tty::is_interactive() {
         return Err(Error::build_config_error(
             "Multiple Ed25519 keys found in ssh-agent.\n\
                       Specify which key to use with -i <path>, --ssh-identity <path>, or \
@@ -67,15 +67,11 @@ fn format_candidate(candidate: &SshKeyCandidateView) -> String {
     }
 }
 
-pub(crate) fn is_prompt_available() -> bool {
-    std::io::stdin().is_terminal() && std::env::var("CI").is_err()
-}
-
 pub(crate) fn prompt_member_handle() -> Result<String> {
     Input::new()
         .with_prompt("Enter your member handle (alphanumeric and .@_+-)")
         .validate_with(|input: &String| {
-            validation::validate_member_handle(input)
+            MemberHandle::try_from(input.as_str())
                 .map(|_| ())
                 .map_err(|e| e.to_string())
         })
@@ -92,7 +88,7 @@ pub(crate) fn prompt_github_user() -> Result<Option<String>> {
             if trimmed.is_empty() {
                 return Ok(());
             }
-            validation::validate_github_login(trimmed)
+            validate_github_login(trimmed)
                 .map(|_| ())
                 .map_err(|e| e.to_string())
         })
@@ -119,7 +115,7 @@ pub(crate) fn resolve_cli_key_generation_github_user(
     resolve_key_generation_github_user_with_prompt(
         true,
         resolved,
-        is_prompt_available(),
+        tty::is_interactive(),
         prompt_github_user,
     )
 }
@@ -145,11 +141,11 @@ where
 
 fn validate_prompt_github_user(github_user: Option<String>) -> Result<Option<String>> {
     if let Some(login) = github_user.as_deref() {
-        validation::validate_github_login(login)?;
+        validate_github_login(login)?;
     }
     Ok(github_user)
 }
 
 #[cfg(test)]
 #[path = "../../tests/unit/internal/cli_identity_prompt_test.rs"]
-mod tests;
+mod cli_identity_prompt_test;

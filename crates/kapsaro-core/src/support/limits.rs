@@ -23,6 +23,15 @@ pub const DIRECTORY_LOCK_RETRY_MIN_INTERVAL: Duration = Duration::from_millis(5)
 /// Longest pause the retry backoff grows to.
 pub const DIRECTORY_LOCK_RETRY_MAX_INTERVAL: Duration = Duration::from_millis(200);
 
+/// How long one read from or write to the ssh-agent socket waits.
+///
+/// The socket is a Unix stream with no deadline of its own, so an agent that
+/// accepts the connection and then answers nothing leaves the command waiting
+/// forever, with the operator holding a terminal that never returns. The bound
+/// matches the directory lock, which is the other place a command waits on
+/// something outside itself.
+pub const SSH_AGENT_IO_TIMEOUT: Duration = Duration::from_secs(30);
+
 /// Maximum kv-enc file size in bytes (16 MiB)
 pub const MAX_KV_ENC_FILE_SIZE: usize = 16 * 1024 * 1024;
 

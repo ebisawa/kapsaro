@@ -3,12 +3,12 @@
 
 //! Unit tests for PublicKeySource trait implementations
 
-use crate::app_test_utils::add_generated_key;
 use crate::io::keystore::access::KeystoreAccess;
 use crate::io::keystore::public_key_source::{
     KeystorePublicKeySource, PublicKeySource, WorkspacePublicKeySource,
 };
 use crate::model::identity::{Kid, MemberHandle};
+use crate::service_test_utils::add_generated_key;
 use crate::test_utils::{
     setup_test_keystore_from_fixtures, setup_test_workspace_from_fixtures, ALICE_MEMBER_HANDLE,
     BOB_MEMBER_HANDLE,

@@ -123,4 +123,4 @@ fn format_stderr_error_lines(lines: Vec<ErrorDisplayLine>) -> Vec<String> {
 
 #[cfg(test)]
 #[path = "../../tests/unit/internal/cli_error_test.rs"]
-mod tests;
+mod cli_error_test;

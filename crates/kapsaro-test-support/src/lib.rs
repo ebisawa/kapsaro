@@ -1,8 +1,8 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-// Shared test helpers used across kapsaro workspace crates.
-// Provides constants, fixtures, crypto contexts, and key generation utilities.
+//! Shared test helpers used across kapsaro workspace crates.
+//! Provides constants, fixtures, crypto contexts, and key generation utilities.
 
 pub mod constants;
 pub mod context_options;
@@ -12,4 +12,5 @@ pub mod fixture;
 pub mod guards;
 pub mod keygen_helpers;
 pub mod privilege;
+pub mod trust_store_state;
 pub mod workspace_state;

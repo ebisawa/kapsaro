@@ -45,24 +45,15 @@ pub(super) async fn verify_github_keys(
     login_for_keys: &str,
 ) -> Result<VerificationResult> {
     let member_handle = &public_key.protected.subject_handle;
-
-    debug!(
-        "[VERIFY] GitHub API: GET https://api.github.com/users/{}/keys",
-        login_for_keys
-    );
+    debug!("[VERIFY] GitHub API: GET https://api.github.com/users/{login_for_keys}/keys");
 
     let github_keys = api.fetch_keys(login_for_keys).await?;
-    debug!("[VERIFY] GitHub API: fetched {} key(s)", github_keys.len());
+    let key_count = github_keys.len();
+    debug!("[VERIFY] GitHub API: fetched {key_count} key(s)");
 
     if github_keys.is_empty() {
-        return Ok(VerificationResult::failed(
-            member_handle,
-            format!("No SSH keys found for GitHub user id {}", id_used),
-            None,
-            true,
-        ));
+        return Ok(build_no_listed_keys_result(member_handle, id_used));
     }
-
     if let Some(result) = find_key_by_fingerprint(
         public_key,
         our_fingerprint,
@@ -73,20 +64,45 @@ pub(super) async fn verify_github_keys(
         return Ok(result);
     }
 
-    debug!(
-        "[VERIFY] Verify {}: no matching key among {} key(s)",
+    debug!("[VERIFY] Verify {member_handle}: no matching key among {key_count} key(s)");
+    Ok(build_key_not_listed_result(
         member_handle,
-        github_keys.len()
-    );
+        our_fingerprint,
+        id_used,
+        key_count,
+    ))
+}
 
-    Ok(VerificationResult::failed(
+/// Report an account that lists no SSH key at all.
+///
+/// No fingerprint is carried: nothing was compared against ours, so naming one
+/// would suggest a comparison that never happened.
+fn build_no_listed_keys_result(member_handle: &str, id_used: u64) -> VerificationResult {
+    VerificationResult::failed(
+        member_handle,
+        format!("No SSH keys found for GitHub user id {}", id_used),
+        None,
+        true,
+    )
+}
+
+/// Report an account whose listed keys do not include ours.
+///
+/// The count says how much was checked, so the reader can tell this from an
+/// account that listed nothing.
+fn build_key_not_listed_result(
+    member_handle: &str,
+    our_fingerprint: &str,
+    id_used: u64,
+    checked_keys: usize,
+) -> VerificationResult {
+    VerificationResult::failed(
         member_handle,
         format!(
             "SSH key not found on GitHub (id={}, checked {} keys)",
-            id_used,
-            github_keys.len()
+            id_used, checked_keys
         ),
         Some(our_fingerprint.to_string()),
         true,
-    ))
+    )
 }

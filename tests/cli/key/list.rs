@@ -3,7 +3,7 @@
 
 //! Integration tests for `key list` command
 
-use crate::cli::common::{cmd, generate_temp_ssh_keypair, make_secret_home, TEST_MEMBER_HANDLE};
+use crate::cli::common::{cmd, generate_temp_ssh_keypair, setup_secret_home, TEST_MEMBER_HANDLE};
 use crate::cli::key::find_kid_in_member_dir;
 use kapsaro_core::test_support::helpers::kid::format_kid_display;
 
@@ -37,7 +37,7 @@ fn linked_home_holding_one_key(temp: &tempfile::TempDir, ssh_priv: &std::path::P
 #[cfg(unix)]
 #[test]
 fn test_key_list_reads_through_an_explicit_home_symlink() {
-    let temp = make_secret_home();
+    let temp = setup_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
     let selected_home = linked_home_holding_one_key(&temp, &ssh_priv);
 
@@ -58,7 +58,7 @@ fn test_key_list_reads_through_an_explicit_home_symlink() {
 #[cfg(unix)]
 #[test]
 fn test_key_list_reads_through_an_environment_home_symlink() {
-    let temp = make_secret_home();
+    let temp = setup_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
     let selected_home = linked_home_holding_one_key(&temp, &ssh_priv);
 
@@ -77,7 +77,7 @@ fn test_key_list_reads_through_an_environment_home_symlink() {
 
 #[test]
 fn test_key_list_basic() {
-    let temp_dir = make_secret_home();
+    let temp_dir = setup_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     let member_handle = TEST_MEMBER_HANDLE;
@@ -135,7 +135,7 @@ fn test_key_list_basic() {
 
 #[test]
 fn test_key_list_json_output() {
-    let temp_dir = make_secret_home();
+    let temp_dir = setup_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     let member_handle = TEST_MEMBER_HANDLE;
@@ -197,7 +197,7 @@ fn test_key_list_json_output() {
 
 #[test]
 fn test_key_list_text_shows_an_incomplete_active_key() {
-    let home = make_secret_home();
+    let home = setup_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
     cmd()
         .args(["key", "new", "--member-handle", TEST_MEMBER_HANDLE])
@@ -232,7 +232,7 @@ fn test_key_list_text_shows_an_incomplete_active_key() {
 
 #[test]
 fn test_key_list_json_shows_an_incomplete_active_key() {
-    let home = make_secret_home();
+    let home = setup_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
     cmd()
         .args(["key", "new", "--member-handle", TEST_MEMBER_HANDLE])
@@ -274,7 +274,7 @@ fn test_key_list_json_shows_an_incomplete_active_key() {
 
 #[test]
 fn test_key_list_verbose_aligns_field_values() {
-    let temp_dir = make_secret_home();
+    let temp_dir = setup_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     let member_handle = TEST_MEMBER_HANDLE;
@@ -323,7 +323,7 @@ fn test_key_list_verbose_aligns_field_values() {
 /// that creates a key is named on stderr.
 #[test]
 fn test_key_list_without_a_keystore_lists_nothing_and_names_the_next_step() {
-    let temp_dir = make_secret_home();
+    let temp_dir = setup_secret_home();
 
     cmd()
         .arg("key")
@@ -341,7 +341,7 @@ fn test_key_list_without_a_keystore_lists_nothing_and_names_the_next_step() {
 
 #[test]
 fn test_key_list_auto_resolve_member_handle() {
-    let temp_dir = make_secret_home();
+    let temp_dir = setup_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     let member_handle = TEST_MEMBER_HANDLE;

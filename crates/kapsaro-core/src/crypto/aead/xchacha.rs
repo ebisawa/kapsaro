@@ -120,5 +120,5 @@ pub(crate) fn encrypt_with_fresh_nonce(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/internal/crypto_xchacha20_poly1305_test.rs"]
-mod crypto_xchacha20_poly1305_test;
+#[path = "../../../tests/unit/internal/crypto_aead_xchacha_test.rs"]
+mod crypto_aead_xchacha_test;

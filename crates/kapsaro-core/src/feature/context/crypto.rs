@@ -74,7 +74,7 @@ pub(crate) enum PublicKeyMatch {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DecryptionKeyInfo {
-    pub kid: String,
+    pub kid: Kid,
     pub expires_at: String,
     pub used_fallback: bool,
     pub(crate) key_identity: LocalKeyIdentity,

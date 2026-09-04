@@ -25,12 +25,14 @@ pub(crate) struct DoctorArgs {
 pub(crate) fn run(args: DoctorArgs) -> Result<i32> {
     let verbose = args.common.verbose.verbose;
     let context = CliContext::resolve(&args.common)?;
-    let ci = capture_doctor_ci_readiness();
+    let ci = capture_doctor_ci_readiness(&context);
     let workspace = context.doctor_workspace_resolution();
+    // Environment-variable key mode must not open the local state home just to
+    // name an owner, so only an explicitly given handle is used there.
     let member_handle = match &ci {
         DoctorCiReadiness::Active { .. } => args.member.member_handle.clone(),
         DoctorCiReadiness::Inactive => {
-            context.resolve_member_handle_override(args.member.member_handle)?
+            context.configured_member_handle(args.member.member_handle)?
         }
     };
     let report = execute_doctor_command(DoctorRequest {

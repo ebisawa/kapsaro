@@ -9,7 +9,7 @@
 use crate::io::document_store;
 use crate::support::fs::anchor::AnchoredDir;
 use crate::support::fs::relative::{
-    describe_unreplaceable_child_type, optional_child_type_at, save_text_restricted_at, DirectoryFd,
+    format_unreplaceable_child_type, optional_child_type_at, save_text_restricted_at, DirectoryFd,
 };
 use crate::support::limits::MAX_CONFIG_FILE_SIZE;
 use crate::support::path::format_path_relative_to_cwd;
@@ -135,7 +135,7 @@ where
     let Some(child_type) = optional_child_type_at(home, CONFIG_FILE_NAME)? else {
         return Ok(());
     };
-    let Some(description) = describe_unreplaceable_child_type(child_type) else {
+    let Some(description) = format_unreplaceable_child_type(child_type) else {
         return Ok(());
     };
     Err(Error::build_invalid_operation_error(format!(

@@ -353,6 +353,27 @@ fn test_parse_kv_tokens_with_schema() {
     );
 }
 
+/// A 32-byte tag encoded as base64url leaves the last 4 bits of the final
+/// character unused, so a tag whose last character sets them cannot decode to
+/// 32 bytes and must be rejected before it reaches verification.
+#[test]
+fn test_parse_kv_signature_token_rejects_mac_with_non_zero_trailing_bits() {
+    let signature = serde_json::json!({
+        "alg": algorithm::SIGNATURE_ED25519,
+        "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
+        "signer_pub": build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
+        "mac": format!("hmac-sha256:{}B", "A".repeat(42)),
+        "sig": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ"
+    });
+    let signature_token = TokenCodec::encode(TokenCodec::JsonJcs, &signature).unwrap();
+
+    let error = parse_kv_signature_token(&signature_token).unwrap_err();
+
+    let message = error.format_user_message();
+    assert!(message.contains("mac"), "got: {message}");
+    assert!(message.contains("does not match"), "got: {message}");
+}
+
 #[test]
 fn test_parse_kv_entry_token_rejects_duplicate_member() {
     let raw_entry = br#"{

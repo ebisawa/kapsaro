@@ -5,9 +5,9 @@
 
 pub mod judgment;
 pub mod known_keys;
+pub mod purge;
 pub mod recipient_sets;
 pub mod signature;
 pub mod signer_keys;
 pub mod store_mutation;
-pub mod transaction;
 pub mod verification;

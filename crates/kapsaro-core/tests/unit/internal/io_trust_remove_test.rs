@@ -4,7 +4,7 @@
 //! Tests for the report a local trust store deletion leaves behind.
 //! Covers the wording that has to name the removal before the failure after it.
 
-use super::{describe_failure_after_trust_store_removal, report_quarantined_removal};
+use super::{format_failure_after_trust_store_removal, report_quarantined_removal};
 use crate::support::fs::relative::{open_dir_nofollow, DirectoryScope, OpenDir, RemovedEntry};
 use crate::Error;
 use std::fs;
@@ -29,7 +29,7 @@ fn store_path(dir: &Path) -> std::path::PathBuf {
 /// approvals that are already gone.
 #[test]
 fn test_failure_after_removal_reports_the_removal_first() {
-    let message = describe_failure_after_trust_store_removal(
+    let message = format_failure_after_trust_store_removal(
         std::path::Path::new("/tmp/.kapsaro/trust/alice@example.com.json"),
         "its directory entry was not persisted",
         &crate::Error::build_io_error("disk went away".to_string()),

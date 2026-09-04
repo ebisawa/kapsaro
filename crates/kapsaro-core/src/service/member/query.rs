@@ -11,6 +11,7 @@ use crate::io::workspace::members::{
     get_active_member_file_path, get_incoming_member_file_path, list_active_member_paths,
     list_incoming_member_paths, load_member_file_from_path, MemberStatus,
 };
+use crate::model::identity::MemberHandle;
 use crate::support::path::format_path_relative_to_cwd;
 use crate::Error;
 use crate::Result;
@@ -34,6 +35,10 @@ pub fn load_member_show_result(
     workspace_path: &std::path::Path,
     member_handle: &str,
 ) -> Result<MemberShowResult> {
+    // The handle becomes one entry name below members/, so it is validated as a
+    // handle before it is joined onto the directory rather than after.
+    let member_handle = MemberHandle::try_from(member_handle)?;
+    let member_handle = member_handle.as_str();
     let active_path = get_active_member_file_path(workspace_path, member_handle);
     let incoming_path = get_incoming_member_file_path(workspace_path, member_handle);
     let (member_path, status) = if active_path.exists() {

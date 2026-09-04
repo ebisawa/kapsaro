@@ -4,6 +4,7 @@
 //! Fixed-capability workspace read authorization session.
 //! Re-evaluates reviewed file and KV reads against current trusted state.
 
+use std::borrow::Cow;
 use std::fs::File;
 use std::io::{Seek, SeekFrom};
 use std::path::Path;
@@ -21,6 +22,7 @@ use crate::support::fs::relative::{
 use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
 
+use super::artifact::verified::{ReadableEncArtifact, VerifiedEncArtifact};
 use super::config::LocalStateSession;
 use super::file::{
     FileEncArtifact, FileReadOperation, TrustedFileEncArtifact, VerifiedFileEncArtifact,
@@ -35,7 +37,7 @@ use super::trust::recovery::{
 use super::trust::{
     ApprovalConflictHandling, CurrentMemberSnapshot, KnownKeyReview, KnownKeyReviewCandidate,
     LocalTrustStore, NonMemberSignerReview, ReadTrustExceptions, ReadTrustReview, TrustApproval,
-    TrustApprovalOutcome, TrustDecision, TrustPolicyEvaluator, TrustReviewRequest,
+    TrustApprovalOutcome, TrustPolicyEvaluator, TrustReviewRequest,
 };
 
 /// A read decision that either grants a capability or returns opaque review state.
@@ -274,10 +276,10 @@ impl<'a> WorkspaceReadSession<'a> {
         let source = target.source.clone();
         let artifact = self.load_verified_file(&source)?;
         let binding = ReadReviewBinding::new(
-            artifact.binding_digest()?,
+            artifact.binding_digest(),
             ReadOperationBinding::File(operation),
         );
-        self.evaluate_file(
+        self.evaluate_read(
             artifact,
             operation,
             allow_non_member,
@@ -304,10 +306,10 @@ impl<'a> WorkspaceReadSession<'a> {
         let source = review.source.clone();
         let artifact = self.load_verified_file(&source)?;
         review.validate_target(
-            artifact.binding_digest()?,
+            artifact.binding_digest(),
             &ReadOperationBinding::File(operation),
         )?;
-        self.evaluate_file(
+        self.evaluate_read(
             artifact,
             operation,
             review.allow_non_member,
@@ -336,7 +338,7 @@ impl<'a> WorkspaceReadSession<'a> {
             artifact.binding_digest(),
             ReadOperationBinding::Kv(operation.clone()),
         );
-        self.evaluate_kv(
+        self.evaluate_read(
             artifact,
             operation,
             allow_non_member,
@@ -366,7 +368,7 @@ impl<'a> WorkspaceReadSession<'a> {
             artifact.binding_digest(),
             &ReadOperationBinding::Kv(operation.clone()),
         )?;
-        self.evaluate_kv(
+        self.evaluate_read(
             artifact,
             operation,
             review.allow_non_member,
@@ -379,111 +381,82 @@ impl<'a> WorkspaceReadSession<'a> {
         )
     }
 
-    fn evaluate_file(
+    /// Evaluate one artifact against current trust and bind it when authorized.
+    fn evaluate_read<A: ReadableEncArtifact>(
         &self,
-        artifact: VerifiedFileEncArtifact,
-        operation: FileReadOperation,
+        artifact: A,
+        operation: A::Operation,
         allow_non_member: bool,
         state: ReadEvaluationState,
-    ) -> Result<ReadSessionDecision<TrustedFileEncArtifact<'a>>> {
-        let ReadEvaluationState {
-            binding,
-            source,
-            acceptance,
-            accepted_non_member,
-        } = state;
-        let evaluator = self.load_evaluator()?;
-        let preflight = evaluator.preflight_file_read(
+    ) -> Result<ReadSessionDecision<A::Trusted<'a>>> {
+        let preflight = self.load_read_preflight(
             &artifact,
-            self.key_ctx,
-            self.known_key_review,
             allow_non_member,
+            &state.binding,
+            state.acceptance,
+            state.accepted_non_member,
         )?;
-        let resolved = resolve_exceptions(
-            &preflight,
-            &binding,
-            acceptance,
-            accepted_non_member,
-            self.known_key_review,
-        )?;
-        if resolved.exceptions.is_none() {
-            return review_or_continue(preflight, binding, allow_non_member, None, source);
-        }
-        let unresolved = preflight.unresolved_recipient_kids().to_vec();
-        match evaluator.evaluate_file(
+        let Some(exceptions) = preflight.resolution.exceptions else {
+            return review_or_continue(
+                preflight.review,
+                state.binding,
+                allow_non_member,
+                None,
+                state.source,
+            );
+        };
+        let unresolved = preflight.review.unresolved_recipient_kids().to_vec();
+        let requests = preflight.evaluator.evaluate_read_requests(
             &artifact,
             self.key_ctx,
-            operation,
-            self.options,
-            resolved.exceptions.expect("resolved exception"),
-        )? {
-            TrustDecision::Trusted(_) => {
-                TrustedFileEncArtifact::from_authorized_owned(artifact, self.key_ctx, self.options)
-                    .map(|value| authorized(value, unresolved))
-            }
-            TrustDecision::ReviewRequired(_) => review_or_continue(
-                preflight,
-                binding,
+            &operation,
+            &exceptions,
+        )?;
+        if !requests.is_empty() {
+            return review_or_continue(
+                preflight.review,
+                state.binding,
                 true,
-                resolved.accepted_non_member,
-                source,
-            ),
+                preflight.resolution.accepted_non_member,
+                state.source,
+            );
         }
+        A::into_trusted(Cow::Owned(artifact), self.key_ctx, operation, self.options)
+            .map(|value| authorized(value, unresolved))
     }
 
-    fn evaluate_kv(
+    /// Read the trust state this artifact is judged under.
+    ///
+    /// The evaluator is kept alongside what it reported, because the second
+    /// pass over the artifact has to be made by the same one: reloading it
+    /// would judge the read against a store another command may have moved.
+    fn load_read_preflight<A: ReadableEncArtifact>(
         &self,
-        artifact: VerifiedKvEncArtifact,
-        operation: KvReadOperation,
+        artifact: &A,
         allow_non_member: bool,
-        state: ReadEvaluationState,
-    ) -> Result<ReadSessionDecision<TrustedKvEncArtifact<'a>>> {
-        let ReadEvaluationState {
-            binding,
-            source,
-            acceptance,
-            accepted_non_member,
-        } = state;
+        binding: &ReadReviewBinding,
+        acceptance: Option<ReadAcceptance>,
+        accepted_non_member: Option<AcceptedNonMember>,
+    ) -> Result<ReadPreflight> {
         let evaluator = self.load_evaluator()?;
-        let preflight = evaluator.preflight_kv_read(
-            &artifact,
+        let review = evaluator.preflight_read(
+            artifact,
             self.key_ctx,
             self.known_key_review,
             allow_non_member,
         )?;
-        let resolved = resolve_exceptions(
-            &preflight,
-            &binding,
+        let resolution = resolve_exceptions(
+            &review,
+            binding,
             acceptance,
             accepted_non_member,
             self.known_key_review,
         )?;
-        if resolved.exceptions.is_none() {
-            return review_or_continue(preflight, binding, allow_non_member, None, source);
-        }
-        let unresolved = preflight.unresolved_recipient_kids().to_vec();
-        match evaluator.evaluate_kv(
-            &artifact,
-            self.key_ctx,
-            operation.clone(),
-            self.options,
-            resolved.exceptions.expect("resolved exception"),
-        )? {
-            TrustDecision::Trusted(_) => TrustedKvEncArtifact::from_authorized_owned(
-                artifact,
-                self.key_ctx,
-                operation,
-                self.options,
-            )
-            .map(|value| authorized(value, unresolved)),
-            TrustDecision::ReviewRequired(_) => review_or_continue(
-                preflight,
-                binding,
-                true,
-                resolved.accepted_non_member,
-                source,
-            ),
-        }
+        Ok(ReadPreflight {
+            evaluator,
+            review,
+            resolution,
+        })
     }
 
     fn load_verified_file(&self, source: &ReadSource) -> Result<VerifiedFileEncArtifact> {
@@ -695,7 +668,14 @@ impl ReadReviewBinding {
     }
 }
 
-struct ResolvedExceptions {
+/// What one read's trust preflight settled, before the artifact is opened.
+struct ReadPreflight {
+    evaluator: TrustPolicyEvaluator,
+    review: ReadTrustReview,
+    resolution: ExceptionResolution,
+}
+
+struct ExceptionResolution {
     exceptions: Option<ReadTrustExceptions>,
     accepted_non_member: Option<AcceptedNonMember>,
 }
@@ -706,7 +686,7 @@ fn resolve_exceptions(
     acceptance: Option<ReadAcceptance>,
     accepted_non_member: Option<AcceptedNonMember>,
     known_key_review: KnownKeyReview,
-) -> Result<ResolvedExceptions> {
+) -> Result<ExceptionResolution> {
     let accepted = match (acceptance, accepted_non_member) {
         (Some(acceptance), None) => Some(AcceptedNonMember::from(acceptance)),
         (None, accepted) => accepted,
@@ -716,19 +696,19 @@ fn resolve_exceptions(
     };
     let Some(accepted) = accepted else {
         if preflight.non_member_signer().is_some() || !preflight.requests().is_empty() {
-            return Ok(ResolvedExceptions {
+            return Ok(ExceptionResolution {
                 exceptions: None,
                 accepted_non_member: None,
             });
         }
-        return Ok(ResolvedExceptions {
+        return Ok(ExceptionResolution {
             exceptions: Some(ReadTrustExceptions::none().with_known_key_review(known_key_review)),
             accepted_non_member: None,
         });
     };
     validate_acceptance(preflight, binding, &accepted)?;
     let signer = accepted.signer.clone();
-    Ok(ResolvedExceptions {
+    Ok(ExceptionResolution {
         exceptions: Some(
             ReadTrustExceptions::none()
                 .with_known_key_review(known_key_review)
@@ -787,16 +767,18 @@ fn review_or_continue<T>(
             "Read authorization did not produce a capability".to_string(),
         ));
     }
-    Ok(ReadSessionDecision::ReviewRequired(Box::new(read_review(
-        &preflight,
-        binding,
-        allow_non_member,
-        accepted_non_member,
-        source,
-    ))))
+    Ok(ReadSessionDecision::ReviewRequired(Box::new(
+        build_read_review(
+            &preflight,
+            binding,
+            allow_non_member,
+            accepted_non_member,
+            source,
+        ),
+    )))
 }
 
-fn read_review(
+fn build_read_review(
     preflight: &ReadTrustReview,
     binding: ReadReviewBinding,
     allow_non_member: bool,

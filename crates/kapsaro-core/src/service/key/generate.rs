@@ -20,7 +20,7 @@ use crate::support::fs::anchor::AnchoredDir;
 use crate::support::kid::format_kid_display_lossy;
 use crate::{Error, ErrorKind, Result};
 
-pub(crate) struct AppKeyGenerationOptions {
+pub(crate) struct LocalKeyGenerationOptions {
     pub member_handle: String,
     pub home: KeyGenerationHome,
     pub created_at: String,
@@ -67,7 +67,7 @@ impl KeyGenerationHome {
     }
 
     fn ensure_keystore_access(&self) -> Result<KeystoreAccess> {
-        KeystoreAccess::create_from_anchored_home(&self.0)
+        KeystoreAccess::ensure_from_anchored_home(&self.0)
     }
 }
 
@@ -78,19 +78,16 @@ pub(crate) struct KeyGenerationSaveResult {
 
 /// Resolve GitHub account metadata, verify SSH key on GitHub, then generate a key.
 fn generate_key_with_github_user(
-    mut options: AppKeyGenerationOptions,
+    mut options: LocalKeyGenerationOptions,
     github_user: Option<String>,
 ) -> Result<KeyGenerationResult> {
     let github_account = resolve_github_account(github_user)?;
-    options.github_account = github_account.clone();
 
-    let github_verification = if let Some(account) = github_account.as_ref() {
-        verify_preflight_github_binding(&options.ssh_ctx.public_key, account)?
-    } else {
-        OnlineVerificationStatus::NotConfigured
+    options.github_verification = match github_account.as_ref() {
+        Some(account) => verify_preflight_github_binding(&options.ssh_ctx.public_key, account)?,
+        None => OnlineVerificationStatus::NotConfigured,
     };
-
-    options.github_verification = github_verification;
+    options.github_account = github_account.map(|account| account.to_inner());
     generate_and_save_key(options)
 }
 
@@ -110,7 +107,7 @@ pub fn generate_key_command(
     let (created_at, expires_at) = resolve_key_timestamps(expiry.expires_at, expiry.valid_for)?;
 
     generate_key_with_github_user(
-        AppKeyGenerationOptions {
+        LocalKeyGenerationOptions {
             member_handle,
             home,
             created_at,
@@ -125,13 +122,13 @@ pub fn generate_key_command(
 }
 
 pub(crate) fn generate_and_save_key(
-    options: AppKeyGenerationOptions,
+    options: LocalKeyGenerationOptions,
 ) -> Result<KeyGenerationResult> {
     generate_and_save_key_with_access(options).map(|saved| saved.result)
 }
 
 pub(crate) fn generate_and_save_key_with_access(
-    options: AppKeyGenerationOptions,
+    options: LocalKeyGenerationOptions,
 ) -> Result<KeyGenerationSaveResult> {
     let access = options.home.ensure_keystore_access()?;
     let no_activate = options.no_activate;
@@ -238,5 +235,5 @@ fn build_activation_failure_error(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/internal/app_key_generate_test.rs"]
-mod app_key_generate_test;
+#[path = "../../../tests/unit/internal/service_key_generate_test.rs"]
+mod service_key_generate_test;

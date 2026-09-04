@@ -10,7 +10,7 @@ use crate::io::keystore::paths::get_public_key_file_path_from_root;
 use crate::model::identity::{Kid, MemberHandle};
 use crate::service::key::manage::KeyCommandCapabilities;
 use crate::service::trust::store::{
-    plan_trust_store_resign_bound_session, PlannedTrustStoreResign, StoredTrustSigner,
+    plan_trust_store_resign_bound_session, TrustSignerRecord, TrustStoreResignPlan,
 };
 use crate::service::trust::TrustCommandSession;
 use crate::support::path::format_finding_path;
@@ -83,17 +83,17 @@ pub(super) fn resolve_trust_signer_removal(
     request: &TrustSignerRemovalRequest<'_>,
 ) -> Result<TrustSignerRemoval> {
     match capabilities.stored_trust_signer(request.member_handle) {
-        StoredTrustSigner::Absent => Ok(TrustSignerRemoval::Unrelated),
-        StoredTrustSigner::Unreadable(error) => Ok(TrustSignerRemoval::UnknownSigner(error)),
-        StoredTrustSigner::Signer(signer_kid) if signer_kid != request.kid.as_str() => {
+        TrustSignerRecord::Absent => Ok(TrustSignerRemoval::Unrelated),
+        TrustSignerRecord::Unreadable(error) => Ok(TrustSignerRemoval::UnknownSigner(error)),
+        TrustSignerRecord::Signer(signer_kid) if signer_kid != request.kid.as_str() => {
             Ok(TrustSignerRemoval::Unrelated)
         }
-        StoredTrustSigner::Signer(_) => classify_signer_removal(capabilities.keystore(), request),
+        TrustSignerRecord::Signer(_) => evaluate_signer_removal(capabilities.keystore(), request),
     }
 }
 
 /// Decide whether another key of the same member can take the signature over.
-fn classify_signer_removal(
+fn evaluate_signer_removal(
     access: &KeystoreAccess,
     request: &TrustSignerRemovalRequest<'_>,
 ) -> Result<TrustSignerRemoval> {
@@ -146,7 +146,7 @@ where
 /// hand-over refused to lift off the removed key goes away with it, one already
 /// moved to another key stays verifiable, and one the hand-over never settled
 /// rules nothing out either way.
-enum FailedHandover {
+enum HandoverFailure {
     /// The hand-over was refused because it would leave the signature in place.
     StillSigner(Error),
     /// The signature had already moved to another key of this member.
@@ -171,7 +171,7 @@ where
     match attempt_signature_handover(capabilities, request, resolve_signing_execution) {
         Ok(signer_kid) => Ok(TrustSignerRemovalOutcome::resigned(signer_kid)),
         Err(failure) if request.force => Ok(TrustSignerRemovalOutcome::warned(
-            describe_failed_handover(access, request, &failure),
+            format_failed_handover(access, request, &failure),
         )),
         Err(failure) => Err(build_stopped_handover_error(request, failure)),
     }
@@ -193,20 +193,20 @@ fn attempt_signature_handover<Resign>(
     capabilities: &KeyCommandCapabilities,
     request: &TrustSignerRemovalRequest<'_>,
     resolve_signing_execution: Resign,
-) -> std::result::Result<String, FailedHandover>
+) -> std::result::Result<String, HandoverFailure>
 where
     Resign: FnOnce(&MemberHandle) -> Result<TrustCommandSession>,
 {
     let session =
-        resolve_signing_execution(request.member_handle).map_err(FailedHandover::Unobserved)?;
+        resolve_signing_execution(request.member_handle).map_err(HandoverFailure::Unobserved)?;
     if session.owner() != request.member_handle {
         let error = build_foreign_signing_identity_error(request.member_handle, session.owner());
-        return Err(FailedHandover::Unobserved(error));
+        return Err(HandoverFailure::Unobserved(error));
     }
     let planned =
         plan_trust_store_resign_bound_session(&session, &capabilities.local_state_binding())
-            .map_err(FailedHandover::Unobserved)?;
-    if let Some(failure) = classify_planned_handover(&planned, request) {
+            .map_err(HandoverFailure::Unobserved)?;
+    if let Some(failure) = find_failed_handover(&planned, request) {
         return Err(failure);
     }
     // A commit that does not come back settles nothing about the stored
@@ -217,7 +217,7 @@ where
     planned
         .commit()
         .map(|outcome| outcome.signer_kid)
-        .map_err(FailedHandover::Unobserved)
+        .map_err(HandoverFailure::Unobserved)
 }
 
 fn build_foreign_signing_identity_error(expected: &MemberHandle, resolved: &MemberHandle) -> Error {
@@ -237,17 +237,17 @@ fn build_foreign_signing_identity_error(expected: &MemberHandle, resolved: &Memb
 /// removed key does carry, handed to a key that stays, is the one case that
 /// moves it, so nothing else needs asking: the write that follows is a
 /// re-signing by construction.
-fn classify_planned_handover(
-    planned: &PlannedTrustStoreResign<'_>,
+fn find_failed_handover(
+    planned: &TrustStoreResignPlan<'_>,
     request: &TrustSignerRemovalRequest<'_>,
-) -> Option<FailedHandover> {
+) -> Option<HandoverFailure> {
     let kid = request.kid;
     let previous_signer_kid = planned.previous_signer_kid();
     if previous_signer_kid != kid {
-        return Some(FailedHandover::AlreadyMoved(previous_signer_kid.clone()));
+        return Some(HandoverFailure::AlreadyMoved(previous_signer_kid.clone()));
     }
     if planned.next_signer_kid() == kid.as_str() {
-        return Some(FailedHandover::StillSigner(
+        return Some(HandoverFailure::StillSigner(
             build_signature_would_stay_error(kid),
         ));
     }
@@ -265,30 +265,32 @@ fn build_signature_would_stay_error(kid: &Kid) -> Error {
 /// Refuse the removal the hand-over stopped, the way that hand-over ended.
 fn build_stopped_handover_error(
     request: &TrustSignerRemovalRequest<'_>,
-    failure: FailedHandover,
+    failure: HandoverFailure,
 ) -> Error {
     match failure {
-        FailedHandover::AlreadyMoved(signer_kid) => {
+        HandoverFailure::AlreadyMoved(signer_kid) => {
             build_moved_signature_error(request, &signer_kid)
         }
-        FailedHandover::StillSigner(cause) | FailedHandover::Unobserved(cause) => {
+        HandoverFailure::StillSigner(cause) | HandoverFailure::Unobserved(cause) => {
             build_failed_handover_error(request, cause)
         }
     }
 }
 
 /// Report the removal the hand-over stopped, the way that hand-over ended.
-fn describe_failed_handover(
+fn format_failed_handover(
     access: &KeystoreAccess,
     request: &TrustSignerRemovalRequest<'_>,
-    failure: &FailedHandover,
+    failure: &HandoverFailure,
 ) -> String {
     match failure {
-        FailedHandover::AlreadyMoved(signer_kid) => {
+        HandoverFailure::AlreadyMoved(signer_kid) => {
             build_moved_signature_warning(request, signer_kid)
         }
-        FailedHandover::StillSigner(cause) => build_failed_handover_warning(access, request, cause),
-        FailedHandover::Unobserved(cause) => {
+        HandoverFailure::StillSigner(cause) => {
+            build_failed_handover_warning(access, request, cause)
+        }
+        HandoverFailure::Unobserved(cause) => {
             build_unobserved_handover_warning(access, request, cause)
         }
     }
@@ -356,7 +358,7 @@ fn build_last_signer_warning(
         "Removed key '{}' signed the local trust store, and no other key could take the \
          signature over. {}",
         request.kid,
-        describe_signature_recovery(access, request)
+        format_signature_recovery(access, request)
     )
 }
 
@@ -375,7 +377,7 @@ fn build_failed_handover_warning(
          key failed: {}. {}",
         request.kid,
         error.format_user_message(),
-        describe_signature_recovery(access, request)
+        format_signature_recovery(access, request)
     )
 }
 
@@ -416,7 +418,7 @@ fn build_unobserved_handover_warning(
          names now: {}. {}",
         request.kid,
         error.format_user_message(),
-        describe_unconfirmed_signature_recovery(access, request)
+        format_unconfirmed_signature_recovery(access, request)
     )
 }
 
@@ -459,7 +461,7 @@ fn build_unreadable_store_warning(
          key that signed it: {}. {}",
         request.kid,
         error.format_user_message(),
-        describe_signature_recovery(access, request)
+        format_signature_recovery(access, request)
     )
 }
 
@@ -469,7 +471,7 @@ fn build_unreadable_store_warning(
 /// `kapsaro trust resign` is what moves that signature onto the key this member
 /// has active. Both steps are named because either one alone leaves the
 /// approvals where they are: unverifiable.
-fn describe_signature_restoration(
+fn format_signature_restoration(
     access: &KeystoreAccess,
     request: &TrustSignerRemovalRequest<'_>,
 ) -> String {
@@ -485,13 +487,13 @@ fn describe_signature_restoration(
     )
 }
 
-fn describe_signature_recovery(
+fn format_signature_recovery(
     access: &KeystoreAccess,
     request: &TrustSignerRemovalRequest<'_>,
 ) -> String {
     format!(
         "The stored approvals no longer verify. To keep them, {}",
-        describe_signature_restoration(access, request)
+        format_signature_restoration(access, request)
     )
 }
 
@@ -502,7 +504,7 @@ fn describe_signature_recovery(
 /// as it is unverifiable. Re-signing settles it either way: it repairs a store
 /// whose signature can still be verified, and reports one whose signature
 /// cannot.
-fn describe_unconfirmed_signature_recovery(
+fn format_unconfirmed_signature_recovery(
     access: &KeystoreAccess,
     request: &TrustSignerRemovalRequest<'_>,
 ) -> String {
@@ -511,10 +513,10 @@ fn describe_unconfirmed_signature_recovery(
          resign --member-handle {}' to settle it: if that reports the stored trust store cannot \
          be verified, {}",
         request.member_handle,
-        describe_signature_restoration(access, request)
+        format_signature_restoration(access, request)
     )
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/internal/app_key_trust_signer_test.rs"]
-mod app_key_trust_signer_test;
+#[path = "../../../tests/unit/internal/service_key_trust_signer_test.rs"]
+mod service_key_trust_signer_test;

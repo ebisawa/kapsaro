@@ -1,7 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Trust review outcome types shared across app-layer orchestration.
+//! Trust review outcome types shared across service-layer orchestration.
 //! Keeps decision data separate from service evaluation and review execution logic.
 
 use crate::feature::trust::recipient_sets::ArtifactRecipientSet;
@@ -76,7 +76,7 @@ impl ArtifactRecipientSetSnapshot {
         )
     }
 
-    fn from_record(record: &RecipientSetRecord) -> Self {
+    pub(crate) fn from_record(record: &RecipientSetRecord) -> Self {
         Self::new(
             record.recipient_kids.clone(),
             record.recipient_handle_hints.as_deref().unwrap_or(&[]),

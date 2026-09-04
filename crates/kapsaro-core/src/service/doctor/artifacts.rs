@@ -4,9 +4,12 @@
 //! Doctor checks for encrypted artifacts found in the workspace.
 //! Verifies format, signature, signer and recipient membership, and disclosure history for each artifact.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use crate::feature::artifact::{artifact_recipient_evidence, verify_artifact_signature};
+use crate::feature::trust::judgment::{
+    build_active_members_by_kid, ActiveMemberSnapshot, CurrentMemberMatch, KidSetMatch,
+};
 use crate::feature::trust::recipient_sets::{
     find_recipient_handle_mismatch, ArtifactRecipientEvidence, RecipientHandleMismatch,
 };
@@ -112,7 +115,7 @@ fn build_unreadable_active_members_check(workspace_dir: &AnchoredDir, reason: &s
         "artifacts.active_members",
         DoctorCategory::Artifacts,
         DoctorSubject::Path(format_path_relative_to_cwd(&active_dir)),
-        "Active members could not be read, so artifact signers and recipients were not judged",
+        "Active members could not be read or indexed, so artifact signers and recipients were not judged",
         reason,
         "repair members/active, then run the diagnosis again",
     )
@@ -130,7 +133,7 @@ fn check_skipped_secrets_entries(
     warnings
         .iter()
         .map(|warning| {
-            DoctorCheck::warn_with_reason_and_next_action(
+            DoctorCheck::build_warning_with_reason_and_next_action(
                 "artifacts.entry",
                 DoctorCategory::Artifacts,
                 secrets_subject.clone(),
@@ -252,50 +255,37 @@ fn check_active_signer(
     active_members_by_kid: &BTreeMap<String, PublicKey>,
     subject: &DoctorSubject,
 ) -> DoctorCheck {
-    match active_members_by_kid.get(&proof.kid) {
-        Some(public_key) => check_known_active_signer(proof, public_key, subject),
-        None => check_missing_active_signer(proof, subject),
-    }
-}
-
-fn check_known_active_signer(
-    proof: &SignatureVerificationProof,
-    public_key: &PublicKey,
-    subject: &DoctorSubject,
-) -> DoctorCheck {
-    if public_key.protected.subject_handle == proof.member_handle {
-        return DoctorCheck::ok(
+    match ActiveMemberSnapshot::new(active_members_by_kid)
+        .judge_handle_match(&proof.kid, &proof.member_handle)
+    {
+        CurrentMemberMatch::Matched => DoctorCheck::ok(
             "artifact.signer_active",
             DoctorCategory::Artifacts,
             subject.clone(),
             "Artifact signer is an active member",
-        );
-    }
-    DoctorCheck::fail_with_reason_and_next_action(
-        "artifact.signer_active",
-        DoctorCategory::Artifacts,
-        subject.clone(),
-        "Artifact signer kid belongs to another active member",
-        format!(
-            "signer: {}; active member: {}",
-            proof.member_handle, public_key.protected.subject_handle
         ),
-        "investigate the artifact before using it",
-    )
-}
-
-fn check_missing_active_signer(
-    proof: &SignatureVerificationProof,
-    subject: &DoctorSubject,
-) -> DoctorCheck {
-    DoctorCheck::fail_with_reason_and_next_action(
-        "artifact.signer_active",
-        DoctorCategory::Artifacts,
-        subject.clone(),
-        "Artifact signer is not in current members/active",
-        format!("signer: {}; kid: {}", proof.member_handle, proof.kid),
-        "run kapsaro rewrap",
-    )
+        CurrentMemberMatch::MemberHandleMismatch {
+            active_member_handle,
+        } => DoctorCheck::fail_with_reason_and_next_action(
+            "artifact.signer_active",
+            DoctorCategory::Artifacts,
+            subject.clone(),
+            "Artifact signer kid belongs to another active member",
+            format!(
+                "signer: {}; active member: {}",
+                proof.member_handle, active_member_handle
+            ),
+            "investigate the artifact before using it",
+        ),
+        CurrentMemberMatch::Missing => DoctorCheck::fail_with_reason_and_next_action(
+            "artifact.signer_active",
+            DoctorCategory::Artifacts,
+            subject.clone(),
+            "Artifact signer is not in current members/active",
+            format!("signer: {}; kid: {}", proof.member_handle, proof.kid),
+            "run kapsaro rewrap",
+        ),
+    }
 }
 
 fn check_signer_warnings(
@@ -306,7 +296,7 @@ fn check_signer_warnings(
         .warnings
         .iter()
         .map(|warning| {
-            DoctorCheck::warn_with_reason_and_next_action(
+            DoctorCheck::build_warning_with_reason_and_next_action(
                 "key.expiry",
                 DoctorCategory::Artifacts,
                 subject.clone(),
@@ -334,30 +324,12 @@ fn check_recipients(
         checks.push(check);
     }
 
-    let (active_kids, artifact_kids) = collect_recipient_kid_sets(&evidence, active_members_by_kid);
     checks.push(check_active_recipient_set(
-        &active_kids,
-        &artifact_kids,
+        &evidence,
+        active_members_by_kid,
         subject,
     ));
     checks
-}
-
-fn collect_recipient_kid_sets(
-    evidence: &ArtifactRecipientEvidence,
-    active_members_by_kid: &BTreeMap<String, PublicKey>,
-) -> (BTreeSet<String>, BTreeSet<String>) {
-    let active_kids = active_members_by_kid
-        .keys()
-        .cloned()
-        .collect::<BTreeSet<_>>();
-    let artifact_kids = evidence
-        .recipient_set
-        .recipient_kids()
-        .iter()
-        .cloned()
-        .collect::<BTreeSet<_>>();
-    (active_kids, artifact_kids)
 }
 
 enum RecipientEvidenceCheck {
@@ -408,36 +380,35 @@ fn build_recipient_handle_mismatch_check(
 }
 
 fn check_active_recipient_set(
-    active_kids: &BTreeSet<String>,
-    artifact_kids: &BTreeSet<String>,
+    evidence: &ArtifactRecipientEvidence,
+    active_members_by_kid: &BTreeMap<String, PublicKey>,
     subject: &DoctorSubject,
 ) -> DoctorCheck {
-    if artifact_kids == active_kids {
-        DoctorCheck::ok(
+    let artifact_kids = evidence.recipient_set.recipient_kids();
+    match ActiveMemberSnapshot::new(active_members_by_kid)
+        .judge_kid_set_match(artifact_kids.iter().map(String::as_str))
+    {
+        KidSetMatch::Exact => DoctorCheck::ok(
             "artifact.recipients_active",
             DoctorCategory::Artifacts,
             subject.clone(),
             "Artifact recipients match current active members",
-        )
-    } else {
-        DoctorCheck::warn_with_reason_and_next_action(
+        ),
+        KidSetMatch::Differs {
+            missing_active_kids,
+            stale_kids,
+        } => DoctorCheck::build_warning_with_reason_and_next_action(
             "artifact.recipients_active",
             DoctorCategory::Artifacts,
             subject.clone(),
             "Artifact recipients differ from current active members",
-            format_recipient_diff(active_kids, artifact_kids),
+            format!(
+                "missing active kids: {:?}; stale kids: {:?}",
+                missing_active_kids, stale_kids
+            ),
             "run kapsaro rewrap",
-        )
+        ),
     }
-}
-
-fn format_recipient_diff(active: &BTreeSet<String>, artifact: &BTreeSet<String>) -> String {
-    let missing = active.difference(artifact).cloned().collect::<Vec<_>>();
-    let stale = artifact.difference(active).cloned().collect::<Vec<_>>();
-    format!(
-        "missing active kids: {:?}; stale kids: {:?}",
-        missing, stale
-    )
 }
 
 fn check_disclosure_history(content: &EncContent, subject: &DoctorSubject) -> Vec<DoctorCheck> {
@@ -461,7 +432,7 @@ fn check_disclosure_history(content: &EncContent, subject: &DoctorSubject) -> Ve
             "Disclosure history is empty",
         )];
     }
-    vec![DoctorCheck::warn_with_reason_and_next_action(
+    vec![DoctorCheck::build_warning_with_reason_and_next_action(
         "disclosure_history.present",
         DoctorCategory::Artifacts,
         subject.clone(),
@@ -483,9 +454,5 @@ fn removed_recipients(content: &EncContent) -> Result<Vec<RemovedRecipient>> {
 }
 
 fn load_active_member_index(workspace: &AnchoredDir) -> Result<BTreeMap<String, PublicKey>> {
-    let mut index = BTreeMap::new();
-    for member in load_active_member_files_at(workspace)? {
-        index.insert(member.protected.kid.clone(), member);
-    }
-    Ok(index)
+    build_active_members_by_kid(&load_active_member_files_at(workspace)?)
 }

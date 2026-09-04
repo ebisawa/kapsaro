@@ -1,7 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Result and view types returned by the member app-layer operations.
+//! Result and view types returned by the member service operations.
 //! Plain data carriers; the conversions that populate them live with their producers.
 
 use crate::io::workspace::members::ReviewedMemberDocument;

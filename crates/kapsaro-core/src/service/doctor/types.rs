@@ -216,7 +216,7 @@ impl DoctorCheck {
         self
     }
 
-    pub(crate) fn warn_with_next_action(
+    pub(crate) fn build_warning_with_next_action(
         id: &'static str,
         category: DoctorCategory,
         subject: DoctorSubject,
@@ -247,7 +247,7 @@ impl DoctorCheck {
         Self::fail_with_reason(id, category, subject, message, reason).with_next_action(next_action)
     }
 
-    pub(crate) fn warn_with_reason_and_next_action(
+    pub(crate) fn build_warning_with_reason_and_next_action(
         id: &'static str,
         category: DoctorCategory,
         subject: DoctorSubject,
@@ -381,5 +381,5 @@ impl DoctorReport {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/internal/app_doctor_types_test.rs"]
-mod tests;
+#[path = "../../../tests/unit/internal/service_doctor_types_test.rs"]
+mod service_doctor_types_test;

@@ -18,12 +18,12 @@ use std::process::{Command, Stdio};
 use crate::cli::common::command::ReadCommandLabels;
 use crate::cli::common::kv_read::{KvReadSession, NonMemberReviewMode};
 use crate::cli::common::output::text::print_local_state_diagnostics;
-use crate::cli::common::presentation::remove_parent_kapsaro_env_vars;
 use crate::cli::options::{
     AllowExpiredKeyOption, KvStoreNameOption, MemberHandleOption, SigningOptions,
 };
 use kapsaro_core::api::diagnostics::take_local_state_warnings;
 use kapsaro_core::api::kv::KvReadOperation;
+use kapsaro_core::api::process::remove_parent_kapsaro_env_vars;
 use kapsaro_core::api::secret::SecretString;
 use kapsaro_core::{Error, Result};
 use tracing::debug;
@@ -86,7 +86,7 @@ pub(crate) fn execute_child_command(
         .stdin(Stdio::inherit())
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit());
-    configure_child_environment(&mut command, env_vars);
+    set_child_environment(&mut command, env_vars);
     // Drain and show local state warnings before blocking on the child: `status()`
     // does not return until the child exits, and an unhandled Ctrl-C would drop
     // the warnings recorded during key loading before the deferred drain in cli.rs runs.
@@ -105,7 +105,7 @@ pub(crate) fn execute_child_command(
     Ok(code)
 }
 
-pub(crate) fn configure_child_environment(
+pub(crate) fn set_child_environment(
     command: &mut Command,
     env_vars: &BTreeMap<String, SecretString>,
 ) {
@@ -117,4 +117,4 @@ pub(crate) fn configure_child_environment(
 
 #[cfg(test)]
 #[path = "../../tests/unit/internal/cli_run_test.rs"]
-mod tests;
+mod cli_run_test;

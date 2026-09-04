@@ -34,13 +34,13 @@ pub(crate) use store::{
 pub(crate) mod test_support;
 
 #[cfg(test)]
-#[path = "../../../tests/unit/internal/workspace_members_internal_test.rs"]
-mod internal_tests;
+#[path = "../../../tests/unit/internal/io_workspace_members_internal_test.rs"]
+mod io_workspace_members_internal_test;
 
 #[cfg(test)]
-#[path = "../../../tests/unit/internal/feature_member_test.rs"]
-mod feature_member_test;
+#[path = "../../../tests/unit/internal/io_workspace_members_removal_test.rs"]
+mod io_workspace_members_removal_test;
 
 #[cfg(test)]
-#[path = "../../../tests/unit/internal/workspace_members_test.rs"]
-mod workspace_members_test;
+#[path = "../../../tests/unit/internal/io_workspace_members_test.rs"]
+mod io_workspace_members_test;

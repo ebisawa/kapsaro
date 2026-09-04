@@ -5,9 +5,9 @@
 
 use crate::cli::common::{
     assert_member_set_review_success, cmd, copy_dir_all, encrypt_file_with_member_set_review,
-    import_file_with_member_set_review, kapsaro_std_cmd, make_secret_home, run_command_with_pty,
-    run_command_with_pty_script, set_value_with_member_set_review, setup_workspace,
-    BOB_MEMBER_HANDLE, TEST_MEMBER_HANDLE,
+    import_file_with_member_set_review, kapsaro_std_cmd, run_command_with_pty,
+    run_command_with_pty_script, set_value_with_member_set_review, setup_secret_home,
+    setup_workspace, BOB_MEMBER_HANDLE, TEST_MEMBER_HANDLE,
 };
 use predicates::prelude::*;
 use std::fs;
@@ -211,7 +211,7 @@ fn test_user_safe_key_rotation_backup_restore_and_trusted_ci_e2e() {
         "deploy-token",
     );
 
-    let restored_home = make_secret_home();
+    let restored_home = setup_secret_home();
     copy_dir_all(
         &home_dir.path().join("keys"),
         &restored_home.path().join("keys"),
@@ -239,7 +239,7 @@ fn test_user_safe_key_rotation_backup_restore_and_trusted_ci_e2e() {
     );
 
     let exported_key = export_private_key_to_stdout(&home_dir, &ssh_priv);
-    let ci_home = make_secret_home();
+    let ci_home = setup_secret_home();
     assert_ci_read_commands(
         &workspace_dir,
         &ci_home,
@@ -328,8 +328,7 @@ fn approve_member_key(
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("KAPSARO_HOME", home_dir.path())
-        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .env_remove("CI");
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap());
     let result = run_command_with_pty(&mut command, "Approve this key?", b"y\r");
     assert!(
         result.status.success(),
@@ -517,8 +516,7 @@ fn rewrap_std_command(workspace: &Path, home: &Path, ssh_priv: &Path) -> StdComm
         .arg("--member-handle")
         .arg(TEST_MEMBER_HANDLE)
         .env("KAPSARO_HOME", home)
-        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .env_remove("CI");
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap());
     command
 }
 

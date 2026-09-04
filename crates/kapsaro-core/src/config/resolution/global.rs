@@ -25,18 +25,14 @@ pub(crate) fn normalize_key(key: &str) -> Result<String> {
 /// The key a caller passes is whatever the operator typed, and it is normalized
 /// here: which spellings the configuration accepts is settled in one place
 /// rather than at every entry point that reads a value.
-pub fn resolve_config_value(key: &str, base_dir: Option<&Path>) -> Result<Option<String>> {
+pub fn resolve_config_value(key: &str, base_dir: &Path) -> Result<Option<String>> {
     let normalized = normalize_key(key)?;
     let mut configured = load_global_config(base_dir)?;
     Ok(configured.remove(&normalized))
 }
 
-pub fn load_global_config(base_dir: Option<&Path>) -> Result<BTreeMap<String, String>> {
-    let base_dir = match base_dir {
-        Some(dir) => dir.to_path_buf(),
-        None => config::paths::get_base_dir()?,
-    };
-    let Some(home) = open_optional_home(&base_dir)? else {
+pub fn load_global_config(base_dir: &Path) -> Result<BTreeMap<String, String>> {
+    let Some(home) = open_optional_home(base_dir)? else {
         return Ok(BTreeMap::new());
     };
     config::store::load_config_file_from_anchored_home(&home)
@@ -86,8 +82,8 @@ pub(crate) fn open_optional_home(base_dir: &Path) -> Result<Option<AnchoredDir>>
 }
 
 /// Open the local state home for writing, creating it when it is missing.
-pub(crate) fn create_home(base_dir: &Path) -> Result<AnchoredDir> {
-    AnchoredDir::create(
+pub(crate) fn ensure_home(base_dir: &Path) -> Result<AnchoredDir> {
+    AnchoredDir::ensure(
         base_dir,
         DirectoryScope::LocalState,
         LOCAL_STATE_ROOT_SUBJECT,
@@ -95,5 +91,5 @@ pub(crate) fn create_home(base_dir: &Path) -> Result<AnchoredDir> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/internal/feature_config_test.rs"]
-mod feature_config_test;
+#[path = "../../../tests/unit/internal/config_resolution_global_test.rs"]
+mod config_resolution_global_test;

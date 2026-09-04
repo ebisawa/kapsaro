@@ -13,7 +13,6 @@ use crate::cli::common::trust::{
     run_with_trust_command_session_reset_recovery,
 };
 use crate::cli::identity_prompt;
-use crate::cli::options::ToCommonOptions;
 use kapsaro_core::api::file::encrypt::EncryptFileCommand;
 use kapsaro_core::api::key::build_missing_member_handle_error;
 use kapsaro_core::api::kv::mutation::{
@@ -74,22 +73,34 @@ pub(crate) trait WriteCommandPlan {
     }
 }
 
+/// Open the workspace write session a command needs, in the standard order.
+///
+/// Commands that have nothing to do between opening the workspace directories
+/// and opening the trust session use this. `unset` keeps the steps apart
+/// because it must resolve the member handle and confirm before signing.
+pub(crate) fn open_cli_write_session(
+    context: &CliContext,
+    member_handle: Option<String>,
+    allow_expired_key: bool,
+) -> Result<CliWriteSession> {
+    let directories = WorkspaceWriteDirectories::open(context.workspace_path()?)?;
+    resolve_cli_write_session(context, directories, member_handle, allow_expired_key)
+}
+
 pub(crate) fn resolve_cli_write_session(
     context: &CliContext,
-    common: &impl ToCommonOptions,
     directories: WorkspaceWriteDirectories,
     member_handle: Option<String>,
     allow_expired_key: bool,
 ) -> Result<CliWriteSession> {
-    let common = common.to_common_options();
     run_pre_signing_key_load_hook();
-    let key_context = load_signing_key_context(context, &common, member_handle, None)?;
+    let key_context = load_signing_key_context(context, member_handle, None)?;
     let owner = key_context.member_handle().clone();
     let trust = TrustCommandSession::open(context.local_state()?, owner, key_context)?;
     let options = WriteTrustOptions::new(
         allow_expired_key,
         tty::is_interactive(),
-        context.strict_key_checking(),
+        context.strict_key_checking()?,
     );
     Ok(CliWriteSession {
         directories,
@@ -106,7 +117,7 @@ pub(crate) fn resolve_required_cli_member_handle(
     require_member_handle_with_prompt(
         context.member_handle(member_handle)?,
         allow_prompt,
-        identity_prompt::is_prompt_available(),
+        tty::is_interactive(),
         identity_prompt::prompt_member_handle,
     )
 }
@@ -118,7 +129,7 @@ pub(crate) fn require_member_handle(
     require_member_handle_with_prompt(
         resolved,
         allow_prompt,
-        identity_prompt::is_prompt_available(),
+        tty::is_interactive(),
         identity_prompt::prompt_member_handle,
     )
 }
@@ -179,16 +190,16 @@ where
         },
         build_write_recipient_trust_review_plan(plan, labels),
         print_warnings,
-        |candidate, context| {
-            confirm_then_ensure_current(plan, || confirm_signer_key_approval(candidate, context))
+        |candidate, _context| {
+            confirm_then_ensure_current(plan, || confirm_signer_key_approval(candidate))
         },
-        |candidate, subject, recipients| {
+        |candidate, _subject, recipients| {
             confirm_then_ensure_current(plan, || {
-                confirm_non_member_acceptance(candidate, subject, recipients)
+                confirm_non_member_acceptance(candidate, recipients)
             })
         },
-        |candidates, context| {
-            confirm_then_ensure_current(plan, || confirm_recipient_approvals(candidates, context))
+        |candidates, _context| {
+            confirm_then_ensure_current(plan, || confirm_recipient_approvals(candidates))
         },
     )
 }
@@ -200,9 +211,9 @@ where
     debug!(
         "[TRUST] write gate: signer={}, recipients={}",
         plan.signer_trust()
-            .map(describe_signer_trust)
+            .map(format_signer_trust)
             .unwrap_or("not-applicable"),
-        describe_recipient_trust(plan.recipient_trust())
+        format_recipient_trust(plan.recipient_trust())
     );
 }
 
@@ -259,7 +270,7 @@ where
     })
 }
 
-fn describe_signer_trust(outcome: &SignerTrustOutcome) -> &'static str {
+fn format_signer_trust(outcome: &SignerTrustOutcome) -> &'static str {
     match outcome {
         SignerTrustOutcome::Accepted => "accepted",
         SignerTrustOutcome::NeedsKnownKeyApproval(_) => "needs-known-key-approval",
@@ -267,7 +278,7 @@ fn describe_signer_trust(outcome: &SignerTrustOutcome) -> &'static str {
     }
 }
 
-fn describe_recipient_trust(outcome: &RecipientTrustOutcome) -> &'static str {
+fn format_recipient_trust(outcome: &RecipientTrustOutcome) -> &'static str {
     match outcome {
         RecipientTrustOutcome::Accepted => "accepted",
         RecipientTrustOutcome::NeedsManualApproval(_) => "needs-manual-approval",

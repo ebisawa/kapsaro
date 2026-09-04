@@ -21,6 +21,4 @@ pub mod helpers;
 pub mod member;
 pub mod paths;
 pub mod public_key_source;
-#[cfg(test)]
-pub mod resolver;
 pub mod signer;

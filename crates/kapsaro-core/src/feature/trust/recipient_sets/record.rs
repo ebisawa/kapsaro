@@ -231,6 +231,22 @@ pub fn find_recipient_handle_mismatch(
     })
 }
 
+/// The first recipient kid that no longer belongs to an active member.
+///
+/// An artifact wrapped for a key the workspace has dropped can no longer be
+/// opened by the member it was meant for, so the kid itself is what a caller
+/// has to name.
+pub fn find_inactive_recipient_kid<'a>(
+    current: &'a ArtifactRecipientSet,
+    active_members_by_kid: &BTreeMap<String, PublicKey>,
+) -> Option<&'a str> {
+    current
+        .recipient_kids()
+        .iter()
+        .map(String::as_str)
+        .find(|kid| !active_members_by_kid.contains_key(*kid))
+}
+
 pub fn is_self_only_recipient_set(
     current: &ArtifactRecipientSet,
     active_members_by_kid: &BTreeMap<String, PublicKey>,

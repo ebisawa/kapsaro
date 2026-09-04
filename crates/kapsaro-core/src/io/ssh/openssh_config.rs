@@ -26,6 +26,9 @@ use std::path::{Path, PathBuf};
 /// 1. `Host *` block (if present)
 /// 2. Global scope (outside any Host block)
 ///
+/// A block naming particular hosts is skipped: the agent it names is chosen for
+/// connections to those hosts and says nothing about signing here.
+///
 /// # Returns
 ///
 /// - `Ok(Some(path))` if `IdentityAgent` is found and not "none"
@@ -59,41 +62,80 @@ pub fn find_identity_agent(
     parse_identity_agent(&content, home, expansion_values)
 }
 
+/// Which part of the file the reader stands in.
+///
+/// A directive applies to the hosts of the block it stands in, so the three are
+/// kept apart: an agent named outside every block, one named in the block that
+/// matches every host, and one named in a block for particular hosts, which
+/// says nothing about the hosts kapsaro signs for. A `Match` block is read as
+/// a block for particular hosts, since its conditions are not evaluated here.
+enum HostScope {
+    Global,
+    HostStar,
+    OtherHost,
+}
+
+impl HostScope {
+    fn from_host_patterns(patterns: &str) -> Self {
+        if patterns.split_whitespace().any(|pattern| pattern == "*") {
+            Self::HostStar
+        } else {
+            Self::OtherHost
+        }
+    }
+}
+
 /// Extract IdentityAgent values (global and Host *) from parsed SSH config lines.
 fn extract_identity_agent_values(content: &str) -> (Option<String>, Option<String>) {
-    let mut in_host_star = false;
+    let mut scope = HostScope::Global;
     let mut global_identity_agent: Option<String> = None;
     let mut host_star_identity_agent: Option<String> = None;
 
     for line in content.lines() {
-        let line = extract_config_line_before_comment(line);
-        let line = line.trim();
-
+        let line = extract_config_line_before_comment(line).trim();
         if line.is_empty() {
             continue;
         }
 
-        if let Some(host_pattern) = line.strip_prefix("Host") {
-            let patterns: Vec<&str> = host_pattern.split_whitespace().collect();
-            in_host_star = patterns.iter().any(|p| p.eq_ignore_ascii_case("*"));
+        let (keyword, value) = split_config_keyword(line);
+        if keyword.eq_ignore_ascii_case("host") {
+            scope = HostScope::from_host_patterns(value);
+            continue;
+        }
+        if keyword.eq_ignore_ascii_case("match") {
+            scope = HostScope::OtherHost;
+            continue;
+        }
+        if !keyword.eq_ignore_ascii_case("identityagent") {
             continue;
         }
 
-        let line_lower = line.to_ascii_lowercase();
-        if let Some(value) = line_lower
-            .strip_prefix("identityagent")
-            .map(|suffix| &line[line.len() - suffix.len()..])
-        {
-            let unquoted = parse_quoted_value(value.trim());
-            if in_host_star {
-                host_star_identity_agent = Some(unquoted);
-            } else if global_identity_agent.is_none() {
+        let unquoted = parse_quoted_value(value);
+        match scope {
+            HostScope::HostStar => host_star_identity_agent = Some(unquoted),
+            HostScope::Global if global_identity_agent.is_none() => {
                 global_identity_agent = Some(unquoted);
             }
+            HostScope::Global | HostScope::OtherHost => {}
         }
     }
 
     (global_identity_agent, host_star_identity_agent)
+}
+
+/// Split a config line into its keyword and the rest of the line.
+///
+/// The keyword ends at the first whitespace or `=`, which is what separates it
+/// from its value in an OpenSSH config. Matching a bare prefix instead would
+/// read `HostName` and `HostKeyAlias` as the start of a `Host` block and end
+/// the block they actually stand in.
+fn split_config_keyword(line: &str) -> (&str, &str) {
+    let keyword_end = line
+        .find(|c: char| c.is_whitespace() || c == '=')
+        .unwrap_or(line.len());
+    let (keyword, rest) = line.split_at(keyword_end);
+    let rest = rest.trim_start();
+    (keyword, rest.strip_prefix('=').unwrap_or(rest).trim())
 }
 
 /// Resolve an IdentityAgent value using only caller-supplied expansion inputs.
@@ -181,9 +223,9 @@ pub fn parse_quoted_value(value: &str) -> String {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/internal/ssh_openssh_config_integration_test.rs"]
-mod ssh_openssh_config_integration_test;
+#[path = "../../../tests/unit/internal/io_ssh_openssh_config_integration_test.rs"]
+mod io_ssh_openssh_config_integration_test;
 
 #[cfg(test)]
-#[path = "../../../tests/unit/internal/ssh_openssh_config_test.rs"]
-mod ssh_openssh_config_test;
+#[path = "../../../tests/unit/internal/io_ssh_openssh_config_test.rs"]
+mod io_ssh_openssh_config_test;

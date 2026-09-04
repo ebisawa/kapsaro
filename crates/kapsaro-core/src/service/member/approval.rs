@@ -269,7 +269,7 @@ pub fn save_member_approvals(
 }
 
 fn select_approval_targets(
-    active_members: &[crate::model::public_key::PublicKey],
+    active_members: &[PublicKey],
     member_handles: &[String],
     self_member_handle: &str,
 ) -> Result<Vec<crate::model::public_key::PublicKey>> {
@@ -308,7 +308,7 @@ fn select_approval_targets(
 /// `verify_member_public_keys()` was called, preventing TOCTOU between verification
 /// and kid resolution.
 fn evaluate_candidate_with_snapshot(
-    vr: &crate::io::verify_online::VerificationResult,
+    vr: &VerificationResult,
     active_members: &[crate::model::public_key::PublicKey],
     known_keys: &[crate::model::trust_store::KnownKey],
 ) -> Result<(MemberApprovalResult, Option<ApprovedKnownKey>)> {
@@ -317,6 +317,33 @@ fn evaluate_candidate_with_snapshot(
     let Some(pk) = member_pk else {
         return Ok((build_missing_active_member_approval_result(vr), None));
     };
+    let candidate = build_member_approval_candidate(vr, pk)?;
+
+    enforce_candidate_public_key_active(&pk.protected.expires_at)?;
+
+    if !evaluate_candidate_online_verification(vr, &candidate) {
+        return Ok((
+            build_member_approval_result(vr, &candidate, false, false, false),
+            None,
+        ));
+    }
+
+    let result = evaluate_candidate_known_key_state(vr, &candidate, known_keys)?;
+    let approval = result
+        .review_required
+        .then(|| ApprovedKnownKey::from_candidate(&candidate))
+        .transpose()?;
+    Ok((result, approval))
+}
+
+/// Build the review candidate for one verified active member key.
+///
+/// The verified online evidence is bound to the same candidate the review
+/// shows, so an approval cannot carry evidence for a different key.
+fn build_member_approval_candidate(
+    vr: &VerificationResult,
+    pk: &PublicKey,
+) -> Result<TrustApprovalCandidate> {
     let verified = crate::feature::verify::public_key::verify_public_key_for_verification_context(
         pk,
         crate::feature::verify::public_key::WORKSPACE_ACTIVE_MEMBER_READ_TRUST_CONTEXT,
@@ -334,26 +361,12 @@ fn evaluate_candidate_with_snapshot(
             )
         })
         .transpose()?;
-    let candidate = TrustApprovalCandidateBuilder::from_known_key_candidate(&service_candidate)
-        .with_verification_result(vr)
-        .with_optional_verified_service_evidence(verified_service_evidence)
-        .build();
-
-    enforce_candidate_public_key_active(&pk.protected.expires_at)?;
-
-    if !evaluate_candidate_online_verification(vr, &candidate) {
-        return Ok((
-            build_member_approval_result(vr, &candidate, false, false, false),
-            None,
-        ));
-    }
-
-    let result = evaluate_candidate_known_key_state(vr, &candidate, known_keys)?;
-    let approval = result
-        .review_required
-        .then(|| ApprovedKnownKey::from_candidate(&candidate))
-        .transpose()?;
-    Ok((result, approval))
+    Ok(
+        TrustApprovalCandidateBuilder::from_known_key_candidate(&service_candidate)
+            .with_verification_result(vr)
+            .with_optional_verified_service_evidence(verified_service_evidence)
+            .build(),
+    )
 }
 
 fn enforce_candidate_public_key_active(expires_at: &str) -> Result<()> {
@@ -387,10 +400,13 @@ fn evaluate_candidate_known_key_state(
 ) -> Result<MemberApprovalResult> {
     let known_key_state = match judge_known_key(known_keys, candidate.kid(), &vr.member_handle) {
         Ok(state) => state,
+        // A key that contradicts what the store already records is not a
+        // verified key: the anomaly is exactly the reason it cannot be treated
+        // as one.
         Err(e) => {
             return Ok(build_member_approval_result_with_message(
                 candidate,
-                true,
+                false,
                 false,
                 false,
                 format!("Integrity anomaly: {}", e),
@@ -407,10 +423,11 @@ fn evaluate_candidate_known_key_state(
     ))
 }
 
+/// Whether the stored expiry states that the key has already expired.
+///
+/// A timestamp that will not read back states nothing about expiry, so it is
+/// not treated as one. What such a document is is settled where it is verified.
 fn is_public_key_expired(expires_at: &str) -> bool {
-    if expires_at.is_empty() {
-        return false;
-    }
     matches!(
         check_key_expiry(expires_at, time::OffsetDateTime::now_utc()),
         Ok(KeyExpiryStatus::Expired { .. })
@@ -427,8 +444,8 @@ fn find_member_public_key<'a>(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/internal/app_member_approval_test.rs"]
-mod tests;
+#[path = "../../../tests/unit/internal/service_member_approval_test.rs"]
+mod service_member_approval_test;
 
 fn build_missing_active_member_approval_result(
     vr: &crate::io::verify_online::VerificationResult,

@@ -7,11 +7,12 @@ use console::Style;
 
 use crate::cli::common::output::text::layout;
 use crate::cli::common::output::text::layout::LineTarget;
-use crate::cli::common::presentation::format_kid_display_lossy;
 use kapsaro_core::api::inspect::{
     ArtifactSignatureMetadata, FileEncInspectMetadata, InspectMetadata, KvEncInspectMetadata,
-    OnlineVerificationMetadata, SignatureVerificationMetadata, WrapDataMetadata,
+    KvEntryMetadata, OnlineVerificationMetadata, RemovedRecipientMetadata,
+    SignatureVerificationMetadata, WrapDataMetadata, WrapItemMetadata,
 };
+use kapsaro_core::api::key::format_kid_display_lossy;
 
 const PAYLOAD_CT_DISPLAY_LEN: usize = 64;
 const WRAP_TOKEN_DISPLAY_LEN: usize = 32;
@@ -89,25 +90,7 @@ fn build_kv_output(kv: &KvEncInspectMetadata) -> InspectOutput {
         section("Wrap Data", build_wrap_lines(&kv.wrap_data)),
         section(
             format!("Entries ({})", kv.entries.len()),
-            kv.entries
-                .iter()
-                .enumerate()
-                .flat_map(|(index, entry)| {
-                    let mut lines = vec![
-                        field_line(&format!("  [{index}] Key: "), &entry.key),
-                        field_line("      Nonce:   ", &entry.nonce),
-                        format!(
-                            "      CT:      {} bytes ({})",
-                            entry.ct.len(),
-                            display_field(&entry.ct, ENTRY_CT_DISPLAY_LEN)
-                        ),
-                    ];
-                    if entry.disclosed {
-                        lines.push("      ⚠ DISCLOSED — Secret may need rotation".to_string());
-                    }
-                    lines
-                })
-                .collect(),
+            build_entry_lines(&kv.entries),
         ),
         section("Signature", build_signature_lines(&kv.signature)),
         section(
@@ -132,6 +115,30 @@ fn section(title: impl Into<String>, lines: Vec<String>) -> InspectSection {
     }
 }
 
+fn build_entry_lines(entries: &[KvEntryMetadata]) -> Vec<String> {
+    entries
+        .iter()
+        .enumerate()
+        .flat_map(|(index, entry)| build_single_entry_lines(index, entry))
+        .collect()
+}
+
+fn build_single_entry_lines(index: usize, entry: &KvEntryMetadata) -> Vec<String> {
+    let mut lines = vec![
+        field_line(&format!("  [{index}] Key: "), &entry.key),
+        field_line("      Nonce:   ", &entry.nonce),
+        format!(
+            "      CT:      {} bytes ({})",
+            entry.ct.len(),
+            display_field(&entry.ct, ENTRY_CT_DISPLAY_LEN)
+        ),
+    ];
+    if entry.disclosed {
+        lines.push("      ⚠ DISCLOSED — Secret may need rotation".to_string());
+    }
+    lines
+}
+
 fn build_wrap_lines(wrap: &WrapDataMetadata) -> Vec<String> {
     let mut lines = vec![format!("  Recipients ({}):", wrap.recipients.len())];
     lines.extend(
@@ -141,39 +148,44 @@ fn build_wrap_lines(wrap: &WrapDataMetadata) -> Vec<String> {
     );
     lines.push("  Wrap Items:".to_string());
     for (index, item) in wrap.wrap_items.iter().enumerate() {
-        lines.push(field_line(
-            &format!("    [{index}] RH:    "),
-            &item.recipient_handle,
-        ));
-        lines.push(format!(
-            "        Kid:   {}",
-            format_kid_display_lossy(&item.kid)
-        ));
-        lines.push(field_line("        Alg:   ", &item.alg));
-        lines.push(format!(
+        lines.extend(build_wrap_item_lines(index, item));
+    }
+    lines.extend(build_removed_recipient_lines(&wrap.removed_recipients));
+    lines
+}
+
+fn build_wrap_item_lines(index: usize, item: &WrapItemMetadata) -> Vec<String> {
+    vec![
+        field_line(&format!("    [{index}] RH:    "), &item.recipient_handle),
+        format!("        Kid:   {}", format_kid_display_lossy(&item.kid)),
+        field_line("        Alg:   ", &item.alg),
+        format!(
             "        Enc:   {}",
             display_field(&item.enc, WRAP_TOKEN_DISPLAY_LEN)
-        ));
-        lines.push(format!(
+        ),
+        format!(
             "        CT:    {}",
             display_field(&item.ct, WRAP_TOKEN_DISPLAY_LEN)
-        ));
+        ),
+    ]
+}
+
+fn build_removed_recipient_lines(removed_recipients: &[RemovedRecipientMetadata]) -> Vec<String> {
+    if removed_recipients.is_empty() {
+        return Vec::new();
     }
-    if !wrap.removed_recipients.is_empty() {
-        lines.push(String::new());
-        lines.push(format!(
-            "  Removed Recipients ({}):",
-            wrap.removed_recipients.len()
-        ));
-        for removed in &wrap.removed_recipients {
-            lines.push(format!(
-                "    • {} (kid: {}, removed at {})",
-                escape_field(&removed.recipient_handle),
-                format_kid_display_lossy(&removed.kid),
-                escape_field(&removed.removed_at)
-            ));
-        }
-    }
+    let mut lines = vec![
+        String::new(),
+        format!("  Removed Recipients ({}):", removed_recipients.len()),
+    ];
+    lines.extend(removed_recipients.iter().map(|removed| {
+        format!(
+            "    • {} (kid: {}, removed at {})",
+            escape_field(&removed.recipient_handle),
+            format_kid_display_lossy(&removed.kid),
+            escape_field(&removed.removed_at)
+        )
+    }));
     lines
 }
 
@@ -418,4 +430,4 @@ fn colorize_inspect_line(line: &str) -> String {
 
 #[cfg(test)]
 #[path = "../../../../../tests/unit/internal/cli_common_output_text_inspect_test.rs"]
-mod tests;
+mod cli_common_output_text_inspect_test;

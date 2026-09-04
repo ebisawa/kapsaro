@@ -3,7 +3,7 @@
 
 //! Integration tests for `unset` command
 
-use crate::cli::common::{cmd, make_secret_home, setup_workspace_with_kv_entries};
+use crate::cli::common::{cmd, setup_secret_home, setup_workspace_with_kv_entries};
 use predicates::prelude::*;
 use std::fs;
 use std::path::PathBuf;
@@ -100,7 +100,7 @@ fn test_unset_confirmation_precedes_signing_key_resolution() {
 
 #[test]
 fn test_unset_requires_workspace_before_confirmation() {
-    let home_dir = make_secret_home();
+    let home_dir = setup_secret_home();
     let missing_workspace = home_dir.path().join("missing-workspace");
 
     cmd()
@@ -122,7 +122,7 @@ fn test_unset_requires_workspace_before_confirmation() {
 #[test]
 fn test_unset_requires_member_handle_before_confirmation() {
     let workspace_dir = TempDir::new().unwrap();
-    let home_dir = make_secret_home();
+    let home_dir = setup_secret_home();
 
     fs::create_dir_all(workspace_dir.path().join("members/active")).unwrap();
     fs::create_dir_all(workspace_dir.path().join("members/incoming")).unwrap();

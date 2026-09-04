@@ -8,6 +8,9 @@ use std::collections::BTreeSet;
 
 use crate::feature::trust::judgment::{SelfTrustSet, TrustIdentity};
 use crate::feature::trust::known_keys::{judge_known_key, KnownKeyJudgment};
+use crate::feature::verify::public_key::{
+    verify_public_key_for_verification_context, WORKSPACE_INCOMING_MEMBER_CONTEXT,
+};
 use crate::io::verify_online::VerifiedGithubIdentity;
 use crate::model::trust_store::KnownKey;
 use crate::service::trust::{
@@ -194,20 +197,20 @@ pub fn build_promotion_review_session(
     review_plan: &IncomingPromotionReviewPlan,
 ) -> Result<PromotionReviewSession> {
     build_promotion_review_session_with_verifier(review_plan, |candidate| {
-        verify_prompt_candidate_online(candidate)
+        evaluate_promotion_candidate_online(candidate)
     })
 }
 
-pub fn verify_prompt_candidate_online(
+pub fn evaluate_promotion_candidate_online(
     candidate: &IncomingPromotionCandidate,
 ) -> Result<IncomingPromotionCandidate> {
     if !candidate.review.github_binding_configured {
         return Ok(candidate.clone());
     }
 
-    let verified = crate::feature::verify::public_key::verify_public_key_for_verification_context(
+    let verified = verify_public_key_for_verification_context(
         &candidate.public_key,
-        crate::feature::verify::public_key::WORKSPACE_INCOMING_MEMBER_CONTEXT,
+        WORKSPACE_INCOMING_MEMBER_CONTEXT,
     )?;
     let service_candidate =
         crate::service::trust::KnownKeyReviewCandidate::from_verified_signing_public_key(
@@ -247,18 +250,7 @@ where
     let mut prompt_views = Vec::new();
 
     for candidate in &review_plan.prompt_candidates {
-        let reviewed = if candidate.review.github_binding_configured {
-            match verify_online(candidate) {
-                Ok(reviewed) => reviewed,
-                Err(error) => {
-                    let failed = build_online_verification_failure(candidate, &error);
-                    failed_candidates.push(build_failed_candidate(&failed));
-                    continue;
-                }
-            }
-        } else {
-            candidate.clone()
-        };
+        let reviewed = verify_prompt_candidate(candidate, &mut verify_online);
         if should_skip_prompt_candidate(&reviewed) {
             failed_candidates.push(build_failed_candidate(&reviewed));
             continue;
@@ -277,6 +269,24 @@ where
         auto_accepted_candidates: review_plan.auto_accepted_candidates.clone(),
         prompt_candidates,
     })
+}
+
+/// Verify one candidate online, folding a failure into a candidate that no
+/// prompt can offer, so both outcomes leave the review the same way.
+fn verify_prompt_candidate<VerifyOnline>(
+    candidate: &IncomingPromotionCandidate,
+    verify_online: &mut VerifyOnline,
+) -> IncomingPromotionCandidate
+where
+    VerifyOnline: FnMut(&IncomingPromotionCandidate) -> Result<IncomingPromotionCandidate>,
+{
+    if !candidate.review.github_binding_configured {
+        return candidate.clone();
+    }
+    match verify_online(candidate) {
+        Ok(reviewed) => reviewed,
+        Err(error) => build_online_verification_failure(candidate, &error),
+    }
 }
 
 fn build_online_verification_failure(
@@ -309,11 +319,10 @@ impl TryFrom<&IncomingPromotionCandidate> for TrustApprovalCandidate {
     type Error = Error;
 
     fn try_from(candidate: &IncomingPromotionCandidate) -> Result<Self> {
-        let verified =
-            crate::feature::verify::public_key::verify_public_key_for_verification_context(
-                &candidate.public_key,
-                crate::feature::verify::public_key::WORKSPACE_INCOMING_MEMBER_CONTEXT,
-            )?;
+        let verified = verify_public_key_for_verification_context(
+            &candidate.public_key,
+            WORKSPACE_INCOMING_MEMBER_CONTEXT,
+        )?;
         Ok(
             TrustApprovalCandidateBuilder::from_verified_signing_public_key(
                 &verified.verified_public_key,
@@ -331,5 +340,5 @@ impl TryFrom<&IncomingPromotionCandidate> for TrustApprovalCandidate {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/internal/app_rewrap_promotion_test.rs"]
-mod tests;
+#[path = "../../../tests/unit/internal/service_rewrap_promotion_test.rs"]
+mod service_rewrap_promotion_test;

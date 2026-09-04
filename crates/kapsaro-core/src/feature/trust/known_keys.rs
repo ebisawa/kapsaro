@@ -4,11 +4,11 @@
 //! Known keys CRUD operations and integrity checks.
 
 use crate::feature::trust::judgment::{IntoKid, IntoMemberHandle};
+use crate::feature::trust::purge::purge_records;
 use crate::model::identity::{Kid, MemberHandle};
 use crate::model::trust_store::KnownKey;
 use crate::support::kid::resolve_unique_kid;
 use crate::{Error, Result};
-use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -24,14 +24,6 @@ pub struct KnownKeyIdentity {
 }
 
 impl KnownKeyIdentity {
-    pub fn new<M, K>(member_handle: M, kid: K) -> Self
-    where
-        M: IntoMemberHandle,
-        K: IntoKid,
-    {
-        Self::try_new(member_handle, kid).expect("known key identity inputs must be valid")
-    }
-
     pub fn try_new<M, K>(member_handle: M, kid: K) -> Result<Self>
     where
         M: IntoMemberHandle,
@@ -47,10 +39,6 @@ impl KnownKeyIdentity {
         self.member_handle.as_str()
     }
 
-    pub fn member_handle_value(&self) -> &MemberHandle {
-        &self.member_handle
-    }
-
     pub fn kid(&self) -> &str {
         self.kid.as_str()
     }
@@ -62,7 +50,7 @@ impl KnownKeyIdentity {
 /// - Same subject_handle and kid -> already approved, no update (`Ok(false)`)
 /// - New `(subject_handle, kid)` -> inserted (`Ok(true)`)
 pub fn add_known_key(keys: &mut Vec<KnownKey>, new_key: KnownKey) -> Result<bool> {
-    validate_kid_integrity(keys, &new_key.kid, &new_key.subject_handle)?;
+    enforce_kid_integrity(keys, &new_key.kid, &new_key.subject_handle)?;
 
     if find_known_key(keys, &new_key.kid).is_some() {
         return Ok(false);
@@ -91,29 +79,7 @@ pub fn purge_known_keys(
     keys: &mut Vec<KnownKey>,
     older_than: OffsetDateTime,
 ) -> Result<Vec<KnownKey>> {
-    let mut removed = Vec::new();
-    let mut retained = Vec::with_capacity(keys.len());
-
-    for key in keys.drain(..) {
-        let approved_at = OffsetDateTime::parse(&key.approved_at, &Rfc3339).map_err(|e| {
-            Error::build_parse_error_with_source(
-                format!(
-                    "Failed to parse known_keys[].approved_at '{}': {}",
-                    key.approved_at, e
-                ),
-                e,
-            )
-        })?;
-
-        if approved_at < older_than {
-            removed.push(key);
-        } else {
-            retained.push(key);
-        }
-    }
-
-    *keys = retained;
-    Ok(removed)
+    purge_records(keys, older_than)
 }
 
 /// Find a known key by kid.
@@ -126,7 +92,7 @@ pub fn judge_known_key(
     candidate_kid: &str,
     candidate_member_handle: &str,
 ) -> Result<KnownKeyJudgment> {
-    validate_kid_integrity(keys, candidate_kid, candidate_member_handle)?;
+    enforce_kid_integrity(keys, candidate_kid, candidate_member_handle)?;
     if find_known_key(keys, candidate_kid).is_some() {
         Ok(KnownKeyJudgment::Existing)
     } else {
@@ -137,26 +103,43 @@ pub fn judge_known_key(
 /// Validate that a candidate kid does not conflict with existing known_keys.
 ///
 /// Fails if the same kid exists with a different subject_handle.
-pub fn validate_kid_integrity(
+pub fn enforce_kid_integrity(
     keys: &[KnownKey],
     candidate_kid: &str,
     candidate_member_handle: &str,
 ) -> Result<()> {
     if let Some(existing) = find_known_key(keys, candidate_kid) {
         if existing.subject_handle != candidate_member_handle {
-            return Err(Error::build_verification_error(
-                "E_TRUST_KID_INTEGRITY_ANOMALY".to_string(),
-                format!(
-                    "Known key kid has conflicting subject handle.\n\
-                     Kid: {}\n\
-                     Existing subject: {}\n\
-                     Candidate subject: {}",
-                    candidate_kid, existing.subject_handle, candidate_member_handle
-                ),
+            return Err(build_kid_integrity_anomaly_error(
+                candidate_kid,
+                &existing.subject_handle,
+                candidate_member_handle,
             ));
         }
     }
     Ok(())
+}
+
+/// Report a kid that is already bound to another member than the candidate.
+///
+/// Every path that meets the anomaly states it the same way, because what the
+/// operator has to look at is the same in each: the kid, the member it is
+/// already recorded for, and the member now claiming it.
+pub(crate) fn build_kid_integrity_anomaly_error(
+    kid: &str,
+    existing_member_handle: &str,
+    candidate_member_handle: &str,
+) -> Error {
+    Error::build_verification_error(
+        "E_TRUST_KID_INTEGRITY_ANOMALY".to_string(),
+        format!(
+            "Known key kid has conflicting subject handle.\n\
+             Kid: {}\n\
+             Existing subject: {}\n\
+             Candidate subject: {}",
+            kid, existing_member_handle, candidate_member_handle
+        ),
+    )
 }
 
 #[cfg(test)]

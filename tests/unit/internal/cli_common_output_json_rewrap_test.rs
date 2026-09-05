@@ -5,7 +5,7 @@ use super::build_rewrap_batch_result_output;
 use crate::cli::common::output::rewrap::{RewrapBatchView, RewrapFailureView};
 
 #[test]
-fn test_build_rewrap_batch_result_output_success() {
+fn test_build_rewrap_batch_result_output() {
     let view = RewrapBatchView {
         processed_files: vec!["secrets/app.env.encrypted".to_string()],
         failed_files: Vec::new(),

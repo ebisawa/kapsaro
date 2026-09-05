@@ -1,9 +1,9 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Workspace module.
+//! Workspace I/O root.
 //!
-//! Provides workspace detection, configuration parsing, and mode resolution.
+//! Groups workspace detection, member storage, and workspace directory setup.
 
 pub mod detection;
 pub mod members;

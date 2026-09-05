@@ -20,19 +20,19 @@ use tracing::debug;
 
 const PRIVATE_KEY_SOURCE: &str = "provided private key";
 
-/// Result of loading a private key from environment variables
+/// Result of parsing a caller-supplied encoded private key
 #[derive(Debug)]
-pub struct EnvKeyLoadResult {
+pub struct EnvKeyParseResult {
     pub verified_key: VerifiedPrivateKey,
     pub member_handle: MemberHandle,
     pub expires_at: VerifiedExpiresAt,
 }
 
 /// Decode and verify one password-protected key supplied by the caller.
-pub(crate) fn load_private_key(
+pub(crate) fn parse_env_key(
     encoded: SecretString,
     password: SecretString,
-) -> Result<EnvKeyLoadResult> {
+) -> Result<EnvKeyParseResult> {
     let json_bytes = decode_private_key_env(encoded.as_str())?;
     debug!("[ENV_KEY] load private key: decoded private key payload");
     let private_key = parse_password_protected_private_key(json_bytes.as_bytes())?;
@@ -41,7 +41,7 @@ pub(crate) fn load_private_key(
         private_key.protected.subject_handle,
         format_kid_half_display_lossy(&private_key.protected.kid)
     );
-    build_env_key_load_result(&private_key, &password)
+    build_env_key_parse_result(&private_key, &password)
 }
 
 fn decode_private_key_env(encoded: &str) -> Result<SecretBytes> {
@@ -59,10 +59,10 @@ fn parse_password_protected_private_key(json_bytes: &[u8]) -> Result<PrivateKey>
     }
 }
 
-fn build_env_key_load_result(
+fn build_env_key_parse_result(
     private_key: &PrivateKey,
     password: &SecretString,
-) -> Result<EnvKeyLoadResult> {
+) -> Result<EnvKeyParseResult> {
     let member_handle = private_key.protected.subject_handle.clone();
     let kid = private_key.protected.kid.clone();
     let plaintext = decrypt_private_key_with_password(private_key, password)?;
@@ -73,7 +73,7 @@ fn build_env_key_load_result(
         format_kid_half_display_lossy(&kid)
     );
 
-    Ok(EnvKeyLoadResult {
+    Ok(EnvKeyParseResult {
         verified_key,
         member_handle: MemberHandle::try_from(member_handle)?,
         expires_at: VerifiedExpiresAt::from_verified_private_key_metadata(

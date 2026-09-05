@@ -44,5 +44,5 @@ pub fn decode_ssh_public_key_blob(ssh_pubkey: &str) -> Result<Vec<u8>> {
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/internal/ssh_parse_test.rs"]
-mod ssh_parse_test;
+#[path = "../../../../tests/unit/internal/io_ssh_protocol_parse_test.rs"]
+mod io_ssh_protocol_parse_test;

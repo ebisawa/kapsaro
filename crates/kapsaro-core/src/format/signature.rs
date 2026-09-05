@@ -10,7 +10,7 @@ mod body;
 mod codec;
 mod input;
 
-pub(crate) use algorithm::verify_signature_algorithm;
+pub(crate) use algorithm::validate_signature_algorithm;
 pub(crate) use body::{
     build_file_artifact_body_bytes, build_kv_artifact_body_bytes,
     build_kv_artifact_body_bytes_from_unsigned, ArtifactBodyBytes,

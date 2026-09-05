@@ -3,9 +3,11 @@
 
 //! Guards for commands that are unavailable in environment-variable key mode.
 
+use crate::cli::common::context::CliContext;
 use crate::cli::CommandCapability;
 use kapsaro_core::api::secret::SecretString;
-use kapsaro_core::api::{doctor::DoctorCiReadiness, key::validate_environment_key};
+use kapsaro_core::api::trust::StrictKeyChecking;
+use kapsaro_core::api::{doctor::DoctorCiReadiness, key::load_environment_key};
 use kapsaro_core::Result;
 use tracing::debug;
 
@@ -33,26 +35,31 @@ pub(crate) fn is_environment_key_mode() -> bool {
     std::env::var_os("KAPSARO_PRIVATE_KEY").is_some()
 }
 
-pub(crate) fn capture_doctor_ci_readiness() -> DoctorCiReadiness {
+pub(crate) fn capture_doctor_ci_readiness(context: &CliContext) -> DoctorCiReadiness {
     if !is_environment_key_mode() {
         return DoctorCiReadiness::Inactive;
     }
     let _cleanup = EnvironmentKeyCleanup;
-    let strict_key_checking_disabled = std::env::var_os("KAPSARO_STRICT_KEY_CHECKING").as_deref()
-        == Some(std::ffi::OsStr::new("no"));
+    let strict_key_checking = context.strict_key_checking();
     let private_key_error = validate_environment_from_cli()
         .err()
         .map(|error| error.format_user_message().to_string());
-    DoctorCiReadiness::Active {
-        strict_key_checking_disabled,
-        private_key_error,
+    match strict_key_checking {
+        Ok(resolution) => DoctorCiReadiness::active(
+            matches!(resolution.mode, StrictKeyChecking::Yes),
+            private_key_error,
+        ),
+        Err(error) => DoctorCiReadiness::active_with_invalid_strict_key_checking(
+            error.format_user_message().to_string(),
+            private_key_error,
+        ),
     }
 }
 
 fn validate_environment_from_cli() -> Result<()> {
     let encoded = load_secret_environment("KAPSARO_PRIVATE_KEY", false)?;
     let password = load_secret_environment("KAPSARO_KEY_PASSWORD", true)?;
-    validate_environment_key(encoded, password)
+    load_environment_key(encoded, password)
 }
 
 fn load_secret_environment(name: &str, password: bool) -> Result<SecretString> {

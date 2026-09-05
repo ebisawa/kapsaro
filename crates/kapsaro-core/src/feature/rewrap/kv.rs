@@ -28,6 +28,15 @@ struct KvRewrapExecutor<'a> {
     session: VerifiedKvRewriteSession<'a>,
     doc: KvDocumentDraft,
     ctx: &'a RewrapContext<'a>,
+    master_key_state: KvMasterKeyState,
+}
+
+/// Whether the master key still is the one the loaded document was encrypted
+/// with, or a fresh one this rewrap already generated.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum KvMasterKeyState {
+    Original,
+    Rotated,
 }
 
 impl<'a> RewrapExecutor for KvRewrapExecutor<'a> {
@@ -62,7 +71,7 @@ impl<'a> RewrapExecutor for KvRewrapExecutor<'a> {
     }
 
     fn remove_recipients(&mut self, recipients: &[String]) -> Result<()> {
-        let mut current_recipients = self.session.current_recipients();
+        let mut current_recipients = self.current_recipients();
         for recipient in recipients {
             if !check_recipient_exists(&current_recipients, recipient) {
                 warn!(
@@ -88,7 +97,10 @@ impl<'a> RewrapExecutor for KvRewrapExecutor<'a> {
     }
 
     fn rotate_key(&mut self) -> Result<()> {
-        let current_recipients = self.session.current_recipients();
+        if self.master_key_state == KvMasterKeyState::Rotated {
+            return Ok(());
+        }
+        let current_recipients = self.current_recipients();
         let new_content = self.session.rewrap_kv_with_recipients(
             Some(self.ctx.target_members()),
             KvRecipientRewriteRequest {
@@ -130,10 +142,18 @@ impl<'a> KvRewrapExecutor<'a> {
         let kv_doc = session.document();
         let doc = session.build_unsigned(kv_doc.head().clone())?;
 
-        Ok(Self { session, doc, ctx })
+        Ok(Self {
+            session,
+            doc,
+            ctx,
+            master_key_state: KvMasterKeyState::Original,
+        })
     }
 
     /// Rebuild the document from new kv-enc content (used after remove/rotate).
+    ///
+    /// The content is always the result of a full re-encryption, so the master
+    /// key it carries is a fresh one.
     fn rebuild_from_content(&mut self, content: &str) -> Result<()> {
         let kv_content = KvEncContent::new_unchecked(content.to_string());
         self.session = VerifiedKvRewriteSession::load(
@@ -144,6 +164,7 @@ impl<'a> KvRewrapExecutor<'a> {
         )?;
         let kv_doc = self.session.document();
         self.doc = self.session.build_unsigned(kv_doc.head().clone())?;
+        self.master_key_state = KvMasterKeyState::Rotated;
         Ok(())
     }
 

@@ -8,13 +8,12 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::format::content::KvEncContent;
-use crate::format::kv::{DEFAULT_KV_ENC_BASENAME, KV_ENC_EXTENSION};
 use crate::service::artifact::ReviewedTextFile;
+use crate::service::kv::core::resolve_kv_store_file_name;
 use crate::service::workspace::WorkspaceWriteCapabilities;
 use crate::support::fs::relative::DirectoryFd;
 use crate::support::limits::resolve_encrypted_artifact_read_limit;
 use crate::support::path::format_path_relative_to_cwd;
-use crate::support::validation::validate_kv_file_basename;
 use crate::{Error, Result};
 
 /// Label the KV target carries in messages about a review that no longer holds.
@@ -43,7 +42,7 @@ impl KvFileTarget {
         capabilities: &WorkspaceWriteCapabilities<'_>,
         file_name: Option<&str>,
     ) -> Result<Self> {
-        let file_name = kv_file_name(file_name)?;
+        let file_name = resolve_kv_store_file_name(file_name)?;
         let file_path = capabilities.secrets().path().join(&file_name);
 
         Ok(Self {
@@ -51,18 +50,6 @@ impl KvFileTarget {
             file_name,
         })
     }
-}
-
-/// The file name a KV command acts on, defaulted and validated.
-fn kv_file_name(file_name: Option<&str>) -> Result<String> {
-    let name = match file_name {
-        Some(supplied) => {
-            validate_kv_file_basename(supplied)?;
-            supplied
-        }
-        None => DEFAULT_KV_ENC_BASENAME,
-    };
-    Ok(format!("{name}{KV_ENC_EXTENSION}"))
 }
 
 /// One KV command bound to the target file and the identity it acts as.
@@ -133,5 +120,5 @@ pub(super) fn reviewed_kv_content(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/internal/app_kv_session_test.rs"]
-mod app_kv_session_test;
+#[path = "../../../tests/unit/internal/service_kv_session_test.rs"]
+mod service_kv_session_test;

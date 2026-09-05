@@ -140,5 +140,5 @@ pub fn build_wraps_for_recipients(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/internal/feature_encrypt_wrap_test.rs"]
-mod feature_encrypt_wrap_test;
+#[path = "../../../tests/unit/internal/feature_envelope_wrap_test.rs"]
+mod feature_envelope_wrap_test;

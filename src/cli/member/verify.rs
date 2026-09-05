@@ -15,7 +15,7 @@ use crate::cli::common::trust::{
 use kapsaro_core::api::member::approval::{
     evaluate_members_for_approval, save_member_approvals, MemberApprovalSession,
 };
-use kapsaro_core::api::member::verification::verify_members;
+use kapsaro_core::api::member::verification::evaluate_members_online;
 use kapsaro_core::Error;
 
 use super::VerifyArgs;
@@ -30,14 +30,13 @@ pub(crate) fn run(args: VerifyArgs) -> Result<(), Error> {
 
 fn run_verify_only(args: VerifyArgs) -> Result<(), Error> {
     let context = CliContext::resolve(&args.common)?;
-    let results = verify_members(&context.workspace_path()?, &args.member_handles)?;
+    let results = evaluate_members_online(&context.workspace_path()?, &args.member_handles)?;
     print_member_verification_results(args.common.json.json, &results)
 }
 
 fn run_approve(args: VerifyArgs) -> Result<(), Error> {
     let context = CliContext::resolve(&args.common)?;
-    let trust =
-        load_trust_command_session(&context, &args.common, args.member.member_handle.clone())?;
+    let trust = load_trust_command_session(&context, args.member.member_handle.clone())?;
     let session = MemberApprovalSession::open(context.workspace_path()?, trust)?;
     run_with_trust_command_session_reset_recovery(session.trust_command(), || {
         let mut evaluation = evaluate_members_for_approval(&session, &args.member_handles)?;
@@ -70,7 +69,7 @@ fn review_approval_candidates(
     }
 
     for result in results.iter_mut().filter(|r| r.review_required) {
-        result.approved = confirm_member_key_approval(result, "member verify")?;
+        result.approved = confirm_member_key_approval(result)?;
     }
 
     Ok(())

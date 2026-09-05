@@ -30,13 +30,15 @@ impl SshSignatureBlob {
         self.0.as_slice()
     }
 
+    /// Read the Ed25519 signature the blob frames.
+    ///
+    /// Every blob reaching this type is an SSHSIG `signature` field, which
+    /// always carries its algorithm identifier ahead of the signature. Bytes
+    /// that skip the framing therefore name no algorithm, and reading them as a
+    /// signature anyway would accept one produced under an algorithm nobody
+    /// checked.
     pub fn extract_ed25519_raw(&self) -> Result<Ed25519RawSignature> {
-        // A bare signature carries no wire framing to decode.
-        let signature = if self.0.len() == ED25519_SIGNATURE_LENGTH {
-            self.0.as_slice()
-        } else {
-            decode_ed25519_wire_signature(&self.0)?
-        };
+        let signature = decode_ed25519_wire_signature(&self.0)?;
         Ok(to_raw_ed25519_signature(signature))
     }
 }

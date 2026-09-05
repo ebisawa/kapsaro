@@ -109,7 +109,6 @@ pub fn execute_encrypt_file_command(command: &EncryptFileCommand) -> Result<Stri
     let signing = build_signing_context(command.capabilities.key_context().inner())?;
     encrypt_file_content(
         &command.input_bytes,
-        command.members.member_handles(),
         command.members.verified_recipients(),
         &signing,
     )
@@ -137,5 +136,5 @@ where
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/internal/app_file_encrypt_test.rs"]
-mod tests;
+#[path = "../../../tests/unit/internal/service_file_encrypt_test.rs"]
+mod service_file_encrypt_test;

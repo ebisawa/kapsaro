@@ -12,7 +12,7 @@ use crate::feature::context::crypto::CryptoContext;
 use crate::format::content::EncContent;
 use crate::format::token::TokenCodec;
 use crate::model::common::WrapItem;
-use crate::model::public_key_verified::VerifiedRecipientKey;
+use crate::model::public_key::VerifiedRecipientKey;
 use crate::Result;
 use tracing::debug;
 
@@ -328,7 +328,7 @@ pub(crate) fn rewrap_content(content: &EncContent, request: &RewrapRequest<'_>) 
 
 #[cfg(test)]
 #[path = "../../tests/unit/internal/feature_rewrap_common_test.rs"]
-mod common_tests;
+mod feature_rewrap_common_test;
 
 #[cfg(test)]
 #[path = "../../tests/unit/internal/feature_rewrap_file_op_test.rs"]

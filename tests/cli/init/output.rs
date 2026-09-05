@@ -114,7 +114,6 @@ fn test_init_already_member_ci_output() {
         .arg("--workspace")
         .arg(workspace_dir.path())
         .env("KAPSARO_HOME", home_dir.path())
-        .env("CI", "true")
         .assert()
         .success()
         .stderr(predicate::str::contains("Workspace already initialized"))

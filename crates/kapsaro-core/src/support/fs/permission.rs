@@ -90,7 +90,7 @@ fn expected_mode(is_dir: bool) -> &'static str {
 }
 
 #[cfg(unix)]
-fn describe_violation(
+fn build_insecure_mode_violation(
     base: &DisplayBase,
     mode: u32,
     is_dir: bool,
@@ -115,7 +115,7 @@ fn describe_violation(
 /// Owner-only permissions say nothing when the owner is somebody else: they can
 /// change the mode back whenever they like, so the entry is theirs to rewrite.
 #[cfg(unix)]
-fn describe_foreign_owner(
+fn build_foreign_owner_violation(
     base: &DisplayBase,
     owner: u32,
     is_dir: bool,
@@ -139,7 +139,7 @@ fn describe_foreign_owner(
 /// Report an entry whose mode could not be read at all.
 /// Treated as a violation so an unreadable entry never passes as safe.
 #[cfg(unix)]
-fn describe_unreadable(
+fn build_unreadable_violation(
     base: &DisplayBase,
     display_path: &Path,
     error: &dyn std::fmt::Display,
@@ -172,7 +172,7 @@ fn escape_detail(error: &dyn std::fmt::Display) -> String {
 /// says what it did not cover instead of letting the inspected part stand for
 /// the tree.
 #[cfg(unix)]
-fn describe_incomplete_scan(
+fn build_incomplete_scan_violation(
     base: &DisplayBase,
     root_path: &Path,
     limit: ScanLimit,
@@ -185,7 +185,7 @@ fn describe_incomplete_scan(
              reached every entry; remove what kapsaro did not write below the local state root, \
              or select another local state root with --home or KAPSARO_HOME",
             base.finding(root_path),
-            limit.describe_excess(),
+            limit.format_excess(),
         ),
     )
 }
@@ -200,7 +200,7 @@ enum ScanLimit {
 
 #[cfg(unix)]
 impl ScanLimit {
-    fn describe_excess(self) -> String {
+    fn format_excess(self) -> String {
         match self {
             Self::Entries => format!("more than {MAX_LOCAL_STATE_TREE_ENTRIES} entries"),
             Self::Depth => format!("more than {MAX_LOCAL_STATE_TREE_DEPTH} levels"),
@@ -265,7 +265,7 @@ pub(crate) fn inspect_entry_facts(
     display_path: &Path,
 ) -> Option<PermissionViolation> {
     if facts.owner != effective_uid {
-        return Some(describe_foreign_owner(
+        return Some(build_foreign_owner_violation(
             base,
             facts.owner,
             facts.is_dir,
@@ -275,7 +275,7 @@ pub(crate) fn inspect_entry_facts(
     if facts.mode & 0o077 == 0 {
         return None;
     }
-    Some(describe_violation(
+    Some(build_insecure_mode_violation(
         base,
         facts.mode,
         facts.is_dir,
@@ -308,7 +308,10 @@ fn inspect_metadata(
 /// somewhere else. The entry is named rather than skipped, and the walk goes on
 /// so the entries beside it are still inspected.
 #[cfg(unix)]
-fn describe_undecodable_name(base: &DisplayBase, display_path: &Path) -> PermissionViolation {
+fn build_undecodable_name_violation(
+    base: &DisplayBase,
+    display_path: &Path,
+) -> PermissionViolation {
     PermissionViolation::new(
         display_path,
         PermissionViolationKind::UndecodableName,
@@ -327,7 +330,7 @@ fn describe_undecodable_name(base: &DisplayBase, display_path: &Path) -> Permiss
 /// in local state produces no finding at all, while every read that reaches it
 /// is already refused.
 #[cfg(unix)]
-fn describe_unexpected_entry_type(
+fn build_unexpected_entry_type_violation(
     base: &DisplayBase,
     display_path: &Path,
     child_type: ChildType,
@@ -358,7 +361,7 @@ fn name_entry_type(child_type: ChildType) -> &'static str {
 /// The mode was read from one inode and the descriptor reached another, so the
 /// verdict recorded a moment ago belongs to neither with any certainty.
 #[cfg(unix)]
-fn describe_replaced_entry(base: &DisplayBase, display_path: &Path) -> PermissionViolation {
+fn build_replaced_entry_violation(base: &DisplayBase, display_path: &Path) -> PermissionViolation {
     PermissionViolation::new(
         display_path,
         PermissionViolationKind::ReplacedEntry,
@@ -676,7 +679,7 @@ fn inspect_ancestor_mode(
     if mode & STICKY_BIT != 0 {
         return None;
     }
-    Some(describe_ancestor_violation(base, mode, real_path))
+    Some(build_ancestor_violation(base, mode, real_path))
 }
 
 /// Name the ancestor and the smallest repair that removes the exposure.
@@ -686,7 +689,7 @@ fn inspect_ancestor_mode(
 /// resolved directory is named rather than a symlink pointing at it, because
 /// that is what the mode belongs to.
 #[cfg(unix)]
-fn describe_ancestor_violation(
+fn build_ancestor_violation(
     base: &DisplayBase,
     mode: u32,
     real_path: &Path,
@@ -699,14 +702,14 @@ fn describe_ancestor_violation(
              bit is not set, so another user can replace the local state path); {}",
             mode & 0o7777,
             base.finding(real_path),
-            describe_ancestor_repair(real_path),
+            format_ancestor_repair(real_path),
         ),
     )
 }
 
 /// Say how to close the exposure, or why only the second way is offered.
 #[cfg(unix)]
-fn describe_ancestor_repair(real_path: &Path) -> String {
+fn format_ancestor_repair(real_path: &Path) -> String {
     match format_repair_command("chmod go-w", real_path) {
         Some(command) => format!(
             "run: {command}, or select another local state root with --home or KAPSARO_HOME"
@@ -749,7 +752,7 @@ fn inspect_open_permission_against(
 ) -> Option<PermissionViolation> {
     match file.metadata() {
         Ok(metadata) => inspect_metadata(base, &metadata, display_path),
-        Err(error) => Some(describe_unreadable(base, display_path, &error)),
+        Err(error) => Some(build_unreadable_violation(base, display_path, &error)),
     }
 }
 
@@ -861,7 +864,7 @@ impl LocalStateTreeWalk {
     /// Hand back the findings, naming the part of the tree left uninspected.
     fn finish(mut self, root_path: &Path) -> Vec<PermissionViolation> {
         if let Some(limit) = self.reached_limit {
-            let finding = describe_incomplete_scan(&self.base, root_path, limit);
+            let finding = build_incomplete_scan_violation(&self.base, root_path, limit);
             self.violations.push(finding);
         }
         self.violations
@@ -905,8 +908,11 @@ impl LocalStateTreeWalk {
         let scanned = match scan_child_entries_at(dir, ScanBudget::AtMost(self.remaining_entries)) {
             Ok(scanned) => scanned,
             Err(error) => {
-                let finding =
-                    describe_unreadable(&self.base, dir.path(), &error.format_user_message());
+                let finding = build_unreadable_violation(
+                    &self.base,
+                    dir.path(),
+                    &error.format_user_message(),
+                );
                 self.record(Some(finding));
                 return;
             }
@@ -954,13 +960,14 @@ impl LocalStateTreeWalk {
         let scanned = match InspectedChild::from_scanned(child) {
             Ok(scanned) => scanned,
             Err(error) => {
-                let finding = describe_unreadable(&self.base, &path, &error.format_user_message());
+                let finding =
+                    build_unreadable_violation(&self.base, &path, &error.format_user_message());
                 self.record(Some(finding));
                 return None;
             }
         };
         if scanned.name.decoded().is_none() {
-            let finding = describe_undecodable_name(&self.base, &path);
+            let finding = build_undecodable_name_violation(&self.base, &path);
             self.record(Some(finding));
         }
         self.judge_child(scanned, &path)
@@ -994,13 +1001,17 @@ impl LocalStateTreeWalk {
     /// gravest thing the walk can find and not something the operator can
     /// repair from their own session.
     fn record_unexpected_entry(&mut self, scanned: &InspectedChild, path: &Path) {
-        let finding = describe_unexpected_entry_type(&self.base, path, scanned.child_type);
+        let finding = build_unexpected_entry_type_violation(&self.base, path, scanned.child_type);
         self.record(Some(finding));
         if scanned.facts.owner == self.effective_uid {
             return;
         }
-        let finding =
-            describe_foreign_owner(&self.base, scanned.facts.owner, scanned.facts.is_dir, path);
+        let finding = build_foreign_owner_violation(
+            &self.base,
+            scanned.facts.owner,
+            scanned.facts.is_dir,
+            path,
+        );
         self.record(Some(finding));
     }
 
@@ -1023,7 +1034,7 @@ impl LocalStateTreeWalk {
             // there is nothing left to report about its permissions.
             Ok(None) => {}
             Err(error) => {
-                let finding = describe_unreadable(
+                let finding = build_unreadable_violation(
                     &self.base,
                     &pending.name.path_under(dir),
                     &error.format_user_message(),
@@ -1043,12 +1054,15 @@ impl LocalStateTreeWalk {
         match open_dir_identity(&child) {
             Ok(opened) if opened == scanned_identity => self.inspect_subtree(&child, depth),
             Ok(_) => {
-                let finding = describe_replaced_entry(&self.base, child.path());
+                let finding = build_replaced_entry_violation(&self.base, child.path());
                 self.record(Some(finding));
             }
             Err(error) => {
-                let finding =
-                    describe_unreadable(&self.base, child.path(), &error.format_user_message());
+                let finding = build_unreadable_violation(
+                    &self.base,
+                    child.path(),
+                    &error.format_user_message(),
+                );
                 self.record(Some(finding));
             }
         }

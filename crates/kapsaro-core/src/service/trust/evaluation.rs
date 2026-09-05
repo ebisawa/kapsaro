@@ -4,6 +4,7 @@
 //! Trust evaluation helpers built on immutable command snapshots.
 
 use crate::feature::context::crypto::LocalKeyIdentity;
+use crate::feature::context::expiry::is_key_expiry_warning;
 use crate::feature::trust::recipient_sets::ArtifactRecipientSet;
 use crate::model::verification::SignatureVerificationProof;
 use crate::service::key::KeyContext;
@@ -118,7 +119,7 @@ pub(crate) fn push_signature_verification_warnings(
 ) -> Result<()> {
     let suppress_local_signer_expiry = matches_local_signer_identity(proof, local_key_identity)?;
     for warning in &proof.warnings {
-        if suppress_local_signer_expiry && is_signer_key_expiry_warning(warning) {
+        if suppress_local_signer_expiry && is_key_expiry_warning(warning) {
             continue;
         }
         push_unique_warning(warnings, warning.clone());
@@ -181,37 +182,48 @@ pub(crate) fn artifact_recipient_outcome_from_decision<T>(
     }) else {
         return Ok(ArtifactRecipientTrustOutcome::Accepted);
     };
-    if !trust_ctx.review_available {
-        let (rule, message) = match request.kind() {
-            TrustReviewKind::ChangedRecipientSet => (
-                "E_RECIPIENT_SET_CHANGED",
-                "This secret's member set changed since local review and requires approval.",
-            ),
-            _ => (
-                "E_RECIPIENT_TRUST_MISSING",
-                "This secret's member set has not been reviewed locally and requires approval.",
-            ),
-        };
-        return Err(crate::Error::build_verification_error(
-            rule.to_string(),
-            message.to_string(),
-        ));
-    }
-    let approved = (request.kind() == TrustReviewKind::ChangedRecipientSet)
-        .then(|| {
-            trust_ctx
-                .recipient_sets
-                .iter()
-                .find(|record| record.sid == current.sid().to_string())
-                .cloned()
-        })
-        .flatten();
+    require_review_available(
+        trust_ctx.review_available,
+        unreviewed_recipient_set_error(request.kind()),
+    )?;
+    let approved = find_approved_recipient_set(trust_ctx, current, request.kind());
     Ok(ArtifactRecipientTrustOutcome::NeedsManualApproval(
         Box::new(crate::service::trust::ArtifactRecipientSetReview::new(
             current.clone(),
             approved,
         )),
     ))
+}
+
+/// State that a recipient set needs approval no run without review can give.
+fn unreviewed_recipient_set_error(kind: TrustReviewKind) -> crate::Error {
+    let (rule, message) = match kind {
+        TrustReviewKind::ChangedRecipientSet => (
+            "E_RECIPIENT_SET_CHANGED",
+            "This secret's member set changed since local review and requires approval.",
+        ),
+        _ => (
+            "E_RECIPIENT_TRUST_MISSING",
+            "This secret's member set has not been reviewed locally and requires approval.",
+        ),
+    };
+    crate::Error::build_verification_error(rule.to_string(), message.to_string())
+}
+
+/// Return the set the last approval stored, which only a changed set has.
+fn find_approved_recipient_set(
+    trust_ctx: &TrustContext,
+    current: &ArtifactRecipientSet,
+    kind: TrustReviewKind,
+) -> Option<crate::model::trust_store::RecipientSetRecord> {
+    if kind != TrustReviewKind::ChangedRecipientSet {
+        return None;
+    }
+    trust_ctx
+        .recipient_sets
+        .iter()
+        .find(|record| record.sid == current.sid().to_string())
+        .cloned()
 }
 
 fn matches_local_signer_identity(
@@ -223,12 +235,6 @@ fn matches_local_signer_identity(
         return Ok(false);
     };
     identity.matches_public_key(signer_public_key)
-}
-
-fn is_signer_key_expiry_warning(warning: &str) -> bool {
-    warning.starts_with("Artifact signing key expires in ")
-        || warning.starts_with("Artifact signing key has expired.")
-        || warning.starts_with("PublicKey for ")
 }
 
 pub fn enforce_write_strict_key_checking(

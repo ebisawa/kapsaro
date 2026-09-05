@@ -38,19 +38,23 @@ impl ConfigKey {
         Self::AllowNonMember,
     ];
 
+    /// The canonical names of every key, in the order `ALL` lists them.
+    ///
+    /// Derived from `canonical_name` so one list of variants settles both the
+    /// parse table and the names an invalid key is reported against.
+    const CANONICAL_NAMES: [&'static str; Self::ALL.len()] = {
+        let mut names = [""; Self::ALL.len()];
+        let mut index = 0;
+        while index < Self::ALL.len() {
+            names[index] = Self::ALL[index].canonical_name();
+            index += 1;
+        }
+        names
+    };
+
     /// Return the canonical global config.toml key names.
     pub fn canonical_names() -> &'static [&'static str] {
-        &[
-            "member_handle",
-            "workspace",
-            "ssh_identity",
-            "ssh_keygen_command",
-            "ssh_add_command",
-            "ssh_signing_method",
-            "github_user",
-            "allow_expired_key",
-            "allow_non_member",
-        ]
+        &Self::CANONICAL_NAMES
     }
 
     /// Parse a user-provided config key and normalize accepted aliases.

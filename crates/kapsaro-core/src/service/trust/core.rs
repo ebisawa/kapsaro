@@ -4,29 +4,24 @@
 //! Non-interactive local trust store service.
 //! Exposes trust evaluation and lock-coordinated local persistence.
 
+use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use crate::feature::context::crypto::{build_signing_context, VerifiedSigningContext};
 use crate::feature::trust::judgment::{
-    build_active_members_by_kid, judge_recipients_trust, judge_recipients_trust_with_additional,
-    judge_signer_trust, ActiveMemberSnapshot, AdditionalKnownKeyCache, KnownKeyCache, SelfTrustSet,
-    TrustIdentity, TrustJudgment,
+    build_active_members_by_kid, enforce_signer_judgment, judge_recipients_trust,
+    judge_signer_trust, ActiveMemberSnapshot, CurrentKeyMatch, KidSetMatch, KnownKeyCache,
+    SelfTrustSet, SignerAcceptance, TrustIdentity, TrustJudgment,
 };
 use crate::feature::trust::known_keys::{add_known_key, KnownKeyIdentity};
 use crate::feature::trust::recipient_sets::{
-    file_recipient_evidence, find_recipient_handle_mismatch, is_self_only_recipient_set,
-    judge_recipient_set, kv_recipient_evidence, upsert_recipient_set, ArtifactRecipientSet,
-    RecipientSetJudgment,
+    file_recipient_evidence, find_inactive_recipient_kid, find_recipient_handle_mismatch,
+    is_self_only_recipient_set, judge_recipient_set, kv_recipient_evidence, upsert_recipient_set,
+    ArtifactRecipientSet, RecipientSetJudgment,
 };
 use crate::feature::trust::signer_keys::document_signer_kid;
-use crate::feature::trust::store_mutation::{
-    TrustStoreMutation, TrustStoreMutationMode, TrustStoreMutationTarget, TrustStoreState,
-};
-use crate::feature::trust::transaction::{
-    commit_trust_store_mutation, resolve_owner_keystore, verify_trust_store_with_owner_keys,
-    ObservedTrustStore, TrustStoreCommitGate, TrustStorePreparation,
-};
+use crate::feature::trust::store_mutation::{TrustStoreMutation, TrustStoreState};
 use crate::feature::verify::public_key::{
     verify_public_key_for_verification_context, WORKSPACE_ACTIVE_MEMBER_READ_TRUST_CONTEXT,
 };
@@ -55,6 +50,9 @@ use crate::support::time::generate_current_timestamp;
 use crate::support::warning::LocalStateWarningCapture;
 use crate::{Error, ErrorKind, Result};
 
+use crate::service::artifact::verified::{
+    EncArtifactKind, ReadableEncArtifact, VerifiedEncArtifact,
+};
 use crate::service::diagnostics::{self, DiagnosticBatch};
 use crate::service::file::{FileReadOperation, TrustedFileEncArtifact, VerifiedFileEncArtifact};
 use crate::service::key::{KeyContext, LocalKeyStore, MemberHandle, RecipientKeys};
@@ -63,8 +61,12 @@ use crate::service::kv::{
     VerifiedKvEncArtifact,
 };
 use crate::service::operation::OperationOptions;
-use crate::service::rewrap::{
-    AuthorizedRewrapInput, RewrapAcceptance, RewrapArtifactKind, RewrapOptions,
+use crate::service::rewrap::{AuthorizedRewrapInput, RewrapAcceptance, RewrapOptions};
+use crate::service::trust::outcome::ArtifactRecipientSetSnapshot;
+use crate::service::trust::persistence::{TrustStoreMutationMode, TrustStoreMutationTarget};
+use crate::service::trust::transaction::{
+    commit_trust_store_mutation, resolve_owner_keystore, verify_trust_store_with_owner_keys,
+    ObservedTrustStore, TrustStoreCommitGate, TrustStorePreparation,
 };
 
 /// Operation name used when a trust store approval needs a local keystore.
@@ -154,6 +156,7 @@ pub struct TrustReviewRequest {
     sid: Option<uuid::Uuid>,
     recipient_kids: Vec<Kid>,
     recipient_handle_hints: Vec<TrustRecipientHandleHint>,
+    approved_recipient_set: Option<ArtifactRecipientSetSnapshot>,
 }
 
 /// Display-only recipient identity captured for recipient-set review.
@@ -243,7 +246,7 @@ pub struct ApprovalConflictHandling {
 #[derive(Debug, Clone)]
 enum ApprovalConflictPolicy {
     Merge,
-    Surface(ReviewedTrustStore),
+    Surface(TrustStoreSurfaceSnapshot),
 }
 
 /// The content one caller reviewed, with the key it was verified against.
@@ -251,7 +254,7 @@ enum ApprovalConflictPolicy {
 /// The commit accepts nothing but this content, so the signer it names is the
 /// only key the write-back can need. A reviewed absence names none.
 #[derive(Debug, Clone)]
-struct ReviewedTrustStore {
+struct TrustStoreSurfaceSnapshot {
     snapshot: TrustStoreSnapshot,
     signer_kid: Option<Kid>,
 }
@@ -267,7 +270,7 @@ impl ApprovalConflictHandling {
     /// Build conflict handling that binds the update to verified reviewed content.
     pub fn surface(reviewed: &VerifiedLocalTrustStoreLoadResult) -> Self {
         Self {
-            policy: ApprovalConflictPolicy::Surface(ReviewedTrustStore {
+            policy: ApprovalConflictPolicy::Surface(TrustStoreSurfaceSnapshot {
                 snapshot: reviewed.snapshot.clone(),
                 signer_kid: reviewed.signer_kid.clone(),
             }),
@@ -281,7 +284,7 @@ impl ApprovalConflictHandling {
     /// says so here, and the update is refused if a store has appeared since.
     pub fn surface_absent() -> Self {
         Self {
-            policy: ApprovalConflictPolicy::Surface(ReviewedTrustStore {
+            policy: ApprovalConflictPolicy::Surface(TrustStoreSurfaceSnapshot {
                 snapshot: TrustStoreSnapshot::Missing,
                 signer_kid: None,
             }),
@@ -332,6 +335,11 @@ impl ReadTrustExceptions {
         self.accepted_non_member = Some((member_handle, kid));
         self
     }
+
+    /// Return whether a reviewed non-member signer identity is accepted.
+    pub(crate) fn has_accepted_non_member(&self) -> bool {
+        self.accepted_non_member.is_some()
+    }
 }
 
 /// Loaded and verified local trust store, bound to the content it was read from.
@@ -364,10 +372,10 @@ impl LocalTrustStore {
         }
     }
 
-    /// Create or reuse a restricted `<KAPSARO_HOME>` directory.
-    pub fn create(base_dir: impl Into<PathBuf>, owner_handle: MemberHandle) -> Result<Self> {
+    /// Open a restricted `<KAPSARO_HOME>` directory, creating it when absent.
+    pub fn ensure(base_dir: impl Into<PathBuf>, owner_handle: MemberHandle) -> Result<Self> {
         let base_dir =
-            AnchoredDir::create(base_dir, DirectoryScope::LocalState, "local state root")?;
+            AnchoredDir::ensure(base_dir, DirectoryScope::LocalState, "local state root")?;
         Ok(Self {
             base_dir,
             owner_handle,
@@ -425,7 +433,7 @@ impl LocalTrustStore {
         D: DirectoryFd + LockTargetDirectory,
     {
         let path = self.path();
-        self.read_verified_at(trust_dir, keystore, &path)
+        self.verify_stored_trust_store_at(trust_dir, keystore, &path)
             .map_err(|error| attach_trust_store_recovery(&path, error))
     }
 
@@ -436,7 +444,7 @@ impl LocalTrustStore {
     /// the trust store would send the operator to a file that is not what is
     /// wrong. They already name their own repair, which is what keeps them out
     /// of the reset offer wrapped around this.
-    fn read_verified_at<D>(
+    fn verify_stored_trust_store_at<D>(
         &self,
         trust_dir: &D,
         keystore: Option<&KeystoreAccess>,
@@ -565,7 +573,7 @@ impl LocalTrustStore {
         trust_dir: &OpenDir,
         approvals: Vec<TrustApproval>,
         key_ctx: &KeyContext,
-        reviewed: ReviewedTrustStore,
+        reviewed: TrustStoreSurfaceSnapshot,
     ) -> Result<usize> {
         let context = self.build_mutation_context(trust_dir, key_ctx)?;
         let prepared = TrustStorePreparation::from_reviewed_snapshot(
@@ -835,37 +843,12 @@ impl TrustPolicyEvaluator {
         options: OperationOptions,
         exceptions: ReadTrustExceptions,
     ) -> Result<TrustDecision<TrustedFileEncArtifact<'a>>> {
-        let FileReadOperation::Decrypt = operation;
-        let subject = artifact.recipient_set_subject()?;
-        let requests =
-            self.evaluate_read_artifact(artifact.inner().proof(), &subject, key_ctx, &exceptions)?;
+        let requests = self.evaluate_read_requests(artifact, key_ctx, &operation, &exceptions)?;
         if !requests.is_empty() {
             return Ok(TrustDecision::ReviewRequired(requests));
         }
-        TrustedFileEncArtifact::from_authorized(artifact, key_ctx, options)
+        VerifiedFileEncArtifact::into_trusted(Cow::Borrowed(artifact), key_ctx, operation, options)
             .map(TrustDecision::Trusted)
-    }
-
-    /// Evaluate the trust reviews required before a file read.
-    ///
-    /// This entry point returns review material without issuing a read
-    /// capability. The caller must reload and use `evaluate_file` after any
-    /// approval has been persisted.
-    pub(crate) fn preflight_file_read(
-        &self,
-        artifact: &VerifiedFileEncArtifact,
-        key_ctx: &KeyContext,
-        known_key_review: KnownKeyReview,
-        allow_non_member_review: bool,
-    ) -> Result<ReadTrustReview> {
-        let subject = artifact.recipient_set_subject()?;
-        self.review_read_artifact(
-            artifact.inner().proof(),
-            &subject,
-            key_ctx,
-            known_key_review,
-            allow_non_member_review,
-        )
     }
 
     /// Evaluate and bind a verified KV artifact to one read operation and key.
@@ -877,35 +860,45 @@ impl TrustPolicyEvaluator {
         options: OperationOptions,
         exceptions: ReadTrustExceptions,
     ) -> Result<TrustDecision<TrustedKvEncArtifact<'a>>> {
-        if operation == KvReadOperation::Environment && exceptions.accepted_non_member.is_some() {
-            return Err(Error::build_invalid_operation_error(
-                "A non-member signer exception cannot authorize environment decryption",
-            ));
-        }
-        let subject = artifact.recipient_set_subject()?;
-        let requests =
-            self.evaluate_read_artifact(artifact.inner().proof(), &subject, key_ctx, &exceptions)?;
+        let requests = self.evaluate_read_requests(artifact, key_ctx, &operation, &exceptions)?;
         if !requests.is_empty() {
             return Ok(TrustDecision::ReviewRequired(requests));
         }
-        TrustedKvEncArtifact::from_authorized(artifact, key_ctx, operation, options)
+        VerifiedKvEncArtifact::into_trusted(Cow::Borrowed(artifact), key_ctx, operation, options)
             .map(TrustDecision::Trusted)
     }
 
-    /// Evaluate the trust reviews required before a KV read.
+    /// Evaluate the trust reviews one read operation requires.
     ///
-    /// Environment reads pass `false` for `allow_non_member_review` because a
-    /// one-shot non-member exception never authorizes environment decryption.
-    pub(crate) fn preflight_kv_read(
+    /// The requests are returned without issuing a read capability, so a caller
+    /// that resolves them evaluates the reloaded artifact again.
+    pub(crate) fn evaluate_read_requests<A: ReadableEncArtifact>(
         &self,
-        artifact: &VerifiedKvEncArtifact,
+        artifact: &A,
+        key_ctx: &KeyContext,
+        operation: &A::Operation,
+        exceptions: &ReadTrustExceptions,
+    ) -> Result<Vec<TrustReviewRequest>> {
+        A::enforce_read_exceptions(operation, exceptions)?;
+        let subject = artifact.recipient_set_subject()?;
+        self.evaluate_read_artifact(artifact.proof(), &subject, key_ctx, exceptions)
+    }
+
+    /// Evaluate the trust reviews required before a read.
+    ///
+    /// This entry point returns review material without issuing a read
+    /// capability. Environment reads pass `false` for `allow_non_member_review`
+    /// because a one-shot non-member exception never authorizes them.
+    pub(crate) fn preflight_read<A: VerifiedEncArtifact>(
+        &self,
+        artifact: &A,
         key_ctx: &KeyContext,
         known_key_review: KnownKeyReview,
         allow_non_member_review: bool,
     ) -> Result<ReadTrustReview> {
         let subject = artifact.recipient_set_subject()?;
         self.review_read_artifact(
-            artifact.inner().proof(),
+            artifact.proof(),
             &subject,
             key_ctx,
             known_key_review,
@@ -934,48 +927,11 @@ impl TrustPolicyEvaluator {
     }
 
     /// Re-evaluate pre-promotion input trust and post-promotion output trust,
-    /// then issue the only capability that can invoke file rewrap.
-    pub(crate) fn evaluate_file_rewrap<'a>(
+    /// then issue the only capability that can invoke rewrap.
+    pub(crate) fn evaluate_rewrap<'a, A: VerifiedEncArtifact>(
         &self,
         input_evaluator: &TrustPolicyEvaluator,
-        artifact: VerifiedFileEncArtifact,
-        recipients: RecipientKeys,
-        key_ctx: &'a KeyContext,
-        options: RewrapOptions,
-        acceptance: Option<RewrapAcceptance>,
-    ) -> Result<TrustDecision<AuthorizedRewrapInput<'a>>> {
-        let input = artifact.recipient_set_subject()?;
-        let exceptions = self.rewrap_exceptions(
-            input_evaluator,
-            artifact.binding_digest()?,
-            RewrapArtifactKind::File,
-            options,
-            artifact.inner().proof(),
-            &input,
-            key_ctx,
-            acceptance,
-        )?;
-        let requests = self.rewrap_requests(
-            input_evaluator,
-            artifact.inner().proof(),
-            &input,
-            &recipients,
-            key_ctx,
-            &exceptions,
-        )?;
-        if !requests.is_empty() {
-            return Ok(TrustDecision::ReviewRequired(requests));
-        }
-        AuthorizedRewrapInput::from_file(artifact, recipients, key_ctx, options)
-            .map(TrustDecision::Trusted)
-    }
-
-    /// Re-evaluate pre-promotion input trust and post-promotion output trust,
-    /// then issue the only capability that can invoke KV rewrap.
-    pub(crate) fn evaluate_kv_rewrap<'a>(
-        &self,
-        input_evaluator: &TrustPolicyEvaluator,
-        artifact: VerifiedKvEncArtifact,
+        artifact: A,
         recipients: RecipientKeys,
         key_ctx: &'a KeyContext,
         options: RewrapOptions,
@@ -985,16 +941,16 @@ impl TrustPolicyEvaluator {
         let exceptions = self.rewrap_exceptions(
             input_evaluator,
             artifact.binding_digest(),
-            RewrapArtifactKind::Kv,
+            A::KIND,
             options,
-            artifact.inner().proof(),
+            artifact.proof(),
             &input,
             key_ctx,
             acceptance,
         )?;
         let requests = self.rewrap_requests(
             input_evaluator,
-            artifact.inner().proof(),
+            artifact.proof(),
             &input,
             &recipients,
             key_ctx,
@@ -1003,7 +959,7 @@ impl TrustPolicyEvaluator {
         if !requests.is_empty() {
             return Ok(TrustDecision::ReviewRequired(requests));
         }
-        AuthorizedRewrapInput::from_kv(artifact, recipients, key_ctx, options)
+        AuthorizedRewrapInput::from_verified(artifact, recipients, key_ctx, options)
             .map(TrustDecision::Trusted)
     }
 
@@ -1012,7 +968,7 @@ impl TrustPolicyEvaluator {
         &self,
         input_evaluator: &TrustPolicyEvaluator,
         digest: [u8; 32],
-        artifact_kind: RewrapArtifactKind,
+        artifact_kind: EncArtifactKind,
         options: RewrapOptions,
         proof: &SignatureVerificationProof,
         input: &RecipientSetSubject,
@@ -1089,25 +1045,15 @@ impl TrustPolicyEvaluator {
         }
     }
 
-    /// Evaluate an exact output member set, including approvals reviewed in this operation.
+    /// Evaluate an exact output member set.
     pub(crate) fn preflight_output_recipient_keys(
         &self,
         recipients: &[PublicKey],
         self_trust: &SelfTrustSet,
-        additional_approvals: &[TrustApproval],
     ) -> Result<TrustDecision> {
         self.enforce_output_public_key_set_current(recipients)?;
-        let additional = additional_approvals
-            .iter()
-            .map(|approval| approval.known_key_identity_for(recipients))
-            .collect::<Result<Vec<_>>>()?;
         let mut requests = Vec::new();
-        self.evaluate_recipient_public_keys_with_additional(
-            recipients,
-            self_trust,
-            &additional,
-            &mut requests,
-        )?;
+        self.evaluate_recipient_public_keys(recipients, self_trust, &mut requests)?;
         if requests.is_empty() {
             Ok(TrustDecision::Trusted(()))
         } else {
@@ -1368,31 +1314,13 @@ impl TrustPolicyEvaluator {
         self_trust: &SelfTrustSet,
         requests: &mut Vec<TrustReviewRequest>,
     ) -> Result<()> {
-        self.evaluate_recipient_public_keys_with_additional(public_keys, self_trust, &[], requests)
-    }
-
-    fn evaluate_recipient_public_keys_with_additional(
-        &self,
-        public_keys: &[PublicKey],
-        self_trust: &SelfTrustSet,
-        additional: &[KnownKeyIdentity],
-        requests: &mut Vec<TrustReviewRequest>,
-    ) -> Result<()> {
         let identities = public_keys
             .iter()
             .map(TrustIdentity::from_public_key)
             .collect::<Result<Vec<_>>>()?;
-        let cache = AdditionalKnownKeyCache::new(self.known_keys(), additional);
-        cache.validate_recipient_integrity(&identities)?;
-        let pending = if additional.is_empty() {
-            judge_recipients_trust(
-                &identities,
-                &KnownKeyCache::new(self.known_keys()),
-                self_trust,
-            )?
-        } else {
-            judge_recipients_trust_with_additional(&identities, &cache, self_trust)?
-        };
+        let cache = KnownKeyCache::new(self.known_keys());
+        cache.enforce_recipient_integrity(&identities)?;
+        let pending = judge_recipients_trust(&identities, &cache, self_trust)?;
         for identity in pending {
             let public_key = public_keys
                 .iter()
@@ -1414,19 +1342,28 @@ impl TrustPolicyEvaluator {
         Ok(())
     }
 
+    /// Refuse output recipients that are not exactly the current member keys.
+    ///
+    /// The comparison bites where the member snapshot was read from the
+    /// workspace, which is the rewrap path. On the KV commit path it cannot:
+    /// the snapshot there is built from the very recipient keys being checked,
+    /// so both sides come from one source and the answer is always yes. What
+    /// guards that path is the input side instead, where the artifact's own
+    /// recipients are checked against the members, together with the review
+    /// snapshot being compared again before the replacement is published.
     fn enforce_output_kid_set_current<'a>(
         &self,
         output_kids: impl IntoIterator<Item = &'a str>,
         output_count: usize,
     ) -> Result<()> {
         let output_kids = output_kids.into_iter().collect::<BTreeSet<_>>();
-        let current_kids = self
-            .members
-            .members_by_kid
-            .keys()
-            .map(String::as_str)
-            .collect::<BTreeSet<_>>();
-        if output_kids != current_kids || output_kids.len() != output_count {
+        let matches_current = matches!(
+            self.members
+                .active_members()
+                .judge_kid_set_match(output_kids.iter().copied()),
+            KidSetMatch::Exact
+        );
+        if !matches_current || output_kids.len() != output_count {
             return Err(Error::build_verification_error(
                 "E_TRUST_REJECTED".to_string(),
                 "Output recipients must match all current members/active keys".to_string(),
@@ -1437,29 +1374,26 @@ impl TrustPolicyEvaluator {
 
     fn enforce_artifact_recipients_current(&self, subject: &RecipientSetSubject) -> Result<()> {
         enforce_recipient_handle_consistency(subject, &self.members.members_by_kid)?;
-        if let Some(kid) = subject
-            .inner
-            .recipient_kids()
-            .iter()
-            .find(|kid| !self.members.members_by_kid.contains_key(*kid))
-        {
-            return Err(build_inactive_recipient_error(kid));
+        match find_inactive_recipient_kid(&subject.inner, &self.members.members_by_kid) {
+            Some(kid) => Err(build_inactive_recipient_error(kid)),
+            None => Ok(()),
         }
-        Ok(())
     }
 
     fn enforce_output_recipient_current(&self, recipient: &PublicKey) -> Result<()> {
         let kid = &recipient.protected.kid;
-        let Some(current) = self.members.members_by_kid.get(kid) else {
-            return Err(build_inactive_recipient_error(kid));
-        };
-        if current == recipient {
-            return Ok(());
+        match self
+            .members
+            .active_members()
+            .judge_public_key_match(recipient)
+        {
+            CurrentKeyMatch::Matched => Ok(()),
+            CurrentKeyMatch::Missing => Err(build_inactive_recipient_error(kid)),
+            CurrentKeyMatch::DocumentMismatch => Err(Error::build_verification_error(
+                "E_ARTIFACT_RECIPIENT_KEY_MISMATCH".to_string(),
+                format!("Output recipient kid '{}' differs from members/active", kid),
+            )),
         }
-        Err(Error::build_verification_error(
-            "E_ARTIFACT_RECIPIENT_KEY_MISMATCH".to_string(),
-            format!("Output recipient kid '{}' differs from members/active", kid),
-        ))
     }
 
     fn evaluate_artifact_recipient_set(
@@ -1471,12 +1405,18 @@ impl TrustPolicyEvaluator {
         if is_self_only_recipient_set(&subject.inner, &self.members.members_by_kid, self_trust)? {
             return Ok(());
         }
-        let kind = match judge_recipient_set(self.recipient_sets(), &subject.inner) {
+        let (kind, approved) = match judge_recipient_set(self.recipient_sets(), &subject.inner) {
             RecipientSetJudgment::Accepted => return Ok(()),
-            RecipientSetJudgment::Missing => TrustReviewKind::RecipientSet,
-            RecipientSetJudgment::Changed { .. } => TrustReviewKind::ChangedRecipientSet,
+            RecipientSetJudgment::Missing => (TrustReviewKind::RecipientSet, None),
+            RecipientSetJudgment::Changed { approved } => {
+                (TrustReviewKind::ChangedRecipientSet, Some(approved))
+            }
         };
-        requests.push(recipient_review_request(kind, &subject.inner)?);
+        requests.push(recipient_review_request(
+            kind,
+            &subject.inner,
+            approved.as_ref(),
+        )?);
         Ok(())
     }
 
@@ -1493,30 +1433,9 @@ fn resolve_signer_judgment(
     judgment: TrustJudgment,
     public_key: &PublicKey,
 ) -> Result<Vec<TrustReviewRequest>> {
-    match judgment {
-        TrustJudgment::Trusted => Ok(Vec::new()),
-        TrustJudgment::NeedsApproval { .. } => Ok(vec![known_key_review_request(public_key)?]),
-        TrustJudgment::NonMember { member_handle, kid } => {
-            Err(build_non_member_error(&member_handle, &kid))
-        }
-        TrustJudgment::ActiveMemberMismatch {
-            member_handle,
-            kid,
-            active_member_handle,
-        } => Err(build_active_member_mismatch_error(
-            &member_handle,
-            &kid,
-            &active_member_handle,
-        )),
-        TrustJudgment::KnownKeyIntegrityAnomaly {
-            member_handle,
-            kid,
-            known_member_handle,
-        } => Err(build_known_key_integrity_error(
-            &member_handle,
-            &kid,
-            &known_member_handle,
-        )),
+    match enforce_signer_judgment(judgment)? {
+        SignerAcceptance::Trusted => Ok(Vec::new()),
+        SignerAcceptance::NeedsApproval { .. } => Ok(vec![known_key_review_request(public_key)?]),
     }
 }
 
@@ -1573,6 +1492,7 @@ fn known_key_review_request(public_key: &PublicKey) -> Result<TrustReviewRequest
         sid: None,
         recipient_kids: Vec::new(),
         recipient_handle_hints: Vec::new(),
+        approved_recipient_set: None,
     })
 }
 
@@ -1616,6 +1536,7 @@ fn push_known_key_review_request(
             sid: None,
             recipient_kids: Vec::new(),
             recipient_handle_hints: Vec::new(),
+            approved_recipient_set: None,
         });
     }
     Ok(())
@@ -1659,44 +1580,6 @@ fn build_inactive_mutation_key_error(key_ctx: &KeyContext) -> Error {
             "Mutation key is not a current active member.\nmember: {}\nkid: {}",
             key_ctx.member_handle(),
             key_ctx.kid()
-        ),
-    )
-}
-
-fn build_non_member_error(member_handle: &MemberHandle, kid: &Kid) -> Error {
-    Error::build_verification_error(
-        "E_TRUST_NON_MEMBER".to_string(),
-        format!(
-            "Signer is not in active members.\nsigner: {}\nkid: {}",
-            member_handle, kid
-        ),
-    )
-}
-
-fn build_active_member_mismatch_error(
-    member_handle: &MemberHandle,
-    kid: &Kid,
-    active_member_handle: &MemberHandle,
-) -> Error {
-    Error::build_verification_error(
-        "E_TRUST_ACTIVE_MEMBER_MISMATCH".to_string(),
-        format!(
-            "Signer '{}' (kid: {}) does not match current active member '{}'",
-            member_handle, kid, active_member_handle
-        ),
-    )
-}
-
-fn build_known_key_integrity_error(
-    member_handle: &MemberHandle,
-    kid: &Kid,
-    known_member_handle: &MemberHandle,
-) -> Error {
-    Error::build_verification_error(
-        "E_TRUST_KID_INTEGRITY_ANOMALY".to_string(),
-        format!(
-            "kid '{}' exists with subject_handle '{}' but candidate has subject_handle '{}'",
-            kid, known_member_handle, member_handle
         ),
     )
 }
@@ -1831,6 +1714,15 @@ impl TrustReviewRequest {
     /// Return display-only recipient identity hints for recipient-set review.
     pub fn recipient_handle_hints(&self) -> &[TrustRecipientHandleHint] {
         &self.recipient_handle_hints
+    }
+
+    /// Return the recipient set the last local approval stored for this artifact.
+    ///
+    /// Only a changed recipient-set review has one, and it is what the current
+    /// set is shown against so the operator sees which members the change adds
+    /// and removes.
+    pub fn approved_recipient_set(&self) -> Option<&ArtifactRecipientSetSnapshot> {
+        self.approved_recipient_set.as_ref()
     }
 }
 
@@ -2140,26 +2032,6 @@ impl TrustApprovalOutcome {
 }
 
 impl TrustApproval {
-    fn known_key_identity_for(&self, recipients: &[PublicKey]) -> Result<KnownKeyIdentity> {
-        let TrustApprovalKind::KnownKey(approval) = &self.kind else {
-            return Err(Error::build_invalid_argument_error(
-                "Output recipient exceptions require known-key approvals".to_string(),
-            ));
-        };
-        if !recipients
-            .iter()
-            .any(|recipient| recipient == approval.candidate.public_key())
-        {
-            return Err(Error::build_invalid_argument_error(
-                "Known-key approval does not identify an output recipient".to_string(),
-            ));
-        }
-        Ok(KnownKeyIdentity::new(
-            approval.candidate.subject_handle.clone(),
-            approval.candidate.kid.clone(),
-        ))
-    }
-
     /// Build a known-key approval.
     pub fn known_key(
         candidate: &KnownKeyReviewCandidate,
@@ -2206,7 +2078,7 @@ impl TrustApproval {
     pub(crate) fn recipient_set_from_artifact(
         recipient_set: &ArtifactRecipientSet,
     ) -> Result<Self> {
-        let request = recipient_review_request(TrustReviewKind::RecipientSet, recipient_set)?;
+        let request = recipient_review_request(TrustReviewKind::RecipientSet, recipient_set, None)?;
         Self::recipient_set(
             request.sid().expect("recipient review carries sid"),
             request.recipient_kids().to_vec(),
@@ -2295,6 +2167,7 @@ impl KnownKeyApproval {
 fn recipient_review_request(
     kind: TrustReviewKind,
     current: &ArtifactRecipientSet,
+    approved: Option<&RecipientSetRecord>,
 ) -> Result<TrustReviewRequest> {
     Ok(TrustReviewRequest {
         kind,
@@ -2313,13 +2186,14 @@ fn recipient_review_request(
             .iter()
             .map(TrustRecipientHandleHint::from_model)
             .collect::<Result<Vec<_>>>()?,
+        approved_recipient_set: approved.map(ArtifactRecipientSetSnapshot::from_record),
     })
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/internal/api_trust_store_mutation_test.rs"]
-mod api_trust_store_mutation_test;
+#[path = "../../../tests/unit/internal/service_trust_core_store_mutation_test.rs"]
+mod service_trust_core_store_mutation_test;
 
 #[cfg(test)]
-#[path = "../../../tests/unit/internal/api_trust_read_test.rs"]
-mod api_trust_read_test;
+#[path = "../../../tests/unit/internal/service_trust_core_read_test.rs"]
+mod service_trust_core_read_test;

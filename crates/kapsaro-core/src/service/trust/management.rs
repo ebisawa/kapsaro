@@ -4,21 +4,21 @@
 //! trust remove / trust purge use cases.
 
 use crate::feature::trust::known_keys::{purge_known_keys, remove_known_key};
+use crate::feature::trust::purge::{collect_purge_candidates, ApprovalRecord};
 use crate::feature::trust::recipient_sets::{purge_recipient_sets, remove_recipient_set};
 use crate::feature::trust::store_mutation::{
     build_trust_store_not_found_error, TrustStoreMutation,
 };
-use crate::feature::trust::transaction::TrustStorePreparation;
-use crate::model::trust_store::{KnownKey, RecipientSetRecord, TrustStoreProtected};
+use crate::model::trust_store::TrustStoreProtected;
 use crate::service::trust::store::{
     execute_trust_store_mutation_with_session,
     execute_trust_store_mutation_with_session_preparation_reporting_resign,
     observe_session_trust_store,
 };
+use crate::service::trust::transaction::TrustStorePreparation;
 use crate::service::trust::types::RemovedKnownKey;
 use crate::service::trust::TrustCommandSession;
-use crate::{Error, Result};
-use time::format_description::well_known::Rfc3339;
+use crate::Result;
 use time::OffsetDateTime;
 
 use super::list::{RecipientSetListItem, TrustListItem};
@@ -95,45 +95,14 @@ pub fn list_recipient_set_purge_candidates<'a>(
     })
 }
 
-trait PurgeCandidateRecord {
-    type Item;
-
-    fn approved_at(&self) -> &str;
-
-    fn to_item(&self) -> Self::Item;
-}
-
-impl PurgeCandidateRecord for KnownKey {
-    type Item = TrustListItem;
-
-    fn approved_at(&self) -> &str {
-        &self.approved_at
-    }
-
-    fn to_item(&self) -> Self::Item {
-        TrustListItem::from(self)
-    }
-}
-
-impl PurgeCandidateRecord for RecipientSetRecord {
-    type Item = RecipientSetListItem;
-
-    fn approved_at(&self) -> &str {
-        &self.approved_at
-    }
-
-    fn to_item(&self) -> Self::Item {
-        RecipientSetListItem::from(self)
-    }
-}
-
-fn list_trust_store_purge_candidates<'a, Record, SelectRecords>(
+fn list_trust_store_purge_candidates<'a, Record, Item, SelectRecords>(
     session: &'a TrustCommandSession,
     older_than_timestamp: OffsetDateTime,
     select_records: SelectRecords,
-) -> Result<ReviewedPurgeCandidates<'a, Record::Item>>
+) -> Result<ReviewedPurgeCandidates<'a, Item>>
 where
-    Record: PurgeCandidateRecord,
+    Record: ApprovalRecord,
+    Item: for<'r> From<&'r Record>,
     SelectRecords: FnOnce(&TrustStoreProtected) -> &[Record],
 {
     // A purge reports what it is about to remove, so an absent store is a
@@ -146,14 +115,10 @@ where
         .ok_or_else(|| build_trust_store_not_found_error(session.owner().as_str()))?
         .protected;
 
-    let items = select_records(protected)
-        .iter()
-        .filter_map(|record| match parse_approved_at(record.approved_at()) {
-            Ok(approved_at) if approved_at < older_than_timestamp => Some(Ok(record.to_item())),
-            Ok(_) => None,
-            Err(e) => Some(Err(e)),
-        })
-        .collect::<Result<Vec<_>>>()?;
+    let items = collect_purge_candidates(select_records(protected), older_than_timestamp)?
+        .into_iter()
+        .map(Item::from)
+        .collect();
 
     Ok(ReviewedPurgeCandidates {
         items,
@@ -165,7 +130,7 @@ where
 
 /// What executing a purge did to the stored trust document.
 ///
-/// `resolve_trust_store_write` re-signs the store under the current key even
+/// `judge_trust_store_write` re-signs the store under the current key even
 /// when a mutation changed nothing, so a purge that removed zero entries can
 /// still produce a write. Reporting only `removed` would let that re-signing
 /// ride along inside a purge report with nothing to show it happened.
@@ -216,15 +181,6 @@ pub fn execute_recipient_set_purge(
     Ok(PurgeOutcome { removed, resigned })
 }
 
-fn parse_approved_at(ts: &str) -> Result<OffsetDateTime> {
-    OffsetDateTime::parse(ts, &Rfc3339).map_err(|e| {
-        Error::build_parse_error_with_source(
-            format!("Failed to parse known_keys[].approved_at '{}': {}", ts, e),
-            e,
-        )
-    })
-}
-
 #[cfg(test)]
-#[path = "../../../tests/unit/internal/app_trust_management_test.rs"]
-mod tests;
+#[path = "../../../tests/unit/internal/service_trust_management_test.rs"]
+mod service_trust_management_test;

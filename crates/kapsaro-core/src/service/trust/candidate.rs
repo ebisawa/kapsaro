@@ -198,5 +198,5 @@ impl TrustApprovalCandidateBuilder {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/internal/app_trust_candidate_test.rs"]
-mod tests;
+#[path = "../../../tests/unit/internal/service_trust_candidate_test.rs"]
+mod service_trust_candidate_test;

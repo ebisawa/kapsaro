@@ -9,7 +9,7 @@ use crate::io::workspace::members::{
 };
 use crate::support::fs::policy::{ensure_real_directory_tree, is_real_dir, DirectoryKind};
 use crate::support::fs::relative::{
-    describe_unreplaceable_child_type, ensure_scoped_child_dir_at, list_child_entries_at,
+    ensure_scoped_child_dir_at, format_unreplaceable_child_type, list_child_entries_at,
     open_dir_nofollow, optional_child_type_at, save_text_at, ChildType, DirectoryFd,
     DirectoryScope, OpenDir,
 };
@@ -18,7 +18,7 @@ use crate::{Error, Result};
 use std::path::Path;
 
 /// Name of the workspace secrets directory holding encrypted artifacts.
-pub(crate) const SECRETS_DIR_NAME: &str = "secrets";
+pub const SECRETS_DIR_NAME: &str = "secrets";
 
 /// Ensure workspace structure exists - create if missing.
 pub fn ensure_workspace_structure(workspace_path: &Path) -> Result<bool> {
@@ -106,7 +106,7 @@ pub fn validate_workspace_exists(workspace_path: &Path) -> Result<()> {
 fn save_gitkeep(dir: &OpenDir) -> Result<()> {
     let name = ".gitkeep";
     if let Some(description) =
-        optional_child_type_at(dir, name)?.and_then(describe_unreplaceable_child_type)
+        optional_child_type_at(dir, name)?.and_then(format_unreplaceable_child_type)
     {
         return Err(Error::build_invalid_operation_error(format!(
             "refusing to replace {} standing where a workspace document belongs: {}",
@@ -122,8 +122,8 @@ fn ensure_workspace_dir(path: &Path) -> Result<()> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/internal/feature_init_test.rs"]
-mod feature_init_test;
+#[path = "../../../tests/unit/internal/io_workspace_setup_creation_test.rs"]
+mod io_workspace_setup_creation_test;
 
 #[cfg(test)]
 #[path = "../../../tests/unit/internal/io_workspace_setup_test.rs"]

@@ -169,5 +169,5 @@ pub(super) fn build_private_key_decrypt_error(error: Error) -> Error {
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/internal/ssh_protection_test.rs"]
-mod ssh_protection_test;
+#[path = "../../../../tests/unit/internal/feature_key_protection_encryption_test.rs"]
+mod feature_key_protection_encryption_test;

@@ -14,6 +14,8 @@ use crate::cli::common::output::text::print_warning;
 use crate::cli::common::output::text::trust::{
     print_trust_store_resigned, print_trust_store_signer_notice,
 };
+use crate::cli::common::presentation::tty;
+use crate::cli::options::ToCommonOptions;
 use kapsaro_core::api::key::manage::{
     activate_key_command, export_key_command, export_private_key_command, remove_key_command,
 };
@@ -21,7 +23,6 @@ use kapsaro_core::api::key::types::KeyExportPrivateResult;
 use kapsaro_core::api::key::{save_private_export_text, Kid, MemberHandle};
 use kapsaro_core::api::secret::SecretString;
 use kapsaro_core::Result;
-use std::io::IsTerminal;
 use std::io::{self, BufRead};
 use std::path::PathBuf;
 use zeroize::Zeroizing;
@@ -30,8 +31,8 @@ use super::{ActivateArgs, ExportArgs, RemoveArgs};
 
 /// Main entry point for key activation
 pub(super) fn run_activate(args: ActivateArgs) -> Result<()> {
-    let context = CliContext::resolve(&args.common)?;
-    let member_handle = context.member_handle(args.member.member_handle.clone())?;
+    let (context, member_handle) =
+        resolve_key_command_context(&args.common, args.member.member_handle.clone())?;
     let result = activate_key_command(context.base_dir()?, member_handle, args.kid.clone())?;
     print_key_activate_summary(&result.member_handle, &result.kid);
     if let Some(warning) = result.trust_store_warning.as_deref() {
@@ -49,19 +50,15 @@ pub(super) fn run_activate(args: ActivateArgs) -> Result<()> {
 
 /// Main entry point for key removal
 pub(super) fn run_remove(args: RemoveArgs) -> Result<()> {
-    let context = CliContext::resolve(&args.common)?;
-    let member_handle = context.member_handle(args.member.member_handle.clone())?;
+    let (context, member_handle) =
+        resolve_key_command_context(&args.common, args.member.member_handle.clone())?;
     let result = remove_key_command(
         context.base_dir()?,
         member_handle,
         args.kid.clone(),
         args.force.force,
         |member_handle| {
-            load_trust_command_session(
-                &context,
-                &args.common,
-                Some(member_handle.as_str().to_string()),
-            )
+            load_trust_command_session(&context, Some(member_handle.as_str().to_string()))
         },
     )?;
     print_key_remove_summary(&result.member_handle, &result.kid, result.was_active);
@@ -81,12 +78,26 @@ pub(super) fn run_export(args: ExportArgs) -> Result<()> {
             "--out is required for public key export".to_string(),
         )
     })?;
-    let context = CliContext::resolve(&args.common)?;
-    let member_handle = context.member_handle(args.member.member_handle.clone())?;
+    let (context, member_handle) =
+        resolve_key_command_context(&args.common, args.member.member_handle.clone())?;
     let result = export_key_command(context.base_dir()?, member_handle, args.kid.clone(), out)?;
     print_key_export_summary(&result.member_handle, &result.kid, out);
 
     Ok(())
+}
+
+/// Resolve the CLI context and the member handle a key subcommand acts on.
+///
+/// The handle stays optional here: the key commands let the local state decide
+/// it when a single member owns the keystore, and the API reports the ambiguity
+/// when more than one does.
+fn resolve_key_command_context(
+    common: &impl ToCommonOptions,
+    member_handle: Option<String>,
+) -> Result<(CliContext, Option<String>)> {
+    let context = CliContext::resolve(common)?;
+    let member_handle = context.member_handle(member_handle)?;
+    Ok((context, member_handle))
 }
 
 /// Main entry point for private key export (password-protected portable format)
@@ -117,7 +128,7 @@ pub(super) fn run_export_private(args: ExportArgs) -> Result<()> {
         print_warning(warning);
     }
 
-    write_private_key_export(destination, &result)
+    save_private_key_export(destination, &result)
 }
 
 /// Where a private key export lands, per the `--out` / `--stdout` invariant:
@@ -141,7 +152,7 @@ fn ensure_private_export_destination(args: &ExportArgs) -> Result<Destination> {
 }
 
 /// Deliver the exported key to the destination the operator named.
-fn write_private_key_export(
+fn save_private_key_export(
     destination: Destination,
     result: &KeyExportPrivateResult,
 ) -> Result<()> {
@@ -160,10 +171,10 @@ fn write_private_key_export(
 }
 
 fn prompt_export_password() -> Result<SecretString> {
-    if io::stdin().is_terminal() {
+    if tty::is_interactive() {
         return prompt_export_password_interactively();
     }
-    read_export_password_from_stdin()
+    load_export_password_from_stdin()
 }
 
 fn prompt_export_password_interactively() -> Result<SecretString> {
@@ -177,8 +188,8 @@ fn prompt_export_password_interactively() -> Result<SecretString> {
     Ok(SecretString::new(password))
 }
 
-/// Read the password and its confirmation from a piped stdin.
-fn read_export_password_from_stdin() -> Result<SecretString> {
+/// Load the password and its confirmation from a piped stdin.
+fn load_export_password_from_stdin() -> Result<SecretString> {
     let stdin = io::stdin();
     let mut reader = stdin.lock();
     let mut password = Zeroizing::new(String::new());

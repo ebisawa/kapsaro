@@ -24,10 +24,14 @@ use crate::feature::kv::query::{
 };
 use crate::feature::kv::types::KvInputEntry as InternalKvInputEntry;
 use crate::feature::verify::kv::signature::verify_kv_content_for_operation;
-use crate::format::content::KvEncContent;
+use crate::format::content::{EncContent, KvEncContent};
 use crate::format::kv::{DEFAULT_KV_ENC_BASENAME, KV_ENC_EXTENSION};
+use crate::model::common::WrapItem;
 use crate::model::kv_enc::verified::VerifiedKvEncDocument;
 use crate::model::verification::SignatureVerificationProof;
+use crate::service::artifact::verified::{
+    EncArtifactKind, ReadableEncArtifact, VerifiedEncArtifact,
+};
 use crate::service::artifact_text::{ArtifactLoadPolicy, ArtifactText};
 use crate::support::fs::load_text_with_limit;
 use crate::support::fs::relative::{load_text_with_limit_at, DirectoryFd};
@@ -40,7 +44,9 @@ use crate::Result;
 use crate::service::key::{KeyContext, RecipientKeys};
 use crate::service::operation::OperationOptions;
 use crate::service::secret::SecretString;
-use crate::service::trust::{push_signature_verification_warnings, RecipientSetSubject};
+use crate::service::trust::{
+    push_signature_verification_warnings, ReadTrustExceptions, RecipientSetSubject,
+};
 
 /// Parsed kv-enc artifact.
 #[derive(Debug, Clone)]
@@ -215,7 +221,9 @@ impl KvEncArtifact {
         let input = build_kv_write_input(recipients, key_ctx);
         let encrypted =
             set_kv_entry_with_recipients(existing, entries, &input.recipients, &input.ctx)?;
-        Ok(Self::from_text(ArtifactText::from_content(encrypted)))
+        // A document is bounded by the same limit however it was produced. A
+        // write allowed past it would build one that no later read accepts.
+        Self::parse(encrypted.as_str())
     }
 
     fn from_text(text: ArtifactText<KvEncContent>) -> Self {
@@ -232,17 +240,71 @@ impl VerifiedKvEncArtifact {
         &self.inner
     }
 
-    pub(crate) fn content(&self) -> &KvEncContent {
-        &self.content
-    }
-
-    pub(crate) fn binding_digest(&self) -> [u8; 32] {
-        Sha256::digest(self.content.as_str().as_bytes()).into()
-    }
-
     /// Extract the recipient-set subject for trust policy evaluation.
     pub fn recipient_set_subject(&self) -> Result<RecipientSetSubject> {
         RecipientSetSubject::from_verified_kv(self.inner())
+    }
+}
+
+impl VerifiedEncArtifact for VerifiedKvEncArtifact {
+    const KIND: EncArtifactKind = EncArtifactKind::Kv;
+
+    fn verify_text(text: &str, options: OperationOptions) -> Result<Self> {
+        KvEncArtifact::parse(text)?.verify(options)
+    }
+
+    fn binding_digest(&self) -> [u8; 32] {
+        Sha256::digest(self.content.as_str().as_bytes()).into()
+    }
+
+    fn proof(&self) -> &SignatureVerificationProof {
+        self.inner.proof()
+    }
+
+    fn recipient_set_subject(&self) -> Result<RecipientSetSubject> {
+        VerifiedKvEncArtifact::recipient_set_subject(self)
+    }
+
+    fn wrap_items(&self) -> &[WrapItem] {
+        &self.inner.document().wrap().wrap
+    }
+
+    fn verify_key_possession(&self, key_ctx: &KeyContext) -> Result<DecryptionKeyInfo> {
+        verify_kv_key_possession_with_context(self, key_ctx)
+    }
+
+    fn into_enc_content(self) -> EncContent {
+        EncContent::KvEnc(self.content)
+    }
+}
+
+impl ReadableEncArtifact for VerifiedKvEncArtifact {
+    type Operation = KvReadOperation;
+    type Trusted<'a> = TrustedKvEncArtifact<'a>;
+
+    /// A one-shot non-member exception never authorizes environment decryption.
+    fn enforce_read_exceptions(
+        operation: &Self::Operation,
+        exceptions: &ReadTrustExceptions,
+    ) -> Result<()> {
+        if operation == &KvReadOperation::Environment && exceptions.has_accepted_non_member() {
+            return Err(crate::Error::build_invalid_operation_error(
+                "A non-member signer exception cannot authorize environment decryption",
+            ));
+        }
+        Ok(())
+    }
+
+    fn into_trusted<'a>(
+        artifact: Cow<'a, Self>,
+        key_ctx: &'a KeyContext,
+        operation: Self::Operation,
+        options: OperationOptions,
+    ) -> Result<Self::Trusted<'a>>
+    where
+        Self: 'a,
+    {
+        TrustedKvEncArtifact::from_authorized(artifact, key_ctx, operation, options)
     }
 }
 
@@ -314,15 +376,15 @@ impl<'a> AuthorizedKvMutation<'a> {
 
 impl<'a> TrustedKvEncArtifact<'a> {
     pub(crate) fn from_authorized(
-        artifact: &'a VerifiedKvEncArtifact,
+        artifact: Cow<'a, VerifiedKvEncArtifact>,
         key_ctx: &'a KeyContext,
         operation: KvReadOperation,
         options: OperationOptions,
     ) -> Result<Self> {
-        let key_info = verify_kv_key_possession_with_context(artifact, key_ctx)?;
+        let key_info = verify_kv_key_possession_with_context(artifact.as_ref(), key_ctx)?;
         let warnings = collect_kv_read_warnings(artifact.inner().proof(), &key_info, options)?;
         Ok(Self {
-            artifact: Cow::Borrowed(artifact),
+            artifact,
             key_ctx,
             operation,
             warnings,
@@ -332,22 +394,6 @@ impl<'a> TrustedKvEncArtifact<'a> {
     /// Return signature and local key warnings produced during authorization.
     pub fn warnings(&self) -> &[String] {
         &self.warnings
-    }
-
-    pub(crate) fn from_authorized_owned(
-        artifact: VerifiedKvEncArtifact,
-        key_ctx: &'a KeyContext,
-        operation: KvReadOperation,
-        options: OperationOptions,
-    ) -> Result<Self> {
-        let key_info = verify_kv_key_possession_with_context(&artifact, key_ctx)?;
-        let warnings = collect_kv_read_warnings(artifact.inner().proof(), &key_info, options)?;
-        Ok(Self {
-            artifact: Cow::Owned(artifact),
-            key_ctx,
-            operation,
-            warnings,
-        })
     }
 
     /// List key names and disclosure metadata after key-possession verification.
@@ -557,5 +603,5 @@ impl KvDisclosedEntry {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/internal/api_kv_mutation_test.rs"]
-mod api_kv_mutation_test;
+#[path = "../../../tests/unit/internal/service_kv_core_test.rs"]
+mod service_kv_core_test;

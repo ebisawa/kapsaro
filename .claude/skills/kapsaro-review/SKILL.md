@@ -9,50 +9,40 @@ description: kapsaro の変更をレビューするときの観点。レイヤ�
 
 ## レイヤー責務
 
-1. `cli` から `feature` / `io` へ直接 import していないか
-2. `app` に `println!` / `eprintln!` / `dialoguer` が混入していないか
-3. `app` が `api` を参照していないか
-4. `service` が `app` / `api` / `cli_api` / `cli` を参照していないか
-5. `service` が環境変数、設定優先順位、workspace 自動検出、TTY、CLI DTO を扱っていないか
-6. `api` に実装、変換、fallback、glob 再公開が混入していないか
-7. `feature` が `cli` / `app` を参照していないか
-8. `format` から `feature` へ依存が逆流していないか
-9. `io` から `feature` / `app` / `cli` へ依存が逆流していないか
-10. `crypto` が `app` / `cli` を参照していないか
-11. 表示の都合だけで service / feature の API が歪められていないか
-12. `support` にドメイン規則や I/O の本体が溜まっていないか
+1. `cli` から `service` / `feature` / `io` へ直接 import していないか
+2. `service` に `println!` / `eprintln!` / `dialoguer` が混入していないか
+3. `service` が `api` / `cli` を参照していないか
+4. `service` が環境変数、設定優先順位、workspace 自動検出、TTY、CLI DTO を扱っていないか
+5. `api` に実装、変換、fallback、glob 再公開が混入していないか
+6. `feature` が `cli` を参照していないか
+7. `format` から `feature` へ依存が逆流していないか
+8. `io` から `feature` / `cli` へ依存が逆流していないか
+9. `crypto` が `cli` / `feature` / `io` を参照していないか
+10. 表示の都合だけで service / feature の API が歪められていないか
+11. `support` にドメイン規則や I/O の本体が溜まっていないか
 
-1 から 10 は grep で確認できる。
+1 から 9 は grep で確認できる。
 
 ```bash
 K=crates/kapsaro-core/src
-rg -n "use crate::(io|feature)::" src/cli -g '*.rs'
-rg -n "println!|eprintln!|dialoguer" $K/app -g '*.rs'
-rg -n "crate::api" $K/app -g '*.rs'
-rg -n "crate::(app|api|cli_api)" $K/service -g '*.rs'
-rg -n "use crate::(feature|app|cli)::" $K/io -g '*.rs'
+rg -n "use kapsaro_core::(service|feature|io)::" src/cli -g '*.rs'
+rg -n "println!|eprintln!|dialoguer" $K/service -g '*.rs'
+rg -n "crate::(api|cli)" $K/service -g '*.rs'
+rg -n "use crate::(feature|cli)::" $K/io -g '*.rs'
 rg -n "use crate::feature::" $K/format -g '*.rs'
-rg -n "use crate::(app|cli|feature|io)::" $K/crypto -g '*.rs'
+rg -n "use crate::(cli|feature|io)::" $K/crypto -g '*.rs'
 ```
 
-11 と 12 は読んで判断する。`support` に新しく入ったものは、2 つ以上のレイヤから使われているか、ビジネス上の意味が付いていないかを見る。意味が付いていたら `service` / `feature` / `io` への移動を検討する。
+10 と 11 は読んで判断する。`support` に新しく入ったものは、2 つ以上のレイヤから使われているか、ビジネス上の意味が付いていないかを見る。意味が付いていたら `service` / `feature` / `io` への移動を検討する。
 
-## 移行中の層への追加
+## 廃止した層の復活
 
-`cli_api` と `app` は廃止予定で、`api` と `service` へ移管中である。変更がこの方向に逆らっていないかを見る。
-
-- `app` や `cli_api` に新しいユースケースや入口関数が追加されていないか。新規 CLI コマンドは `service` の操作と `api` の再公開から作る
-- `service` へ移せる caller 共通の規則が `app` に置かれていないか。CLI 固有の入力解決と進行管理だけが `app` に残ってよい
-- 標準 API へ移行済みの処理が、互換 wrapper として `app` や `cli_api` に残っていないか
-- `app` から処理を移した変更で、移動元に残骸がないか
-
-移行の途中である以上、既存の `app` のコードがこの規則に合わないこと自体は指摘の対象ではない。指摘するのは、その変更が `app` と `cli_api` を新たに太らせている場合。
+`app` と `cli_api` は廃止済みで、責務は `api` と `service` へ移った。これらの名前を持つモジュールや、標準 API の互換 wrapper が復活していないかを見る。
 
 ## テストの登録と構成
 
-`.claude/hooks/` の hook が Copyright ヘッダ、module doc、`mod.rs` の新設、インラインテストモジュール、テスト登録漏れ、二重登録を機械的に検出する。レビューではこれらを再確認せず、hook が扱えない次の項目を見る。
+`scripts/` の検査が Copyright ヘッダ、module doc、`mod.rs` の新設、インラインテストモジュール、テストの登録漏れ、実体のないファイルを指す stale な `#[path]` 登録、同じテストバイナリへの二重登録を機械的に検出する。レビューではこれらを再確認せず、検査が扱えない次の項目を見る。
 
-- 実体のないファイルを指す stale な `#[path]` 登録（コンパイルは通らないが、削除の取り残しとして残っていないか）
 - shebang 付きのファイルを書き出して exec するテストの `#[serial]` 指定。理由は当該テストの module doc にある
 - テストが検証している内容が、その層の担当と合っているか
 - 旧仕様の削除を確認する負のテストが追加されていないか
@@ -64,14 +54,14 @@ rg -n "use crate::(app|cli|feature|io)::" $K/crypto -g '*.rs'
 
 判定は `cargo clippy --workspace --all-targets` で行う。CI のゲートもこれ。lib 単体ビルド（`cargo check -p kapsaro-core` など）は内部テストをコンパイルしないため、テストからのみ使われる項目を誤ってデッドと判定する。削除するとテストが壊れる。
 
-production から使われず内部テストからのみ使われる項目は、削除ではなく `#[cfg(test)] pub(crate) use ...` にする。`crates/kapsaro-core/src/app/trust.rs` に既存の書き方がある。
+production から使われず内部テストからのみ使われる項目は、削除ではなく `#[cfg(test)] pub(crate) use ...` にする。`crates/kapsaro-core/src/service/kv/mutation.rs` と `crates/kapsaro-core/src/io/keystore/access.rs` に既存の書き方がある。
 
 残っている `#[allow]` を貫通して総量を測りたいときは、ファイルを編集せずに次を実行する。
 
 ```bash
 CARGO_TARGET_DIR=/tmp/kapsaro-deadcode \
   RUSTFLAGS="--force-warn dead_code --force-warn unused_imports" \
-  cargo check -p kapsaro-core --features cli-internal,cli-test-support --message-format short \
+  cargo check -p kapsaro-core --features cli-test-support --message-format short \
   | grep '^crates/kapsaro'
 ```
 

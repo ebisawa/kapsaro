@@ -20,7 +20,7 @@ use crate::cli::common::output::text::kv::{
 use crate::cli::common::output::text::print_warning_line;
 use kapsaro_core::api::kv::KvDisclosedEntry;
 use kapsaro_core::api::secret::SecretString;
-use kapsaro_core::Result;
+use kapsaro_core::{Error, Result};
 use std::collections::BTreeMap;
 
 pub(crate) struct KvReadResult {
@@ -50,7 +50,6 @@ pub(crate) fn print_kv_read_result(
 }
 
 pub(crate) fn print_kv_import_result(
-    message: Option<&str>,
     entry_count: usize,
     store_name: &str,
     json_output: bool,
@@ -60,7 +59,7 @@ pub(crate) fn print_kv_import_result(
         json_output,
         || print_kv_import_result_json(entry_count, store_name),
         || {
-            print_import_summary(message, entry_count, quiet);
+            print_import_summary(entry_count, quiet);
         },
     )
 }
@@ -81,13 +80,22 @@ fn print_single_kv_value(
     json_output: bool,
     with_key: bool,
 ) -> Result<()> {
-    let entry = view::build_single_kv_entry(result, key);
+    let entry = view::build_single_kv_entry(result, key)
+        .ok_or_else(|| build_missing_kv_entry_error(key))?;
     print_disclosed_key_warning(entry.key, entry.disclosed);
     print_json_or_text(
         json_output,
         || print_single_kv_value_json(entry.key, entry.value),
         || print_single_kv_value_text(entry.key, entry.value, with_key),
     )
+}
+
+/// Report a requested key the authorized read did not carry.
+///
+/// The read path already fails on a missing key, so this covers the case where
+/// a result reaches the printer without the entry it was asked to render.
+fn build_missing_kv_entry_error(key: &str) -> Error {
+    Error::build_not_found_error(format!("Key '{}' not found", key))
 }
 
 fn print_disclosed_key_warnings(entries: &[view::KvEntryView<'_>]) {

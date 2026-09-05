@@ -16,8 +16,13 @@ impl KvEncVersion {
         self.0
     }
 
-    pub fn from_u32(value: u32) -> Option<Self> {
-        (value == 1).then_some(KvEncVersion::V1)
+    /// Read the version as it is spelled on the header line.
+    ///
+    /// The header line is part of the signed text, so only the canonical
+    /// spelling of a version is a valid header. A numerically equal spelling
+    /// such as `01` names no version.
+    pub fn parse(text: &str) -> Option<Self> {
+        (text == "1").then_some(KvEncVersion::V1)
     }
 }
 

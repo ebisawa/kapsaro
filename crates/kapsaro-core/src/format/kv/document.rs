@@ -24,9 +24,9 @@ pub fn parse_kv_document_with_source(content: &str, source_name: &str) -> Result
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/internal/format_kv_enc_ops_test.rs"]
-mod format_kv_enc_ops_test;
+#[path = "../../../tests/unit/internal/format_kv_document_ops_test.rs"]
+mod format_kv_document_ops_test;
 
 #[cfg(test)]
-#[path = "../../../tests/unit/internal/format_kv_enc_structure_test.rs"]
-mod format_kv_enc_structure_test;
+#[path = "../../../tests/unit/internal/format_kv_document_structure_test.rs"]
+mod format_kv_document_structure_test;

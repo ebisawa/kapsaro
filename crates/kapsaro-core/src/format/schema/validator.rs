@@ -385,9 +385,9 @@ fn unescape_json_pointer_segment(segment: &str) -> String {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/internal/format_schema_trust_store_test.rs"]
-mod format_schema_trust_store_test;
+#[path = "../../../tests/unit/internal/format_schema_validator_trust_store_test.rs"]
+mod format_schema_validator_trust_store_test;
 
 #[cfg(test)]
-#[path = "../../../tests/unit/internal/schema_validator_test.rs"]
-mod schema_validator_test;
+#[path = "../../../tests/unit/internal/format_schema_validator_test.rs"]
+mod format_schema_validator_test;

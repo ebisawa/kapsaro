@@ -50,7 +50,7 @@ fn verify_public_key_self_signature_context(
     public_key: &PublicKey,
     context: &str,
 ) -> Result<PublicKeySelfSignatureVerification> {
-    validate_derived_kid(public_key)?;
+    verify_derived_kid(public_key)?;
     log_public_key_verification(public_key, context, "self-signature");
 
     let protected_jcs = jcs::normalize(&public_key.protected).map_err(|e| {
@@ -161,7 +161,7 @@ fn log_public_key_verification(public_key: &PublicKey, context: &str, verificati
     );
 }
 
-fn validate_derived_kid(public_key: &PublicKey) -> Result<()> {
+fn verify_derived_kid(public_key: &PublicKey) -> Result<()> {
     let mut protected_without_kid = serde_json::to_value(&public_key.protected)?;
     let object = protected_without_kid.as_object_mut().ok_or_else(|| {
         Error::build_verification_error(

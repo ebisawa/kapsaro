@@ -1,8 +1,8 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Application-facing DTOs for key commands.
-//! Keeps CLI output data separate from reusable feature key generation data.
+//! Result types returned by the key service operations.
+//! Keeps caller-facing result data separate from reusable feature key generation data.
 
 use crate::feature::key::portable_export::PortableExportOutput;
 use crate::model::public_key::PublicKey;

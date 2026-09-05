@@ -4,7 +4,7 @@
 //! Local decryption key selection.
 
 use super::loader::load_verified_private_key_from_keystore;
-use super::{CryptoContext, DecryptionKeyInfo, DecryptionKeyResolution};
+use super::{CryptoContext, DecryptionKeyInfo, DecryptionKeyResolution, PrivateKeyLoadResult};
 use crate::feature::envelope::wrap_set::WrapSet;
 use crate::model::identity::{Kid, MemberHandle};
 use crate::support::kid::{format_kid_display_lossy, format_kid_half_display_lossy};
@@ -18,7 +18,7 @@ impl CryptoContext {
         member_handle: &str,
     ) -> Result<DecryptionKeyResolution<'a>> {
         let keystore_member_handle = MemberHandle::try_from(member_handle)?;
-        let wrap_kid = wrap_set.self_wrap_kid(member_handle);
+        let wrap_kid = wrap_set.self_wrap_kid(&keystore_member_handle);
         let candidate = select_candidate_kid(wrap_kid, self.selected_kid_override.as_ref());
         debug!(
             "[CRYPTO] local decryption key: select member_handle={}, explicit_kid={}, wrap_kid_count={}, candidate_count={}",
@@ -42,7 +42,7 @@ impl CryptoContext {
             member_handle,
             self.selected_kid_override.as_ref(),
             candidate.as_ref(),
-            classify_missing_decryption_key(wrap_kid, candidate.as_ref()),
+            judge_missing_decryption_key(wrap_kid, candidate.as_ref()),
         ))
     }
 
@@ -55,7 +55,7 @@ impl CryptoContext {
         DecryptionKeyResolution::Active {
             private_key: &self.private_key,
             info: DecryptionKeyInfo {
-                kid: kid.to_string(),
+                kid: kid.clone(),
                 expires_at: self.local_key_expiry.primary_expires_at().to_string(),
                 used_fallback: false,
                 key_identity: self.local_key_identity.clone(),
@@ -73,17 +73,12 @@ impl CryptoContext {
         keystore_member_handle: &MemberHandle,
         kid: &Kid,
     ) -> Result<Option<DecryptionKeyResolution<'_>>> {
+        let shown_kid = format_kid_half_display_lossy(kid.as_str());
         let Some(local_key_access) = self.local_key_access.as_ref() else {
-            debug!(
-                "[CRYPTO] local decryption key: fallback unavailable (kid: {})",
-                format_kid_half_display_lossy(kid.as_str())
-            );
+            debug!("[CRYPTO] local decryption key: fallback unavailable (kid: {shown_kid})");
             return Ok(None);
         };
-        debug!(
-            "[CRYPTO] local decryption key: try fallback key (kid: {})",
-            format_kid_half_display_lossy(kid.as_str())
-        );
+        debug!("[CRYPTO] local decryption key: try fallback key (kid: {shown_kid})");
 
         match load_verified_private_key_from_keystore(
             &local_key_access.keystore_access,
@@ -93,30 +88,32 @@ impl CryptoContext {
             &local_key_access.ssh_pubkey,
         ) {
             Ok(loaded) => {
-                debug!(
-                    "[CRYPTO] local decryption key: selected fallback key (kid: {})",
-                    format_kid_half_display_lossy(kid.as_str())
-                );
-                Ok(Some(DecryptionKeyResolution::Fallback {
-                    private_key: Box::new(loaded.private_key),
-                    info: DecryptionKeyInfo {
-                        kid: kid.to_string(),
-                        expires_at: loaded.key_expiry.primary_expires_at().to_string(),
-                        used_fallback: true,
-                        key_identity: loaded.key_identity,
-                        key_expiry: loaded.key_expiry,
-                    },
-                }))
+                debug!("[CRYPTO] local decryption key: selected fallback key (kid: {shown_kid})");
+                Ok(Some(build_fallback_resolution(loaded, kid)))
             }
             Err(error) if error.kind() == ErrorKind::NotFound => {
-                debug!(
-                    "[CRYPTO] local decryption key: fallback key not found (kid: {})",
-                    format_kid_half_display_lossy(kid.as_str())
-                );
+                debug!("[CRYPTO] local decryption key: fallback key not found (kid: {shown_kid})");
                 Ok(None)
             }
             Err(error) => Err(error),
         }
+    }
+}
+
+/// Wrap a key opened from the keystore as the fallback the search settled on.
+fn build_fallback_resolution<'a>(
+    loaded: PrivateKeyLoadResult,
+    kid: &Kid,
+) -> DecryptionKeyResolution<'a> {
+    DecryptionKeyResolution::Fallback {
+        private_key: Box::new(loaded.private_key),
+        info: DecryptionKeyInfo {
+            kid: kid.clone(),
+            expires_at: loaded.key_expiry.primary_expires_at().to_string(),
+            used_fallback: true,
+            key_identity: loaded.key_identity,
+            key_expiry: loaded.key_expiry,
+        },
     }
 }
 
@@ -144,7 +141,7 @@ enum MissingDecryptionKey {
 /// overrode it, and that is the single case where a wrap for it is known to
 /// exist. An explicit selection naming another key, or a search with no wrap to
 /// go on, has no wrap behind it whatever the keystore holds.
-fn classify_missing_decryption_key(
+fn judge_missing_decryption_key(
     wrap_kid: Option<&Kid>,
     searched_kid: Option<&Kid>,
 ) -> MissingDecryptionKey {

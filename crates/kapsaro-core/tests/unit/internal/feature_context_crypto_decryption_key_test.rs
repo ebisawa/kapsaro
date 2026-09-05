@@ -5,7 +5,7 @@
 //! Separates an artifact that wraps to nobody local from a key the keystore lost.
 
 use super::{
-    build_missing_decryption_key_error, classify_missing_decryption_key, MissingDecryptionKey,
+    build_missing_decryption_key_error, judge_missing_decryption_key, MissingDecryptionKey,
 };
 use crate::model::identity::Kid;
 
@@ -24,7 +24,7 @@ fn kid(value: &str) -> Kid {
 fn test_wrap_without_a_local_key_is_reported_as_the_missing_key() {
     let wrapped = kid(WRAPPED_KID);
 
-    let missing = classify_missing_decryption_key(Some(&wrapped), Some(&wrapped));
+    let missing = judge_missing_decryption_key(Some(&wrapped), Some(&wrapped));
     let error = build_missing_decryption_key_error(MEMBER, None, Some(&wrapped), missing);
 
     assert_eq!(missing, MissingDecryptionKey::LocalKey);
@@ -40,7 +40,7 @@ fn test_wrap_without_a_local_key_is_reported_as_the_missing_key() {
 /// and it keeps its own wording.
 #[test]
 fn test_absent_wrap_is_reported_as_a_missing_wrap() {
-    let missing = classify_missing_decryption_key(None, None);
+    let missing = judge_missing_decryption_key(None, None);
     let error = build_missing_decryption_key_error(MEMBER, None, None, missing);
 
     assert_eq!(missing, MissingDecryptionKey::Wrap);
@@ -61,7 +61,7 @@ fn test_explicit_kid_the_artifact_does_not_wrap_to_is_reported_as_a_missing_wrap
     let wrapped = kid(WRAPPED_KID);
     let explicit = kid(OTHER_KID);
 
-    let missing = classify_missing_decryption_key(Some(&wrapped), Some(&explicit));
+    let missing = judge_missing_decryption_key(Some(&wrapped), Some(&explicit));
     let error =
         build_missing_decryption_key_error(MEMBER, Some(&explicit), Some(&explicit), missing);
 

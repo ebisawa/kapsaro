@@ -6,10 +6,13 @@
 
 use crate::cli::common::output::text::{print_local_state_diagnostics, print_warning};
 use crate::cli::common::output::trust::review::print_trust_review_line;
-use crate::cli::common::presentation::format_kid_display_lossy;
 use crate::cli::common::presentation::tty;
 use crate::cli::common::prompt::prompt_yes_no;
-use crate::cli::common::trust::format_key_approval_review_lines;
+use crate::cli::common::trust::{
+    build_recipient_rows, format_key_approval_review_lines,
+    format_recipient_set_member_review_lines, ArtifactRecipientReviewRow,
+};
+use kapsaro_core::api::key::format_kid_display_lossy;
 use kapsaro_core::api::online::{GitHubOnlineVerifier, VerifiedGitHubEvidence};
 use kapsaro_core::api::rewrap::{RewrapAcceptance, RewrapReview, RewrapSession};
 use kapsaro_core::api::trust::{
@@ -122,19 +125,33 @@ fn review_rewrap_recipient_set(request: &TrustReviewRequest) -> Result<TrustAppr
 }
 
 fn print_rewrap_recipient_set_review(request: &TrustReviewRequest) {
-    print_trust_review_line("Secret sharing review required:");
-    print_trust_review_line("");
-    print_trust_review_line("This secret is shared with the members below.");
-    print_trust_review_line("Current members");
-    for kid in request.recipient_kids() {
-        let handle = request
-            .recipient_handle_hints()
-            .iter()
-            .find(|hint| hint.kid() == kid)
-            .map(|hint| hint.recipient_handle().to_string())
-            .unwrap_or_else(|| "unknown".to_string());
-        print_trust_review_line(&format!("  - {handle} ({})", format_kid_display_lossy(kid)));
+    for line in format_rewrap_recipient_set_review_lines(request) {
+        print_trust_review_line(&line);
     }
+}
+
+fn format_rewrap_recipient_set_review_lines(request: &TrustReviewRequest) -> Vec<String> {
+    let approved = request.approved_recipient_set().map(build_recipient_rows);
+    format_recipient_set_member_review_lines(
+        &build_rewrap_recipient_rows(request),
+        approved.as_deref(),
+    )
+}
+
+fn build_rewrap_recipient_rows(request: &TrustReviewRequest) -> Vec<ArtifactRecipientReviewRow> {
+    request
+        .recipient_kids()
+        .iter()
+        .map(|kid| {
+            let handle = request
+                .recipient_handle_hints()
+                .iter()
+                .find(|hint| hint.kid() == kid)
+                .map(|hint| hint.recipient_handle().to_string())
+                .unwrap_or_else(|| "unknown".to_string());
+            ArtifactRecipientReviewRow::new(handle, kid.to_string())
+        })
+        .collect()
 }
 
 pub(crate) fn approve_next_key(

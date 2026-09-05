@@ -83,5 +83,5 @@ fn prompt_tofu_confirmation_with_reader(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/internal/cli_rewrap_internal_test.rs"]
-mod tests;
+#[path = "../../../tests/unit/internal/cli_rewrap_promotion_test.rs"]
+mod cli_rewrap_promotion_test;

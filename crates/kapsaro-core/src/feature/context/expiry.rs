@@ -327,6 +327,17 @@ fn format_expiring_key_warning(key_label: &str, days_remaining: i64, expires_at:
     format!("{key_label} expires in {days_remaining} days. Expires at: {expires_at}")
 }
 
+/// Whether one warning is about a key's expiry rather than anything else.
+///
+/// A caller that has already reported the expiry of the key it holds drops the
+/// second statement of it, so the openings the warnings are built with are kept
+/// here, next to the formatting that produces them.
+pub fn is_key_expiry_warning(warning: &str) -> bool {
+    warning.starts_with("Artifact signing key expires in ")
+        || warning.starts_with("Artifact signing key has expired.")
+        || warning.starts_with("PublicKey for ")
+}
+
 fn format_expired_key_warning(key_label: &str, expires_at: &str) -> String {
     format!("{key_label} has expired. Expires at: {expires_at}")
 }

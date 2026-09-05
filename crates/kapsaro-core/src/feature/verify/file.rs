@@ -13,9 +13,9 @@ use crate::model::file_enc::VerifiedFileEncDocument;
 use crate::model::signature::ArtifactSignature;
 use crate::Result;
 
-use super::key_loader::{load_verifying_key_from_signature, SignatureVerificationKey};
 use super::report::build_signature_verification_report;
 use super::signature::verify_signature_with_loaded_key;
+use super::verifying_key::{build_verifying_key_from_signature, SignatureVerificationKey};
 
 /// Parse and verify file-enc content.
 pub fn verify_file_content(content: &FileEncContent) -> Result<VerifiedFileEncDocument> {
@@ -37,7 +37,7 @@ pub fn verify_file_content_for_operation(
 pub fn verify_file_document_report(doc: &FileEncDocument) -> SignatureVerificationReport {
     let signature = &doc.signature;
     let protected = doc.extract_protected_for_signing();
-    build_signature_verification_report(load_verifying_key_from_signature(signature), |loaded| {
+    build_signature_verification_report(build_verifying_key_from_signature(signature), |loaded| {
         verify_loaded_file_signature(protected, signature, loaded)
     })
 }
@@ -66,8 +66,8 @@ fn verify_loaded_file_signature(
 
 #[cfg(test)]
 #[path = "../../../tests/unit/internal/feature_verify_file_operation_test.rs"]
-mod tests;
+mod feature_verify_file_operation_test;
 
 #[cfg(test)]
-#[path = "../../../tests/unit/internal/feature_verify_limits_test.rs"]
-mod feature_verify_limits_test;
+#[path = "../../../tests/unit/internal/feature_verify_file_limits_test.rs"]
+mod feature_verify_file_limits_test;

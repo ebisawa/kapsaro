@@ -100,7 +100,7 @@ fn build_unsearched_check(root: &Path, gap: ResidueScanGap, limits: ResidueLimit
 /// staging of a write in progress destroys what that write was saving, so the
 /// removal is offered together with the condition it is safe under.
 fn build_residue_check(path: &Path) -> DoctorCheck {
-    DoctorCheck::warn_with_reason_and_next_action(
+    DoctorCheck::build_warning_with_reason_and_next_action(
         CHECK_ID,
         DoctorCategory::LocalState,
         DoctorSubject::Path(format_finding_path(path)),
@@ -259,5 +259,5 @@ impl ResidueSearch {
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/internal/app_doctor_local_state_staging_test.rs"]
-mod tests;
+#[path = "../../../../tests/unit/internal/service_doctor_local_state_staging_test.rs"]
+mod service_doctor_local_state_staging_test;

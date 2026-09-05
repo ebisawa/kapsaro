@@ -4,8 +4,8 @@
 //! Text layout helpers for CLI renderers.
 //! Preserves explicit line breaks without applying terminal-width wrapping.
 
-use crate::cli::common::presentation::{format_kid_display, format_kid_display_lossy};
 use console::strip_ansi_codes;
+use kapsaro_core::api::key::{format_kid_display, format_kid_display_lossy};
 
 const PAIR_SEPARATOR: &str = "  ";
 
@@ -108,4 +108,4 @@ pub(crate) fn visible_width(value: &str) -> usize {
 
 #[cfg(test)]
 #[path = "../../../../../tests/unit/internal/cli_common_output_text_layout_test.rs"]
-mod tests;
+mod cli_common_output_text_layout_test;

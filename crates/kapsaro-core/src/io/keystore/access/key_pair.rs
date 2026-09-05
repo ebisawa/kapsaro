@@ -35,11 +35,11 @@ use std::path::Path;
 use zeroize::Zeroizing;
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/internal/keystore_access_key_pair_test.rs"]
-mod keystore_access_key_pair_test;
+#[path = "../../../../tests/unit/internal/io_keystore_access_key_pair_test.rs"]
+mod io_keystore_access_key_pair_test;
 
 /// What the keystore holds under one key id, once its documents have been read.
-pub(super) enum StoredKeyPair {
+pub(super) enum KeyPairRecord {
     /// No directory stands under the key id at all.
     NoKeyDirectory,
     /// The directory is there with one of the two documents gone.
@@ -120,7 +120,7 @@ impl KeystoreAccess {
         let active = self.load_active_kid_in_verified_namespace(&member_dir)?;
         let was_active = active.as_ref() == Some(kid);
         validate(was_active)?;
-        prepare_key_directory_removal(&member_dir, member, kid).map(|_| ())
+        build_key_removal_plan(&member_dir, member, kid).map(|_| ())
     }
 
     /// Load the private half of one key, refusing a key stored without its
@@ -401,21 +401,21 @@ impl KeystoreAccess {
         member: &MemberHandle,
         kid: &Kid,
         private_half: PrivateHalfCheck,
-    ) -> Result<StoredKeyPair>
+    ) -> Result<KeyPairRecord>
     where
         D: DirectoryFd,
     {
         let Some(key_dir) = open_optional_child_dir(member_dir, kid.as_str())? else {
-            return Ok(StoredKeyPair::NoKeyDirectory);
+            return Ok(KeyPairRecord::NoKeyDirectory);
         };
         ensure_key_directory_safe(&key_dir)?;
         let permission_chain = self.key_permission_chain(member_dir, &key_dir);
         if !inspect_stored_private_half(&key_dir, &permission_chain, member, kid, private_half)? {
-            return Ok(StoredKeyPair::HalfMissing);
+            return Ok(KeyPairRecord::HalfMissing);
         }
         match load_optional_public_key_at(&key_dir, &permission_chain, member, kid)? {
-            Some(public_key) => Ok(StoredKeyPair::Present(Box::new(public_key))),
-            None => Ok(StoredKeyPair::HalfMissing),
+            Some(public_key) => Ok(KeyPairRecord::Present(Box::new(public_key))),
+            None => Ok(KeyPairRecord::HalfMissing),
         }
     }
 
@@ -433,7 +433,7 @@ impl KeystoreAccess {
         let active = self.load_active_kid_in_verified_namespace(member_dir)?;
         let was_active = active.as_ref() == Some(kid);
         validate(was_active)?;
-        let prepared = prepare_key_directory_removal(member_dir, member, kid)?;
+        let prepared = build_key_removal_plan(member_dir, member, kid)?;
         // The marker goes first. A deletion that stops partway would otherwise
         // leave `active` naming a key whose private half is gone, which every
         // later load reports as a missing key; clearing it first leaves the
@@ -442,7 +442,7 @@ impl KeystoreAccess {
             clear_active_kid_locked(member_dir, member)?;
         }
         execute_key_directory_removal(member_dir, kid, prepared).map_err(|error| {
-            describe_interrupted_removal(member_dir, member, kid, was_active, error)
+            build_interrupted_removal_error(member_dir, member, kid, was_active, error)
         })?;
         Ok(was_active)
     }
@@ -517,7 +517,7 @@ fn load_private_key_at(
     let mut private_file = relative::open_regular_file_at(key_dir, PRIVATE_KEY_FILE)?;
     ensure_open_private_key_is_owner_only(key_dir, &private_file, &path)?;
     run_private_key_checked_hook();
-    let private_key = read_open_private_key(&mut private_file, &path)?;
+    let private_key = load_open_private_key(&mut private_file, &path)?;
     ensure_document_states_stored_identity(private_key_identity(&private_key), member, kid, &path)?;
     Ok(private_key)
 }
@@ -569,7 +569,7 @@ fn ensure_open_private_key_is_owner_only(
 /// The source text is wiped once the document is built, the way every other
 /// loader of a key document wipes it. The wipe is best effort: the read grows
 /// its buffer as it goes, and a copy left in a freed allocation is out of reach.
-fn read_open_private_key(private_file: &mut File, path: &Path) -> Result<PrivateKey> {
+fn load_open_private_key(private_file: &mut File, path: &Path) -> Result<PrivateKey> {
     let display_path = format_path_relative_to_cwd(path);
     let bytes = load_capped_bytes(
         private_file,
@@ -753,7 +753,7 @@ where
 }
 
 /// A key directory checked over and ready to be deleted.
-struct PreparedKeyRemoval {
+struct KeyRemovalPlan {
     key_dir: OpenDir,
     entries: Vec<(String, ChildType)>,
 }
@@ -764,11 +764,11 @@ struct PreparedKeyRemoval {
 /// removed, so meeting an undeletable entry costs nothing: no key document has
 /// been touched and no marker has been cleared. Nothing here writes, so a
 /// caller asking the question ahead of time performs only published reads.
-fn prepare_key_directory_removal<D>(
+fn build_key_removal_plan<D>(
     member_dir: &D,
     member: &MemberHandle,
     kid: &Kid,
-) -> Result<PreparedKeyRemoval>
+) -> Result<KeyRemovalPlan>
 where
     D: DirectoryFd,
 {
@@ -777,7 +777,7 @@ where
     ensure_key_directory_safe(&key_dir)?;
     let entries = list_child_entries_at(&key_dir)?;
     ensure_key_entries_removable(&key_dir, &entries)?;
-    Ok(PreparedKeyRemoval { key_dir, entries })
+    Ok(KeyRemovalPlan { key_dir, entries })
 }
 
 /// Delete the key directory the preparation opened.
@@ -786,7 +786,7 @@ where
 /// The marker is cleared before the documents go, so a failure here leaves the
 /// member with no active key. Reporting only that the removal failed reads as
 /// "nothing changed", and the operator would not know to run `key activate`.
-fn describe_interrupted_removal<D>(
+fn build_interrupted_removal_error<D>(
     member_dir: &D,
     member: &MemberHandle,
     kid: &Kid,
@@ -816,7 +816,7 @@ where
 fn execute_key_directory_removal(
     member_dir: &ExclusiveLockedDir<'_>,
     kid: &Kid,
-    prepared: PreparedKeyRemoval,
+    prepared: KeyRemovalPlan,
 ) -> Result<()> {
     for (name, child_type) in &prepared.entries {
         remove_child_entry(&prepared.key_dir, name, *child_type)?;
@@ -863,7 +863,7 @@ fn publish_key_pair_atomic(
 ) -> Result<()> {
     ensure_key_pair_states_stored_identity(member_dir, member, kid, private_key, public_key)?;
     let temp_name = relative::unique_staging_dir_name();
-    let temp_dir = relative::create_child_dir_restricted_at(member_dir, &temp_name)?;
+    let temp_dir = relative::save_child_dir_restricted_at(member_dir, &temp_name)?;
     run_key_pair_staged_hook();
     if let Err(error) = publish_staged_key_pair(
         member_dir,

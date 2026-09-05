@@ -8,11 +8,11 @@ use std::process::Command;
 
 use kapsaro_core::api::secret::SecretString;
 
-use crate::cli::run::{configure_child_environment, execute_child_command};
+use crate::cli::run::{execute_child_command, set_child_environment};
 use crate::test_utils::EnvGuard;
 
 #[test]
-fn test_configure_child_environment_removes_parent_kapsaro_values_and_applies_secrets() {
+fn test_set_child_environment_removes_parent_kapsaro_values_and_applies_secrets() {
     let _guard = EnvGuard::new(&["KAPSARO_PARENT_ONLY", "KAPSARO_FROM_ARTIFACT"]);
     std::env::set_var("KAPSARO_PARENT_ONLY", "parent-secret");
     std::env::set_var("KAPSARO_FROM_ARTIFACT", "parent-value");
@@ -28,7 +28,7 @@ fn test_configure_child_environment_removes_parent_kapsaro_values_and_applies_se
     ]);
     let mut command = Command::new("unused");
 
-    configure_child_environment(&mut command, &secrets);
+    set_child_environment(&mut command, &secrets);
 
     let configured = command
         .get_envs()

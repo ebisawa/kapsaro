@@ -5,7 +5,12 @@
 
 use clap::{Args, Subcommand};
 
-use crate::cli::options::{ForceOption, LocalOutputOptions, MemberHandleOption, SigningOptions};
+use crate::cli::common::context::CliContext;
+use crate::cli::common::key_context::load_trust_command_session;
+use crate::cli::options::{
+    ForceOption, LocalOutputOptions, MemberHandleOption, SigningOptions, ToCommonOptions,
+};
+use kapsaro_core::api::trust::TrustCommandSession;
 use kapsaro_core::Error;
 
 mod list;
@@ -130,7 +135,7 @@ pub(crate) struct PurgeArgs {
     #[command(flatten)]
     pub member: MemberHandleOption,
 
-    /// Remove entries older than this duration (e.g. "180d")
+    /// Remove entries older than this duration, as <number><unit> with unit d, m or y (e.g. "180d")
     #[arg(long)]
     pub older_than: String,
 
@@ -183,4 +188,15 @@ fn run_recipients(args: RecipientsArgs) -> Result<(), Error> {
         RecipientTrustCommands::Remove(args) => remove::run_recipient(args),
         RecipientTrustCommands::Purge(args) => purge::run_recipients(args),
     }
+}
+
+/// Resolve the CLI inputs a trust subcommand shares, then open the trust store
+/// session they name. Every trust subcommand that writes starts here, so the
+/// signing key and the store owner are selected the same way in all of them.
+fn load_trust_session(
+    common: &impl ToCommonOptions,
+    member_handle: Option<String>,
+) -> Result<TrustCommandSession, Error> {
+    let context = CliContext::resolve(common)?;
+    load_trust_command_session(&context, member_handle)
 }

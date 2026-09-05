@@ -28,6 +28,9 @@ pub mod process_output;
 #[path = "ssh_stubs.rs"]
 #[allow(dead_code)]
 mod ssh_stubs;
+#[path = "../../../kapsaro-test-support/src/trust_store_state.rs"]
+#[allow(dead_code)]
+pub mod trust_store_state;
 #[path = "../../../kapsaro-test-support/src/workspace_state.rs"]
 #[allow(dead_code)]
 pub mod workspace_state;
@@ -40,10 +43,10 @@ pub use constants::{
 pub use crypto_context::{setup_member_key_context, setup_member_key_context_at};
 #[allow(unused_imports)]
 pub use fixture::{
-    create_local_state_dir, generate_temp_ssh_keypair_in_dir, load_fixture_public_key,
-    load_fixture_ssh_pubkey, local_state_temp_dir, restrict_local_state_file, setup_test_keystore,
+    add_member_to_keystore, ensure_local_state_dir, generate_temp_ssh_keypair_in_dir,
+    load_fixture_public_key, load_fixture_ssh_pubkey, local_state_temp_dir,
+    restrict_local_state_file, save_local_state_file, setup_test_keystore,
     setup_test_keystore_from_fixtures, setup_test_workspace, setup_test_workspace_from_fixtures,
-    write_local_state_file,
 };
 
 /// Save a public key into a keystore, keeping every directory it creates
@@ -59,8 +62,8 @@ pub fn save_public_key(
     kid: &str,
     public_key: &kapsaro_core::test_support::domain::public_key::PublicKey,
 ) -> kapsaro_core::Result<()> {
-    create_local_state_dir(keystore_root);
-    create_local_state_dir(&keystore_root.join(member_handle));
+    ensure_local_state_dir(keystore_root);
+    ensure_local_state_dir(&keystore_root.join(member_handle));
     fixture::save_public_key(keystore_root, member_handle, kid, public_key)
 }
 #[allow(unused_imports)]
@@ -75,6 +78,10 @@ pub use keygen_helpers::{build_test_private_key, keygen_test};
 pub use privilege::{permission_denial_can_be_staged, REQUIRE_UNPRIVILEGED_ENV};
 #[allow(unused_imports)]
 pub use ssh_stubs::stub_agent_signer;
+#[allow(unused_imports)]
+pub use trust_store_state::{
+    build_known_key, build_recipient_set, save_trust_store_signed_by_active_key,
+};
 #[allow(unused_imports)]
 pub use workspace_state::{
     build_expiring_soon_timestamp, kid, member_handle, save_active_public_key_to_workspace,

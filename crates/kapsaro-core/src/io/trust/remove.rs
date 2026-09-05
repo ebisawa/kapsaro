@@ -61,7 +61,7 @@ where
     match removal {
         Ok(RemovedEntry::Persisted) => Ok(true),
         Ok(RemovedEntry::Unpersisted(error)) => Err(Error::build_io_error(
-            describe_failure_after_trust_store_removal(
+            format_failure_after_trust_store_removal(
                 path,
                 "its directory entry was not persisted",
                 &error,
@@ -82,7 +82,7 @@ where
 /// The deletion is what the operator asked for and it landed. Reporting only
 /// the failure that followed reads as "the reset did not happen", which sends
 /// them looking for approvals that are already gone.
-pub(crate) fn describe_failure_after_trust_store_removal(
+pub(crate) fn format_failure_after_trust_store_removal(
     path: &Path,
     condition: &str,
     error: &Error,
@@ -141,8 +141,11 @@ where
 /// The entry holds approvals this run has no mandate to destroy, so it goes
 /// back under the store's own name and the reset ends having deleted nothing. A
 /// restore that cannot land leaves the document under the name it was moved to,
-/// and the report names that entry: it is the only copy, and the trust
-/// directory refuses every later use until an operator has dealt with it.
+/// and the report names both names, because that entry is the only copy. The
+/// trust directory goes on working: an entry under a staging name is skipped by
+/// the directory check rather than refused, so later runs read no approvals at
+/// all until an operator renames it back, and `doctor` reports it standing
+/// there.
 fn restore_unconfirmed_entry<D>(
     locked_trust_dir: &D,
     file_name: &str,
@@ -153,7 +156,7 @@ fn restore_unconfirmed_entry<D>(
 where
     D: DirectoryFd,
 {
-    let replaced = describe_removal_target_replaced(path, reason);
+    let replaced = format_removal_target_replaced(path, reason);
     if let Err(error) = rename_child_noreplace_unsynced_at(locked_trust_dir, quarantine, file_name)
     {
         return build_unrestored_entry_error(
@@ -190,7 +193,7 @@ fn build_quarantine_failed_error(path: &Path, error: &Error) -> Error {
 }
 
 /// Say that the deletion was aimed at a document that is no longer the target.
-fn describe_removal_target_replaced(path: &Path, reason: &str) -> String {
+fn format_removal_target_replaced(path: &Path, reason: &str) -> String {
     format!(
         "Local trust store '{}' changed since reset confirmation and must be reviewed again: \
          {reason}",

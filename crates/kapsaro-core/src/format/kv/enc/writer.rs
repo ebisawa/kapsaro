@@ -27,4 +27,4 @@ pub fn build_unsigned_kv_document(
 
 #[cfg(test)]
 #[path = "../../../../tests/unit/internal/format_kv_enc_writer_test.rs"]
-mod tests;
+mod format_kv_enc_writer_test;

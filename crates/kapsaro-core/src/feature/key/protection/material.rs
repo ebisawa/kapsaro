@@ -4,7 +4,7 @@
 //! Shared PrivateKey protection material and AEAD helpers.
 
 use crate::crypto::aead::xchacha;
-use crate::crypto::rng::fill_random_array;
+use crate::crypto::rng::generate_random_array;
 use crate::crypto::types::data::{Aad, Ciphertext, Plaintext};
 use crate::crypto::types::keys::XChaChaKey;
 use crate::crypto::types::primitives::{HkdfSalt, PrivateKeyIkmSalt, XChaChaNonce};
@@ -37,8 +37,8 @@ pub(super) struct FreshPrivateKeyProtectionMaterial {
 impl FreshPrivateKeyProtectionMaterial {
     pub(super) fn generate() -> Result<Self> {
         Ok(Self::new(
-            PrivateKeyIkmSalt::new(fill_random_array::<32>()?),
-            HkdfSalt::new(fill_random_array::<32>()?),
+            PrivateKeyIkmSalt::new(generate_random_array::<32>()?),
+            HkdfSalt::new(generate_random_array::<32>()?),
         ))
     }
 

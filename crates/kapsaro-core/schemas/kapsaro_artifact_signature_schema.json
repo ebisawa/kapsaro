@@ -10,7 +10,7 @@
     "signer_pub": { "$ref": "kapsaro_public_key_schema.json" },
     "mac": {
       "type": "string",
-      "pattern": "^hmac-sha256:[A-Za-z0-9_-]{43}$",
+      "pattern": "^hmac-sha256:[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$",
       "description": "Key possession proof: HMAC-SHA256 tag encoded as hmac-sha256:<base64url-no-pad 32-byte tag>"
     },
     "sig": {

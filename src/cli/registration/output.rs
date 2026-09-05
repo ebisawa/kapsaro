@@ -11,7 +11,7 @@ use crate::cli::common::output::text::print_warning_line;
 use crate::cli::common::output::text::registration::{
     print_created_workspace_summary, print_registration_next_steps,
 };
-use crate::cli::common::presentation::format_kid_display;
+use kapsaro_core::api::key::format_kid_display;
 use kapsaro_core::api::registration::types::{
     MemberKeySetupResult, RegistrationOutcome, RegistrationResult,
 };

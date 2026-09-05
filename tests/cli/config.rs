@@ -336,3 +336,24 @@ fn test_config_unset_removes_workspace_value() {
         .assert()
         .failure();
 }
+
+/// A home path the CLI cannot read has to stop the command. Falling back to the
+/// default location would write the setting somewhere the operator did not name.
+#[cfg(unix)]
+#[test]
+fn test_config_set_rejects_a_home_path_that_is_not_utf8() {
+    use std::ffi::OsStr;
+    use std::os::unix::ffi::OsStrExt;
+
+    cmd()
+        .arg("config")
+        .arg("set")
+        .arg("member_handle")
+        .arg("test@example.com")
+        .env("KAPSARO_HOME", OsStr::from_bytes(b"/tmp/kapsaro-\xff-home"))
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "KAPSARO_HOME environment variable contains invalid UTF-8",
+        ));
+}

@@ -3,8 +3,8 @@
 
 //! Unit tests for feature/rewrap/file_op module (file-enc rewrap operations).
 //!
-//! Tests rotate, add-recipient, and remove-recipient via the app-level
-//! rewrap API since `file_op` is `pub(crate)`.
+//! Tests rotate, add-recipient, and remove-recipient through the feature-level
+//! rewrap entry points since `file_op` is `pub(crate)`.
 
 use crate::crypto::types::keys::MasterKey;
 use crate::feature::context::crypto::CryptoContext;
@@ -17,10 +17,11 @@ use crate::feature::rewrap::{rewrap_content, RewrapRequest};
 use crate::feature::verify::file::verify_file_document;
 use crate::format::content::{EncContent, FileEncContent};
 use crate::model::file_enc::FileEncDocument;
-use crate::test_support::storage::keystore::storage::save_key_pair_atomic;
 use crate::test_support::storage::keystore::storage::{list_kids, load_public_key};
 use crate::test_utils::keygen_helpers::build_verified_recipient_keys;
-use crate::test_utils::{setup_member_key_context, setup_test_keystore_from_fixtures};
+use crate::test_utils::{
+    add_member_to_keystore, setup_member_key_context, setup_test_keystore_from_fixtures,
+};
 use crate::test_utils::{ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, CAROL_MEMBER_HANDLE};
 use std::fs;
 use tempfile::TempDir;
@@ -74,36 +75,6 @@ fn rewrap_file_content(
     rewrap_content(&EncContent::FileEnc(content.clone()), request)
 }
 
-fn add_member_to_keystore(temp_dir: &TempDir, member_handle: &str) -> String {
-    let keystore_root = temp_dir.path().join("keys");
-    let ssh_pub_content = std::fs::read_to_string(temp_dir.path().join(".ssh/test_ed25519.pub"))
-        .unwrap()
-        .trim()
-        .to_string();
-    let ssh_priv = temp_dir.path().join(".ssh/test_ed25519");
-    let (bob_private, bob_public) =
-        crate::test_utils::keygen_helpers::keygen_test(member_handle, &ssh_priv, &ssh_pub_content)
-            .unwrap();
-    let bob_kid = bob_public.protected.kid.clone();
-    let bob_private_doc = crate::test_utils::keygen_helpers::build_test_private_key(
-        &bob_private,
-        &bob_public.protected.subject_handle,
-        &bob_public.protected.kid,
-        &ssh_priv,
-        &ssh_pub_content,
-    )
-    .unwrap();
-    save_key_pair_atomic(
-        &keystore_root,
-        member_handle,
-        &bob_kid,
-        &bob_private_doc,
-        &bob_public,
-    )
-    .unwrap();
-    bob_kid
-}
-
 /// Setup a two-member keystore (alice + bob) in one TempDir.
 ///
 /// Returns (temp_dir, alice_kid, bob_kid).
@@ -113,7 +84,7 @@ fn setup_two_member_keystore() -> (TempDir, String, String) {
 
     let alice_kids = list_kids(&keystore_root, ALICE_MEMBER_HANDLE).unwrap();
     let alice_kid = alice_kids.first().unwrap().clone();
-    let bob_kid = add_member_to_keystore(&temp_dir, BOB_MEMBER_HANDLE);
+    let bob_kid = add_member_to_keystore(temp_dir.path(), BOB_MEMBER_HANDLE);
 
     (temp_dir, alice_kid, bob_kid)
 }
@@ -123,7 +94,7 @@ fn setup_two_member_keystore() -> (TempDir, String, String) {
 /// Returns (temp_dir, alice_kid, bob_kid, carol_kid).
 fn setup_three_member_keystore() -> (TempDir, String, String, String) {
     let (temp_dir, alice_kid, bob_kid) = setup_two_member_keystore();
-    let carol_kid = add_member_to_keystore(&temp_dir, CAROL_MEMBER_HANDLE);
+    let carol_kid = add_member_to_keystore(temp_dir.path(), CAROL_MEMBER_HANDLE);
     (temp_dir, alice_kid, bob_kid, carol_kid)
 }
 

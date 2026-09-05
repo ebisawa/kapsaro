@@ -91,4 +91,4 @@ fn validate_kv_entry_aead(aead: &str) -> Result<()> {
 
 #[cfg(test)]
 #[path = "../../../tests/unit/internal/feature_envelope_entry_test.rs"]
-mod tests;
+mod feature_envelope_entry_test;

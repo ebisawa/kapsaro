@@ -5,8 +5,10 @@
 
 use crate::feature::context::crypto::CryptoContext;
 use crate::feature::context::crypto::SigningContext;
+use crate::feature::kv::decrypt::decrypt_kv_document_with_context;
 use crate::feature::kv::encrypt::encrypt_kv_map_with_wrap_mutation;
 use crate::feature::rewrap::{rewrap_content, RewrapRequest};
+use crate::feature::verify::kv::signature::verify_kv_content;
 use crate::format::content::{EncContent, KvEncContent};
 use crate::format::kv::document::parse_kv_document;
 use crate::format::kv::dotenv::parse_dotenv;
@@ -18,10 +20,11 @@ use crate::model::kv_enc::line::KvEncLine;
 use crate::test_support::storage::keystore::storage::{list_kids, load_public_key};
 use crate::test_utils::keygen_helpers::build_verified_recipient_keys;
 use crate::test_utils::{
-    save_active_public_key_to_workspace, setup_member_key_context,
+    add_member_to_keystore, save_active_public_key_to_workspace, setup_member_key_context,
     setup_test_keystore_from_fixtures, update_active_private_key_expires_at,
 };
 use crate::test_utils::{ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE};
+use std::collections::HashMap;
 use std::fs;
 use tempfile::TempDir;
 
@@ -86,6 +89,21 @@ fn recipient_handles_from_wrap(wrap: &KvWrap) -> Vec<&str> {
         .collect()
 }
 
+/// Decrypt every entry of kv-enc content as the given member.
+fn decrypt_kv_values_as(
+    content: &str,
+    member_handle: &str,
+    key_ctx: &CryptoContext,
+) -> HashMap<String, String> {
+    let verified = verify_kv_content(&KvEncContent::new_unchecked(content.to_string())).unwrap();
+    decrypt_kv_document_with_context(&verified, member_handle, key_ctx)
+        .unwrap()
+        .value
+        .into_iter()
+        .map(|(key, value)| (key, String::from_utf8(value.to_vec()).unwrap()))
+        .collect()
+}
+
 fn removed_recipient_handles_from_wrap(wrap: &KvWrap) -> Vec<&str> {
     wrap.removed_recipients
         .as_deref()
@@ -147,42 +165,12 @@ fn encrypt_kv_for_alice_and_bob(
 ///
 /// Returns (temp_dir, alice_kid, bob_kid).
 fn setup_two_member_keystore() -> (TempDir, String, String) {
-    // Start with alice keystore
     let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let keystore_root = temp_dir.path().join("keys");
 
     let alice_kids = list_kids(&keystore_root, ALICE_MEMBER_HANDLE).unwrap();
     let alice_kid = alice_kids.first().unwrap().clone();
-
-    // Generate bob's keys in the same keystore
-    let ssh_pub_content = std::fs::read_to_string(temp_dir.path().join(".ssh/test_ed25519.pub"))
-        .unwrap()
-        .trim()
-        .to_string();
-    let ssh_priv = temp_dir.path().join(".ssh/test_ed25519");
-    let (bob_private, bob_public) = crate::test_utils::keygen_helpers::keygen_test(
-        BOB_MEMBER_HANDLE,
-        &ssh_priv,
-        &ssh_pub_content,
-    )
-    .unwrap();
-    let bob_kid = bob_public.protected.kid.clone();
-    let bob_private_doc = crate::test_utils::keygen_helpers::build_test_private_key(
-        &bob_private,
-        &bob_public.protected.subject_handle,
-        &bob_public.protected.kid,
-        &ssh_priv,
-        &ssh_pub_content,
-    )
-    .unwrap();
-    crate::test_support::storage::keystore::storage::save_key_pair_atomic(
-        &keystore_root,
-        BOB_MEMBER_HANDLE,
-        &bob_kid,
-        &bob_private_doc,
-        &bob_public,
-    )
-    .unwrap();
+    let bob_kid = add_member_to_keystore(temp_dir.path(), BOB_MEMBER_HANDLE);
 
     (temp_dir, alice_kid, bob_kid)
 }
@@ -314,6 +302,79 @@ fn test_rewrap_kv_add_recipient() {
         recipient_handles.contains(&ALICE_MEMBER_HANDLE),
         "rewrapped WRAP must still include alice as a recipient, got: {:?}",
         recipient_handles
+    );
+}
+
+#[test]
+fn test_rewrap_kv_add_recipient_with_rotate_key_keeps_added_recipient() {
+    let (temp_dir, alice_kid, bob_kid) = setup_two_member_keystore();
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(&alice_kid));
+
+    // Encrypt for alice only
+    let encrypted = encrypt_kv_for_alice(&temp_dir, &alice_kid, &key_ctx);
+
+    // Setup workspace with both alice and bob as active members (adding bob)
+    setup_workspace_members(&temp_dir, ALICE_MEMBER_HANDLE, &alice_kid);
+    setup_workspace_members(&temp_dir, BOB_MEMBER_HANDLE, &bob_kid);
+
+    // Add bob and rotate the master key in the same rewrap
+    let request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), true, false);
+    let encrypted = KvEncContent::new_unchecked(encrypted);
+    let rewrapped = rewrap_kv_content(&encrypted, &request).unwrap();
+
+    let wrap = parse_wrap_from_content(&rewrapped);
+    let recipient_handles = recipient_handles_from_wrap(&wrap);
+    assert!(
+        recipient_handles.contains(&BOB_MEMBER_HANDLE),
+        "rotated WRAP must keep bob as a recipient, got: {:?}",
+        recipient_handles
+    );
+    assert!(
+        recipient_handles.contains(&ALICE_MEMBER_HANDLE),
+        "rotated WRAP must keep alice as a recipient, got: {:?}",
+        recipient_handles
+    );
+
+    let bob_key_ctx = setup_member_key_context(&temp_dir, BOB_MEMBER_HANDLE, Some(&bob_kid));
+    let values = decrypt_kv_values_as(&rewrapped, BOB_MEMBER_HANDLE, &bob_key_ctx);
+    assert_eq!(
+        values.get("DATABASE_URL").map(String::as_str),
+        Some("postgres://localhost"),
+        "bob must be able to decrypt the rotated document"
+    );
+}
+
+#[test]
+fn test_rewrap_kv_remove_recipient_with_rotate_key_keeps_history() {
+    let (temp_dir, alice_kid, bob_kid) = setup_two_member_keystore();
+    let key_ctx = setup_member_key_context(&temp_dir, ALICE_MEMBER_HANDLE, Some(&alice_kid));
+    let encrypted = encrypt_kv_for_alice_and_bob(&temp_dir, &alice_kid, &bob_kid, &key_ctx);
+
+    // Setup workspace with only alice (bob removed)
+    setup_workspace_members(&temp_dir, ALICE_MEMBER_HANDLE, &alice_kid);
+
+    // Remove bob and rotate the master key in the same rewrap
+    let request = single_rewrap_request(&key_ctx, Some(temp_dir.path()), true, false);
+    let encrypted = KvEncContent::new_unchecked(encrypted);
+    let rewrapped = rewrap_kv_content(&encrypted, &request).unwrap();
+
+    let wrap = parse_wrap_from_content(&rewrapped);
+    let recipient_handles = recipient_handles_from_wrap(&wrap);
+    assert!(recipient_handles.contains(&ALICE_MEMBER_HANDLE));
+    assert!(!recipient_handles.contains(&BOB_MEMBER_HANDLE));
+
+    let removed_recipient_handles = removed_recipient_handles_from_wrap(&wrap);
+    assert!(
+        removed_recipient_handles.contains(&BOB_MEMBER_HANDLE),
+        "disclosure history must survive remove + rotate, got: {:?}",
+        removed_recipient_handles
+    );
+
+    let values = decrypt_kv_values_as(&rewrapped, ALICE_MEMBER_HANDLE, &key_ctx);
+    assert_eq!(
+        values.get("DATABASE_URL").map(String::as_str),
+        Some("postgres://localhost"),
+        "alice must be able to decrypt the rewrapped document"
     );
 }
 

@@ -18,6 +18,7 @@ pub(crate) mod kv;
 pub(crate) mod member;
 pub(crate) mod online;
 pub(crate) mod operation;
+pub(crate) mod process;
 pub(crate) mod read;
 pub(crate) mod registration;
 pub(crate) mod rewrap;

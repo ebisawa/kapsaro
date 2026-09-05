@@ -294,7 +294,7 @@ fn missing_child_dir_error<D>(parent: &D, child: &std::ffi::CStr, path: &Path) -
 where
     D: DirectoryFd,
 {
-    classify_missing_child_dir(
+    build_missing_child_dir_error(
         rfs::statat(parent.file(), child, AtFlags::SYMLINK_NOFOLLOW).map(|_| ()),
         parent.scope(),
         path,
@@ -302,7 +302,7 @@ where
 }
 
 #[cfg(unix)]
-fn classify_missing_child_dir(
+fn build_missing_child_dir_error(
     entry: std::result::Result<(), rustix::io::Errno>,
     scope: DirectoryScope,
     path: &Path,
@@ -322,7 +322,7 @@ fn classify_missing_child_dir(
 
 /// Create a child directory only this account can reach, refusing a taken name.
 #[cfg(unix)]
-pub(crate) fn create_child_dir_restricted_at<D>(parent: &D, name: &str) -> Result<OpenDir>
+pub(crate) fn save_child_dir_restricted_at<D>(parent: &D, name: &str) -> Result<OpenDir>
 where
     D: DirectoryFd,
 {
@@ -366,7 +366,7 @@ where
     let staging = unique_staging_dir_name();
     let staging_child = checked_child_name(&staging)?;
     let create_mode = restricted.unwrap_or(Mode::from(0o777));
-    make_child_dir(parent, &staging, staging_child.as_c_str(), create_mode)?;
+    ensure_staged_child_dir(parent, &staging, staging_child.as_c_str(), create_mode)?;
     let outcome = stage_child_dir(parent, &staging, staging_child.as_c_str(), restricted).and_then(
         |staged| {
             publish_staged_child_dir(parent, staged, staging_child.as_c_str(), (&target, name))
@@ -759,7 +759,12 @@ where
 
 /// Make the directory a publish stages, under a name of that call's own.
 #[cfg(unix)]
-fn make_child_dir<D>(parent: &D, name: &str, child: &std::ffi::CStr, mode: Mode) -> Result<()>
+fn ensure_staged_child_dir<D>(
+    parent: &D,
+    name: &str,
+    child: &std::ffi::CStr,
+    mode: Mode,
+) -> Result<()>
 where
     D: DirectoryFd,
 {
@@ -1013,7 +1018,7 @@ where
     let mut inspected = 0;
     let mut truncated = false;
     for entry in stream {
-        let entry = entry.map_err(|error| read_directory_entry_error(dir, error))?;
+        let entry = entry.map_err(|error| build_directory_entry_error(dir, error))?;
         let raw = entry.file_name();
         if raw.to_bytes() == b"." || raw.to_bytes() == b".." {
             continue;
@@ -1202,7 +1207,7 @@ where
 ///
 /// Every caller that refuses to take over an occupied name reports it in these
 /// words, so the same entry reads the same whichever document was being written.
-pub(crate) fn describe_unreplaceable_child_type(child_type: ChildType) -> Option<&'static str> {
+pub(crate) fn format_unreplaceable_child_type(child_type: ChildType) -> Option<&'static str> {
     match child_type {
         ChildType::RegularFile => None,
         ChildType::Symlink => Some("symlink"),
@@ -1231,7 +1236,7 @@ where
     match reviewed_content {
         Some(reviewed_content) => {
             let current = load_text_with_limit_at(dir, name, max_bytes, subject_display).map_err(
-                |error| classify_review_comparison_failure(dir, name, subject_display, error),
+                |error| build_review_comparison_error(dir, name, subject_display, error),
             )?;
             if current == reviewed_content {
                 return Ok(());
@@ -1255,7 +1260,7 @@ where
 /// open, and answering it with "changed since review" sends the operator back
 /// to review a file when what they have to fix is the read.
 #[cfg(unix)]
-fn classify_review_comparison_failure<D>(
+fn build_review_comparison_error<D>(
     dir: &D,
     name: &str,
     subject_display: &str,
@@ -1313,7 +1318,7 @@ where
     let target = checked_atomic_write_target_name(name)?;
     let temp_name = unique_write_staging_name(name);
     let temp = checked_child_name(&temp_name)?;
-    write_staged_file(dir, &temp_name, temp.as_c_str(), content.as_bytes(), None)?;
+    save_staged_file(dir, &temp_name, temp.as_c_str(), content.as_bytes(), None)?;
     run_pre_publish_hook();
     if let Err(error) = precondition() {
         discard_staged_file(dir, &temp_name);
@@ -1358,14 +1363,14 @@ where
 /// directory entry holds. Bounding the caller's name once is what keeps the
 /// refusal about the name they chose.
 #[cfg(unix)]
-pub(crate) fn create_text_noreplace_at<D>(dir: &D, name: &str, content: &str) -> Result<()>
+pub(crate) fn save_text_noreplace_at<D>(dir: &D, name: &str, content: &str) -> Result<()>
 where
     D: DirectoryFd,
 {
     let target = checked_atomic_write_target_name(name)?;
     let temp_name = unique_write_staging_name(name);
     let temp = checked_child_name(&temp_name)?;
-    write_staged_file(dir, &temp_name, temp.as_c_str(), content.as_bytes(), None)?;
+    save_staged_file(dir, &temp_name, temp.as_c_str(), content.as_bytes(), None)?;
     if let Err(error) =
         rename_child_noreplace(dir, temp.as_c_str(), &temp_name, target.as_c_str(), name)
     {
@@ -1383,7 +1388,7 @@ where
     let target = checked_atomic_write_target_name(name)?;
     let temp_name = unique_write_staging_name(name);
     let temp = checked_child_name(&temp_name)?;
-    write_staged_file(dir, &temp_name, temp.as_c_str(), data, mode)?;
+    save_staged_file(dir, &temp_name, temp.as_c_str(), data, mode)?;
     publish_staged_file(dir, name, &temp_name, temp.as_c_str(), target.as_c_str())
 }
 
@@ -1419,7 +1424,7 @@ fn run_pre_publish_hook() {}
 /// writer still holding it, and a staged file is removed rather than left for
 /// the next caller to find standing in the directory.
 #[cfg(unix)]
-fn write_staged_file<D>(
+fn save_staged_file<D>(
     dir: &D,
     temp_name: &str,
     temp: &std::ffi::CStr,
@@ -1430,9 +1435,9 @@ where
     D: DirectoryFd,
 {
     let create_mode = mode.unwrap_or(Mode::from(0o666));
-    let mut temp_file = create_temp_file(dir, temp, temp_name, create_mode)?;
+    let mut temp_file = stage_temp_file(dir, temp, temp_name, create_mode)?;
     let result = apply_saved_file_mode(dir, &temp_file, temp_name, mode)
-        .and_then(|()| write_and_sync(&mut temp_file, data));
+        .and_then(|()| save_and_sync(&mut temp_file, data));
     drop(temp_file);
     if let Err(error) = result {
         discard_staged_file(dir, temp_name);
@@ -1773,7 +1778,7 @@ fn open_directory_error(path: &Path, error: rustix::io::Errno) -> Error {
 }
 
 #[cfg(unix)]
-fn read_directory_entry_error<D>(dir: &D, error: rustix::io::Errno) -> Error
+fn build_directory_entry_error<D>(dir: &D, error: rustix::io::Errno) -> Error
 where
     D: DirectoryFd,
 {
@@ -1935,7 +1940,7 @@ where
         OFlags::RDONLY | OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC,
         Mode::empty(),
     )
-    .map_err(|e| read_file_error(dir, name, e))?;
+    .map_err(|e| build_file_error(dir, name, e))?;
     let file: File = fd.into();
     validate_regular_file(&file, &child_path(dir, name), dir.scope())?;
     Ok(file)
@@ -1948,7 +1953,7 @@ where
 {
     let path = child_path(dir, name);
     let stat = rfs::statat(dir.file(), child, AtFlags::SYMLINK_NOFOLLOW)
-        .map_err(|e| read_file_error(dir, name, e))?;
+        .map_err(|e| build_file_error(dir, name, e))?;
     validate_raw_file_type(FileType::from_raw_mode(stat.st_mode), &path, dir.scope())
 }
 
@@ -1982,7 +1987,7 @@ fn validate_raw_file_type(file_type: FileType, path: &str, scope: DirectoryScope
 /// `mode` is what the create asks for; the umask still narrows it, and the
 /// caller settles the final mode on the descriptor afterwards.
 #[cfg(unix)]
-fn create_temp_file<D>(dir: &D, temp: &std::ffi::CStr, temp_name: &str, mode: Mode) -> Result<File>
+fn stage_temp_file<D>(dir: &D, temp: &std::ffi::CStr, temp_name: &str, mode: Mode) -> Result<File>
 where
     D: DirectoryFd,
 {
@@ -2019,7 +2024,7 @@ where
 /// `flush` only hands the bytes to the kernel. Without the sync the rename can
 /// reach disk while the contents have not, leaving an empty or truncated file
 /// after a crash.
-fn write_and_sync(file: &mut File, data: &[u8]) -> Result<()> {
+fn save_and_sync(file: &mut File, data: &[u8]) -> Result<()> {
     file.write_all(data)
         .map_err(|e| Error::build_io_error_with_source(format!("Write failed: {}", e), e))?;
     file.sync_all()
@@ -2191,7 +2196,7 @@ fn io_error(message: String, error: rustix::io::Errno) -> Error {
 }
 
 #[cfg(unix)]
-fn read_file_error<D>(dir: &D, name: &str, error: rustix::io::Errno) -> Error
+fn build_file_error<D>(dir: &D, name: &str, error: rustix::io::Errno) -> Error
 where
     D: DirectoryFd,
 {

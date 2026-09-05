@@ -4,11 +4,20 @@
 //! Unit tests for the ssh-agent client transport.
 //! Covers packet framing limits and socket error reporting.
 
-use super::{AgentClient, DefaultAgentSigner, MAX_AGENT_PACKET_SIZE};
+use super::{AgentClient, AgentSocket, DefaultAgentSigner, MAX_AGENT_PACKET_SIZE};
 use crate::io::ssh::protocol::wire::encode_ssh_string;
 use std::cell::RefCell;
 use std::io::{Error, Read, Result as IoResult, Write};
 use std::rc::Rc;
+use std::time::Duration;
+
+/// Build a client over a fake stream, which needs no deadline of its own.
+fn build_test_client(stream: FakeStream) -> AgentClient {
+    AgentClient {
+        socket: Box::new(stream),
+        io_timeout: Duration::from_secs(30),
+    }
+}
 
 #[derive(Default)]
 struct FakeStreamState {
@@ -17,6 +26,11 @@ struct FakeStreamState {
     written: Vec<u8>,
     read_error: bool,
     write_error: bool,
+    /// How long each read pauses, and how few bytes it hands back.
+    ///
+    /// A zero pause means the stream answers a read in full, which is what
+    /// every test but the deadline one wants.
+    read_delay: Duration,
 }
 
 #[derive(Clone, Default)]
@@ -37,6 +51,16 @@ impl FakeStream {
         stream
     }
 
+    /// A stream that answers one byte per read, pausing before each.
+    ///
+    /// This is the agent that stays just inside a per-syscall bound while never
+    /// finishing the exchange.
+    fn with_drip_fed_read_data(read_data: Vec<u8>, read_delay: Duration) -> Self {
+        let stream = Self::with_read_data(read_data);
+        stream.state.borrow_mut().read_delay = read_delay;
+        stream
+    }
+
     fn with_write_error(read_data: Vec<u8>) -> Self {
         let stream = Self::with_read_data(read_data);
         stream.state.borrow_mut().write_error = true;
@@ -48,8 +72,20 @@ impl FakeStream {
     }
 }
 
+impl AgentSocket for FakeStream {
+    /// The fake stream has no socket options; the deadline is enforced by the
+    /// client between reads, which is what these tests exercise.
+    fn set_io_timeout(&self, _timeout: Duration) -> IoResult<()> {
+        Ok(())
+    }
+}
+
 impl Read for FakeStream {
     fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
+        let read_delay = self.state.borrow().read_delay;
+        if !read_delay.is_zero() {
+            std::thread::sleep(read_delay);
+        }
         let mut state = self.state.borrow_mut();
         if state.read_error {
             return Err(Error::other("fake read error"));
@@ -58,7 +94,11 @@ impl Read for FakeStream {
         if remaining == 0 {
             return Ok(0);
         }
-        let count = remaining.min(buf.len());
+        let count = if read_delay.is_zero() {
+            remaining.min(buf.len())
+        } else {
+            1
+        };
         let start = state.read_pos;
         let end = start + count;
         buf[..count].copy_from_slice(&state.read_data[start..end]);
@@ -101,9 +141,7 @@ fn identities_response() -> Vec<u8> {
 fn test_list_identities_writes_request_and_reads_response() {
     let stream = FakeStream::with_read_data(identities_response());
     let written = stream.clone();
-    let mut client = AgentClient {
-        socket: Box::new(stream),
-    };
+    let mut client = build_test_client(stream);
 
     let identities = client.list_identities().unwrap();
 
@@ -117,9 +155,7 @@ fn test_list_identities_rejects_oversized_response_packet() {
     let mut response = Vec::new();
     response.extend_from_slice(&((MAX_AGENT_PACKET_SIZE as u32) + 1).to_be_bytes());
     let stream = FakeStream::with_read_data(response);
-    let mut client = AgentClient {
-        socket: Box::new(stream),
-    };
+    let mut client = build_test_client(stream);
 
     let error = client.list_identities().unwrap_err();
 
@@ -129,9 +165,7 @@ fn test_list_identities_rejects_oversized_response_packet() {
 #[test]
 fn test_list_identities_reports_read_error() {
     let stream = FakeStream::with_read_error();
-    let mut client = AgentClient {
-        socket: Box::new(stream),
-    };
+    let mut client = build_test_client(stream);
 
     let error = client.list_identities().unwrap_err();
 
@@ -141,9 +175,7 @@ fn test_list_identities_reports_read_error() {
 #[test]
 fn test_list_identities_reports_write_error() {
     let stream = FakeStream::with_write_error(identities_response());
-    let mut client = AgentClient {
-        socket: Box::new(stream),
-    };
+    let mut client = build_test_client(stream);
 
     let error = client.list_identities().unwrap_err();
 
@@ -168,4 +200,53 @@ fn test_default_signer_connects_to_the_fixed_socket_after_the_environment_change
     let (_stream, _) = listener.accept().unwrap();
 
     assert_eq!(connected_path, fixed_socket);
+}
+
+/// An agent that accepts the connection and then answers nothing would hold the
+/// command forever, so the read gives up and says what it was waiting for.
+#[cfg(target_family = "unix")]
+#[test]
+fn test_list_identities_reports_a_silent_agent_as_a_timeout_error() {
+    use std::os::unix::net::UnixListener;
+
+    let temp = tempfile::TempDir::new().unwrap();
+    let socket_path = temp.path().join("silent.sock");
+    let listener = UnixListener::bind(&socket_path).unwrap();
+    // Hold the accepted connection open for the length of the test: dropping it
+    // would close the socket and end the read with EOF rather than a timeout.
+    let accepted = std::thread::spawn(move || listener.accept().map(|(stream, _)| stream));
+
+    let mut client =
+        AgentClient::connect_with_timeout(&socket_path, Duration::from_millis(200)).unwrap();
+    let error = client.list_identities().unwrap_err();
+
+    assert!(
+        error
+            .to_string()
+            .contains("ssh-agent did not respond within"),
+        "unexpected message: {error}"
+    );
+    drop(accepted.join().unwrap());
+}
+
+/// An agent that answers a byte at a time, each inside a per-syscall bound,
+/// never trips one. The deadline covers the whole request, so the exchange is
+/// cut short even though every individual read returns promptly.
+#[test]
+fn test_list_identities_reports_a_drip_feeding_agent_as_a_timeout_error() {
+    let stream =
+        FakeStream::with_drip_fed_read_data(identities_response(), Duration::from_millis(10));
+    let mut client = AgentClient {
+        socket: Box::new(stream),
+        io_timeout: Duration::from_millis(30),
+    };
+
+    let error = client.list_identities().unwrap_err();
+
+    assert!(
+        error
+            .to_string()
+            .contains("ssh-agent did not respond within"),
+        "unexpected message: {error}"
+    );
 }

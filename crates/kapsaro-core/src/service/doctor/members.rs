@@ -101,7 +101,7 @@ fn check_empty_incoming_members(incoming_dir: &Path) -> DoctorCheck {
 }
 
 fn check_pending_incoming_members(count: usize) -> DoctorCheck {
-    DoctorCheck::warn_with_next_action(
+    DoctorCheck::build_warning_with_next_action(
         "members.incoming.pending",
         DoctorCategory::MembersIncoming,
         DoctorSubject::General("members/incoming".to_string()),
@@ -250,7 +250,7 @@ fn has_github_binding(public_key: &PublicKey) -> bool {
 }
 
 fn check_missing_github_binding(category: DoctorCategory, member_handle: &str) -> DoctorCheck {
-    DoctorCheck::warn_with_next_action(
+    DoctorCheck::build_warning_with_next_action(
         "github.verify",
         category,
         DoctorSubject::Member(member_handle.to_string()),
@@ -342,7 +342,7 @@ fn build_expiring_member_check(
     expires_at: String,
     days_remaining: i64,
 ) -> DoctorCheck {
-    DoctorCheck::warn_with_reason_and_next_action(
+    DoctorCheck::build_warning_with_reason_and_next_action(
         "key.expiry",
         category,
         DoctorSubject::Member(member_handle.to_string()),

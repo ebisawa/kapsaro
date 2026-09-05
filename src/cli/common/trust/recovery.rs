@@ -17,7 +17,7 @@ use crate::cli::common::prompt::prompt_yes_no_with_reader;
 use kapsaro_core::api::trust::list::TrustListCommand;
 use kapsaro_core::api::trust::recovery::{
     build_trust_store_reset_plan_from_list_command, build_trust_store_reset_plan_from_session,
-    classify_trust_store_reset, execute_trust_store_reset,
+    evaluate_trust_store_reset, execute_trust_store_reset,
     observe_trust_store_recovery_from_list_command, observe_trust_store_recovery_from_session,
     TrustStoreRecoveryToken, TrustStoreResetCause, TrustStoreResetLoss, TrustStoreResetPlan,
 };
@@ -117,7 +117,7 @@ where
     loop {
         match run() {
             Ok(value) => return Ok(value),
-            Err(error) if !attempted_reset => match classify_trust_store_reset(&error) {
+            Err(error) if !attempted_reset => match evaluate_trust_store_reset(&error) {
                 Some(_) => {
                     recover(error)?;
                     attempted_reset = true;
@@ -142,7 +142,7 @@ where
 {
     match run() {
         Ok(value) => Ok(TrustStoreResetOutcome::Completed(value)),
-        Err(error) => match classify_trust_store_reset(&error) {
+        Err(error) => match evaluate_trust_store_reset(&error) {
             Some(_) => recover(error).map(|()| TrustStoreResetOutcome::ResetToEmpty),
             None => Err(error),
         },
@@ -255,7 +255,7 @@ fn trust_store_reset_prompt(
     recovery_hint: Option<&str>,
 ) -> String {
     [
-        describe_reset_loss(loss),
+        format_reset_loss(loss),
         recovery_hint.map(str::to_string),
         Some(trust_store_reset_question(path, cause)),
     ]
@@ -282,7 +282,7 @@ fn trust_store_reset_question(path: &std::path::Path, cause: TrustStoreResetCaus
 ///
 /// Content that would not load names no number, so the operator is asked the
 /// plain question rather than told a figure nothing stands behind.
-fn describe_reset_loss(loss: Option<TrustStoreResetLoss>) -> Option<String> {
+fn format_reset_loss(loss: Option<TrustStoreResetLoss>) -> Option<String> {
     let loss = loss?;
     Some(format!(
         "This discards {} and {}.",
@@ -304,5 +304,5 @@ fn count_label(count: usize, singular: &str, plural: &str) -> String {
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/internal/cli_common_trust_reset_retry_test.rs"]
-mod tests;
+#[path = "../../../../tests/unit/internal/cli_common_trust_recovery_reset_retry_test.rs"]
+mod cli_common_trust_recovery_reset_retry_test;

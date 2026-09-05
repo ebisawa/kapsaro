@@ -30,5 +30,5 @@ pub mod types {
 }
 
 pub mod verification {
-    pub use crate::service::member::verification::verify_members;
+    pub use crate::service::member::verification::evaluate_members_online;
 }

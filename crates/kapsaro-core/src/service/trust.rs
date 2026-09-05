@@ -6,8 +6,19 @@
 pub(crate) mod command;
 mod core;
 
+pub use crate::config::types::{
+    StrictKeyChecking, StrictKeyCheckingResolution, StrictKeyCheckingSource,
+};
+
 pub use command::TrustCommandSession;
-pub use core::*;
+pub use core::{
+    ApprovalConflictHandling, CurrentMemberSnapshot, KnownKeyApprovalEvidence, KnownKeyReview,
+    KnownKeyReviewCandidate, LocalTrustStore, ReadTrustExceptions, RecipientSetSubject,
+    TrustApproval, TrustApprovalOutcome, TrustDecision, TrustPolicyEvaluator,
+    TrustRecipientHandleHint, TrustReviewKind, TrustReviewRequest, VerifiedLocalTrustStore,
+    VerifiedLocalTrustStoreLoadResult,
+};
+pub(crate) use core::{NonMemberSignerReview, ReadTrustReview};
 
 pub(crate) mod approval;
 pub(crate) mod candidate;
@@ -15,11 +26,14 @@ pub(crate) mod evaluation;
 pub(crate) mod list;
 pub(crate) mod management;
 pub(crate) mod outcome;
+pub(crate) mod persistence;
 pub(crate) mod recovery;
 pub(crate) mod resign;
 pub(crate) mod review;
+pub(crate) mod signer_snapshot;
 pub(crate) mod snapshot;
 pub(crate) mod store;
+pub(crate) mod transaction;
 pub(crate) mod types;
 
 pub use candidate::{TrustApprovalCandidate, TrustApprovalCandidateBuilder};

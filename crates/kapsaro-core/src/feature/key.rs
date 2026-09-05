@@ -10,3 +10,4 @@ pub mod protection;
 pub mod public_key_document;
 pub mod ssh_binding;
 pub mod types;
+pub mod validity;

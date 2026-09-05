@@ -9,7 +9,9 @@ use crate::test_utils::setup_member_key_context;
 use kapsaro_core::api::key::KeyContext;
 use kapsaro_core::api::workspace::WorkspaceWriteDirectories;
 use kapsaro_core::service::member::approval::MemberApprovalSession;
-use kapsaro_core::service::trust::{TrustCommandSession, WriteTrustOptions};
+use kapsaro_core::service::trust::{
+    StrictKeyCheckingResolution, TrustCommandSession, WriteTrustOptions,
+};
 
 use super::TestCommandOptions;
 
@@ -72,7 +74,11 @@ pub(crate) fn resolve_test_write_session(
     TestWriteSession {
         directories,
         trust,
-        options: WriteTrustOptions::new(options.allow_expired_key, true, true),
+        options: WriteTrustOptions::new(
+            options.allow_expired_key,
+            true,
+            StrictKeyCheckingResolution::strict(),
+        ),
     }
 }
 

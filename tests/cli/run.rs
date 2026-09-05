@@ -6,7 +6,7 @@
 #[cfg(unix)]
 use crate::cli::common::artifact::setup_unapproved_kv_signer_read_fixture;
 use crate::cli::common::{
-    cmd, generate_temp_ssh_keypair, make_secret_home, set_value_with_member_set_review,
+    cmd, generate_temp_ssh_keypair, set_value_with_member_set_review, setup_secret_home,
     setup_unapproved_kv_read_fixture, setup_workspace, tamper_kv_signature, TEST_MEMBER_HANDLE,
 };
 use predicates::prelude::*;
@@ -95,7 +95,7 @@ fn test_run_ignores_invalid_allow_non_member_config_value() {
 
 #[test]
 fn test_run_error_when_workspace_not_found() {
-    let home_dir = make_secret_home();
+    let home_dir = setup_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
     let current_dir = TempDir::new().unwrap();
 
@@ -193,7 +193,7 @@ fn test_run_skips_known_signer_review_when_strict_checking_is_disabled() {
 #[test]
 fn test_run_error_when_default_file_not_exists() {
     let workspace_dir = TempDir::new().unwrap();
-    let home_dir = make_secret_home();
+    let home_dir = setup_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     // Create workspace structure

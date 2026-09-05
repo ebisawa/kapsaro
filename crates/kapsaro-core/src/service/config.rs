@@ -74,7 +74,7 @@ impl LocalStateSession {
 
     pub(crate) fn ensured_home(&self) -> Result<&AnchoredDir> {
         if self.home.get().is_none() {
-            let opened = global::create_home(&self.base_dir)?;
+            let opened = global::ensure_home(&self.base_dir)?;
             let _ = self.home.set(opened);
         }
         Ok(self
@@ -103,16 +103,16 @@ pub struct ConfigUnsetResult {
 }
 
 pub fn resolve_config_value(base_dir: &std::path::Path, key: &str) -> Result<String> {
-    global::resolve_config_value(key, Some(base_dir))?.ok_or_else(|| config_key_not_found(key))
+    global::resolve_config_value(key, base_dir)?.ok_or_else(|| config_key_not_found(key))
 }
 
 pub fn list_config(base_dir: &std::path::Path) -> Result<BTreeMap<String, String>> {
-    global::load_global_config(Some(base_dir))
+    global::load_global_config(base_dir)
 }
 
 pub fn set_config(base_dir: &std::path::Path, key: &str, value: &str) -> Result<ConfigSetResult> {
     let normalized = global::normalize_key(key)?;
-    let home = global::create_home(base_dir)?;
+    let home = global::ensure_home(base_dir)?;
     set_config_value(&home, &normalized, value)?;
     Ok(ConfigSetResult {
         key: normalized,
@@ -138,5 +138,5 @@ pub fn unset_config(key: &str, base_dir: &std::path::Path) -> Result<ConfigUnset
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/internal/app_config_test.rs"]
-mod tests;
+#[path = "../../tests/unit/internal/service_config_test.rs"]
+mod service_config_test;

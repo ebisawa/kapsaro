@@ -9,7 +9,7 @@ use tracing::debug;
 
 use super::{CryptoContext, LocalKeyAccess, LocalKeyIdentity, PrivateKeyLoadResult};
 use crate::feature::context::expiry::{LocalKeyPairExpiry, VerifiedExpiresAt};
-use crate::feature::key::material::validate_private_key_material;
+use crate::feature::key::material::verify_private_key_material;
 use crate::feature::key::protection::encryption::decrypt_private_key;
 use crate::feature::verify::private_key::verify_private_key_matches_public_key;
 use crate::feature::verify::public_key::{
@@ -39,7 +39,7 @@ pub(crate) fn build_verified_private_key_from_ssh(
     kid: &str,
     ssh_fpr: &str,
 ) -> Result<VerifiedPrivateKey> {
-    validate_private_key_material(&plaintext)?;
+    verify_private_key_material(&plaintext)?;
 
     let proof = DecryptionProof {
         member_handle: member_handle.to_string(),
@@ -55,7 +55,7 @@ pub fn build_verified_private_key_from_password(
     member_handle: &str,
     kid: &str,
 ) -> Result<VerifiedPrivateKey> {
-    validate_private_key_material(&plaintext)?;
+    verify_private_key_material(&plaintext)?;
 
     let proof = DecryptionProof {
         member_handle: member_handle.to_string(),
@@ -177,8 +177,7 @@ fn resolve_and_load_verified_private_key(
     let (kid, encrypted_private_key, public_key) =
         keystore_access.resolve_key_pair(member_handle, explicit_kid)?;
     log_resolved_kid(&kid);
-    let loaded =
-        verify_and_decrypt_key_pair(encrypted_private_key, public_key, backend, ssh_pubkey)?;
+    let loaded = decrypt_key_pair(encrypted_private_key, public_key, backend, ssh_pubkey)?;
     Ok((kid, loaded))
 }
 
@@ -198,11 +197,11 @@ pub(crate) fn load_verified_private_key_from_keystore(
     ssh_pubkey: &str,
 ) -> Result<PrivateKeyLoadResult> {
     let (encrypted_private_key, public_key) = keystore_access.load_key_pair(member_handle, kid)?;
-    verify_and_decrypt_key_pair(encrypted_private_key, public_key, backend, ssh_pubkey)
+    decrypt_key_pair(encrypted_private_key, public_key, backend, ssh_pubkey)
 }
 
 /// Verify one stored key pair against itself and unlock the private half.
-fn verify_and_decrypt_key_pair(
+fn decrypt_key_pair(
     encrypted_private_key: PrivateKey,
     public_key: PublicKey,
     backend: &dyn SignatureBackend,

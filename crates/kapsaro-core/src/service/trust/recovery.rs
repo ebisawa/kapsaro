@@ -1,7 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Application-layer recovery for invalid local trust stores.
+//! Service-layer recovery for invalid local trust stores.
 //! Separates confirmation from identity-bound deletion of the document that failed.
 
 use std::path::{Path, PathBuf};
@@ -11,10 +11,10 @@ use crate::error::{
     LOCAL_STATE_PATH_UNSAFE_RECOVERY, TRUST_SIGNER_KEY_MISSING_RECOVERY,
     TRUST_STORE_RESET_REQUIRED_RECOVERY,
 };
-use crate::feature::trust::signer_keys::describe_signer_key_recovery_route;
+use crate::feature::trust::signer_keys::format_signer_key_recovery_route;
 use crate::io::trust::paths::{get_trust_store_file_name, get_trust_store_file_path};
 use crate::io::trust::remove::{
-    describe_failure_after_trust_store_removal, remove_confirmed_trust_store,
+    format_failure_after_trust_store_removal, remove_confirmed_trust_store,
 };
 use crate::io::trust::store::{load_trust_store_at, validate_trust_directory};
 use crate::model::identity::MemberHandle;
@@ -101,7 +101,7 @@ pub struct TrustStoreResetOutcome {
 /// the same name. What the failure was stays readable from the kind, and a
 /// reset is offered for it whether the bytes would not parse or the signature
 /// over them did not verify.
-pub fn classify_trust_store_reset(error: &Error) -> Option<TrustStoreResetCause> {
+pub fn evaluate_trust_store_reset(error: &Error) -> Option<TrustStoreResetCause> {
     match error.recovery() {
         Some(TRUST_STORE_RESET_REQUIRED_RECOVERY) => Some(TrustStoreResetCause::InvalidDocument),
         Some(TRUST_SIGNER_KEY_MISSING_RECOVERY) => Some(TrustStoreResetCause::MissingSignerKey),
@@ -169,7 +169,7 @@ pub fn build_trust_store_reset_plan_from_list_command(
     error: Error,
     confirmation_available: bool,
 ) -> Result<TrustStoreResetPlan> {
-    let (error, cause) = prepare_reset_error(error, confirmation_available)?;
+    let (error, cause) = build_reset_error(error, confirmation_available)?;
     build_resolved_reset_plan(
         command.owner().clone(),
         command.home(),
@@ -186,7 +186,7 @@ pub fn build_trust_store_reset_plan_from_session(
     error: Error,
     confirmation_available: bool,
 ) -> Result<TrustStoreResetPlan> {
-    let (error, cause) = prepare_reset_error(error, confirmation_available)?;
+    let (error, cause) = build_reset_error(error, confirmation_available)?;
     let home = session.home();
     let trust_dir = session.trust_dir().cloned();
     let path = get_trust_store_file_path(home.path(), session.owner());
@@ -206,7 +206,7 @@ pub(crate) fn build_trust_store_reset_plan_from_read_session(
     error: Error,
     confirmation_available: bool,
 ) -> Result<TrustStoreResetPlan> {
-    let (error, cause) = prepare_reset_error(error, confirmation_available)?;
+    let (error, cause) = build_reset_error(error, confirmation_available)?;
     let home = session.local_state_home().ok_or_else(|| {
         Error::build_invalid_operation_error(
             "Command requires a fixed local-state home".to_string(),
@@ -235,7 +235,7 @@ fn build_resolved_reset_plan(
     let file_name = get_trust_store_file_name(&owner_handle);
     let (error, cause) = failure;
     let target = resolve_reset_target(base, trust_dir.as_deref(), &file_name, token, &path)
-        .map_err(|blocked| describe_reset_target_failure(blocked, &error))?;
+        .map_err(|blocked| build_reset_target_failure_error(blocked, &error))?;
     Ok(TrustStoreResetPlan {
         path,
         trust_dir,
@@ -272,9 +272,9 @@ fn resolve_reset_target(
         trust_dir,
         file_name,
         observed.as_ref(),
-        &describe_trust_store(path),
+        &format_trust_store_name(path),
     )
-    .map_err(|error| map_reset_target_failure_to_conflict(error, path))?;
+    .map_err(|error| build_reset_conflict_error(error, path))?;
     Ok(ResetTarget {
         loss: count_stored_approvals(base, trust_dir, path),
         snapshot,
@@ -286,7 +286,7 @@ fn resolve_reset_target(
 /// The plan is the only thing that carries that failure to the operator, so a
 /// plan that could not be built would otherwise leave them told to run the
 /// command again with no word of what was wrong with the store.
-fn describe_reset_target_failure(blocked: Error, failure: &Error) -> Error {
+fn build_reset_target_failure_error(blocked: Error, failure: &Error) -> Error {
     let message = format!(
         "{} The failure it would have reset the store for: {}",
         blocked.format_user_message(),
@@ -308,7 +308,7 @@ fn describe_reset_target_failure(blocked: Error, failure: &Error) -> Error {
 /// failure that never compared the two - an I/O fault, or a name that stopped
 /// being a regular file - says nothing about which document stands there, so it
 /// travels as itself instead of being reported as a document that moved.
-fn map_reset_target_failure_to_conflict(error: Error, path: &Path) -> Error {
+fn build_reset_conflict_error(error: Error, path: &Path) -> Error {
     if error.kind() == ErrorKind::Io || error.recovery() == Some(LOCAL_STATE_PATH_UNSAFE_RECOVERY) {
         return error;
     }
@@ -316,7 +316,7 @@ fn map_reset_target_failure_to_conflict(error: Error, path: &Path) -> Error {
 }
 
 /// Name one trust store the way every message about it names it.
-fn describe_trust_store(path: &Path) -> String {
+fn format_trust_store_name(path: &Path) -> String {
     format!("Local trust store '{}'", format_path_relative_to_cwd(path))
 }
 
@@ -369,7 +369,7 @@ pub fn execute_trust_store_reset(plan: &TrustStoreResetPlan) -> Result<TrustStor
                 locked_trust_dir,
                 &file_name,
                 plan.target_snapshot.as_ref(),
-                &describe_trust_store(&plan.path),
+                &format_trust_store_name(&plan.path),
             )?;
             deleted =
                 remove_confirmed_trust_store(locked_trust_dir, &file_name, confirmed, &plan.path)?;
@@ -392,7 +392,7 @@ fn report_namespace_check_after_reset(path: &Path, deleted: bool, error: Error) 
     if !deleted {
         return error;
     }
-    let message = describe_failure_after_trust_store_removal(
+    let message = format_failure_after_trust_store_removal(
         path,
         "the trust directory could not be confirmed safe afterwards",
         &error,
@@ -429,7 +429,7 @@ impl TrustStoreResetPlan {
     pub fn recovery_hint(&self) -> Option<String> {
         match self.cause {
             TrustStoreResetCause::MissingSignerKey => {
-                Some(describe_signer_key_recovery_route(&self.owner_handle))
+                Some(format_signer_key_recovery_route(&self.owner_handle))
             }
             TrustStoreResetCause::InvalidDocument => None,
         }
@@ -451,16 +451,16 @@ fn require_reset_confirmation(error: Error, confirmation_available: bool) -> Res
     }
 }
 
-fn prepare_reset_error(
+fn build_reset_error(
     error: Error,
     confirmation_available: bool,
 ) -> Result<(Error, TrustStoreResetCause)> {
-    let Some(cause) = classify_trust_store_reset(&error) else {
+    let Some(cause) = evaluate_trust_store_reset(&error) else {
         return Err(error);
     };
     require_reset_confirmation(error, confirmation_available).map(|error| (error, cause))
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/internal/app_trust_recovery_test.rs"]
-mod tests;
+#[path = "../../../tests/unit/internal/service_trust_recovery_test.rs"]
+mod service_trust_recovery_test;

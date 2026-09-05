@@ -3,6 +3,7 @@
 
 use crate::feature::envelope::wrap_set::WrapSet;
 use crate::model::common::WrapItem;
+use crate::model::identity::{Kid, MemberHandle};
 use crate::model::wire::algorithm;
 
 const ALICE: &str = "alice@example.com";
@@ -11,6 +12,14 @@ const ALICE_KID: &str = "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD";
 const BOB_KID: &str = "9K4W2H7R1M5VX8DPT3QNC6JY0F1BRG4D";
 const ENC_32: &str = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 const CT_48: &str = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+
+fn build_kid(value: &str) -> Kid {
+    Kid::new(value).unwrap()
+}
+
+fn build_handle(value: &str) -> MemberHandle {
+    MemberHandle::new(value).unwrap()
+}
 
 fn wrap_item(recipient_handle: &str, kid: &str) -> WrapItem {
     WrapItem {
@@ -25,7 +34,9 @@ fn wrap_item(recipient_handle: &str, kid: &str) -> WrapItem {
 #[test]
 fn test_wrap_set_parse_validates_domain_fields() {
     let wrap_set = WrapSet::parse(&[wrap_item(ALICE, ALICE_KID)], "Document").unwrap();
-    let item = wrap_set.find_by_kid_for_member(ALICE_KID, ALICE).unwrap();
+    let item = wrap_set
+        .find_by_kid_for_member(&build_kid(ALICE_KID), &build_handle(ALICE))
+        .unwrap();
 
     assert_eq!(item.kid().as_str(), ALICE_KID);
     assert_eq!(item.enc().as_bytes().len(), 32);
@@ -108,7 +119,7 @@ fn test_wrap_set_parse_rejects_duplicate_recipient_handle() {
 fn test_wrap_set_find_by_kid_for_member_reports_missing_kid() {
     let wrap_set = WrapSet::parse(&[wrap_item(ALICE, ALICE_KID)], "Document").unwrap();
 
-    let result = wrap_set.find_by_kid_for_member(BOB_KID, ALICE);
+    let result = wrap_set.find_by_kid_for_member(&build_kid(BOB_KID), &build_handle(ALICE));
 
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("No wrap found"));
@@ -118,7 +129,7 @@ fn test_wrap_set_find_by_kid_for_member_reports_missing_kid() {
 fn test_wrap_set_find_by_kid_for_member_rejects_recipient_mismatch() {
     let wrap_set = WrapSet::parse(&[wrap_item(ALICE, ALICE_KID)], "Document").unwrap();
 
-    let result = wrap_set.find_by_kid_for_member(ALICE_KID, BOB);
+    let result = wrap_set.find_by_kid_for_member(&build_kid(ALICE_KID), &build_handle(BOB));
 
     assert!(result.is_err());
     assert!(result
@@ -135,6 +146,15 @@ fn test_wrap_set_self_wrap_kid_names_the_entry_addressed_to_the_member() {
     )
     .unwrap();
 
-    assert_eq!(wrap_set.self_wrap_kid(ALICE).unwrap().as_str(), ALICE_KID);
-    assert_eq!(wrap_set.self_wrap_kid(BOB).unwrap().as_str(), BOB_KID);
+    assert_eq!(
+        wrap_set
+            .self_wrap_kid(&build_handle(ALICE))
+            .unwrap()
+            .as_str(),
+        ALICE_KID
+    );
+    assert_eq!(
+        wrap_set.self_wrap_kid(&build_handle(BOB)).unwrap().as_str(),
+        BOB_KID
+    );
 }

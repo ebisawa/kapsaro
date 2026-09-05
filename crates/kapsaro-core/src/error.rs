@@ -29,6 +29,10 @@ pub(crate) const TRUST_STORE_RESET_REQUIRED_RECOVERY: &str = "E_TRUST_STORE_RESE
 pub(crate) const TRUST_SIGNER_KEY_IN_USE_RECOVERY: &str = "E_TRUST_SIGNER_KEY_IN_USE";
 pub(crate) const MEMBER_HANDLE_REQUIRED_RECOVERY: &str = "E_MEMBER_HANDLE_REQUIRED";
 
+/// A KV entry the store does not hold. Carried as a code so a caller can tell
+/// this apart from any other refusal without reading the message text.
+pub(crate) const KV_KEY_NOT_FOUND_RECOVERY: &str = "E_KV_KEY_NOT_FOUND";
+
 // Codes carried in a serde error message, which cannot hold our own error type.
 pub(crate) const MEMBER_HANDLE_INVALID_RULE: &str = "E_MEMBER_HANDLE_INVALID";
 pub(crate) const KID_INVALID_RULE: &str = "E_KID_INVALID";
@@ -285,10 +289,6 @@ impl Error {
             rule: Some(rule.into()),
             message: message.into(),
         })
-    }
-
-    pub(crate) fn build_home_environment_not_set_error() -> Self {
-        Self::build_config_error("HOME environment variable not set")
     }
 
     /// Build a not found error.

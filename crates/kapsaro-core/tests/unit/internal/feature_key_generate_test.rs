@@ -395,7 +395,7 @@ fn test_save_and_activate_activates() {
 fn test_save_and_activate_no_activate() {
     let temp_dir = crate::test_utils::local_state_temp_dir();
     let keystore_root = temp_dir.path().join("keys");
-    crate::test_utils::create_local_state_dir(&keystore_root);
+    crate::test_utils::ensure_local_state_dir(&keystore_root);
 
     let (ssh_priv, _ssh_pub_path, ssh_pub_content) =
         crate::test_utils::generate_temp_ssh_keypair_in_dir(&temp_dir);

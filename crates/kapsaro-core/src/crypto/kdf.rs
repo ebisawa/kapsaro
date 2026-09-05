@@ -31,8 +31,11 @@ fn expand_from_ikm(ikm: &Ikm, salt: Option<&[u8]>, info: &Info, output: &mut [u8
 }
 
 /// Run HKDF-Extract for an artifact key schedule.
-pub fn derive_hkdf_sha256_prk(ikm: &Ikm, salt: &[u8]) -> HkdfSha256Prk {
-    let (raw_prk, _) = Hkdf::<Sha256>::extract(Some(salt), ikm.as_bytes());
+///
+/// Only types implementing [`AsHkdfSalt`] can be passed as `salt`, on the same
+/// terms as [`derive_hkdf_sha256_array`].
+pub fn derive_hkdf_sha256_prk<S: AsHkdfSalt>(ikm: &Ikm, salt: &S) -> HkdfSha256Prk {
+    let (raw_prk, _) = Hkdf::<Sha256>::extract(Some(salt.as_hkdf_salt_bytes()), ikm.as_bytes());
     let mut prk = Zeroizing::new([0u8; 32]);
     prk.as_mut().copy_from_slice(&raw_prk);
     HkdfSha256Prk(prk)
@@ -80,7 +83,7 @@ fn expand_hkdf(hkdf: &Hkdf<Sha256>, info: &Info, output: &mut [u8]) -> Result<()
 
 #[cfg(test)]
 #[path = "../../tests/unit/internal/crypto_kdf_internal_test.rs"]
-mod tests;
+mod crypto_kdf_internal_test;
 
 #[cfg(test)]
 #[path = "../../tests/unit/internal/crypto_kdf_test.rs"]

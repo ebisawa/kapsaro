@@ -100,5 +100,5 @@ pub fn extract_recipients_from_wrap(wrap: &KvWrap) -> Vec<String> {
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/internal/format_kv_canonical_test.rs"]
-mod format_kv_canonical_test;
+#[path = "../../../../tests/unit/internal/format_kv_enc_canonical_test.rs"]
+mod format_kv_enc_canonical_test;

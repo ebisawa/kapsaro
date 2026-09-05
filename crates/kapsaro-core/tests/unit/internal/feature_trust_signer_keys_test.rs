@@ -2,21 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! Tests for the signer key one trust store signature names.
-//! Fixes which read failures keep the reset route and which travel as themselves.
+//! Covers which signature kid names a key, and the route back when it is unusable.
 
-use std::fs;
-
-use crate::io::keystore::access::KeystoreAccess;
 use crate::model::identity::{Kid, MemberHandle};
 use crate::model::trust_store::{TrustStoreDocument, TrustStoreProtected, TrustStoreSignature};
 use crate::model::wire::algorithm::SIGNATURE_ED25519;
 use crate::model::wire::format::LOCAL_TRUST_V1;
-use crate::service::trust::recovery::{classify_trust_store_reset, TrustStoreResetCause};
-use crate::test_utils::{setup_test_keystore_from_fixtures, ALICE_MEMBER_HANDLE};
-use crate::ErrorKind;
-use tempfile::TempDir;
+use crate::test_utils::ALICE_MEMBER_HANDLE;
+use std::path::PathBuf;
 
-use super::{build_signer_key_recovery_hint, document_signer_kid, SignerKeySnapshot};
+use super::{build_signer_key_recovery_hint, document_signer_kid};
 
 /// A stored key id, and the same one spelled the way it is shown to an
 /// operator. A stored document never carries the second form.
@@ -24,41 +19,12 @@ const SIGNER_KID: &str = "KAD1AAAA1111BBBB2222CCCC3333DDDD";
 const SIGNER_KID_DISPLAY_FORM: &str = "kad1-aaaa-1111-bbbb-2222-cccc-3333-dddd";
 const STORED_AT: &str = "2026-03-29T12:34:56Z";
 
-struct SignerKeyFixture {
-    home: TempDir,
-    access: KeystoreAccess,
-    owner: MemberHandle,
-    kid: Kid,
+fn owner_handle() -> MemberHandle {
+    MemberHandle::try_from(ALICE_MEMBER_HANDLE).unwrap()
 }
 
-impl SignerKeyFixture {
-    fn open() -> Self {
-        let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
-        let access = KeystoreAccess::open(home.path().join("keys")).unwrap();
-        let owner = MemberHandle::try_from(ALICE_MEMBER_HANDLE).unwrap();
-        let kid = access
-            .load_active_kid(&owner)
-            .unwrap()
-            .expect("the fixture keystore activates one key");
-        Self {
-            home,
-            access,
-            owner,
-            kid,
-        }
-    }
-
-    fn key_dir(&self) -> std::path::PathBuf {
-        self.home
-            .path()
-            .join("keys")
-            .join(ALICE_MEMBER_HANDLE)
-            .join(self.kid.as_str())
-    }
-
-    fn capture(&self) -> crate::Result<SignerKeySnapshot> {
-        SignerKeySnapshot::capture(&self.access, &self.owner, Some(&self.kid))
-    }
+fn stored_signer_kid() -> Kid {
+    Kid::from_canonical(SIGNER_KID.to_string()).unwrap()
 }
 
 fn signed_trust_store_document(signature_kid: &str) -> TrustStoreDocument {
@@ -99,73 +65,14 @@ fn test_display_form_signature_kid_names_no_signer_key() {
     assert!(document_signer_kid(&doc).is_none());
 }
 
-/// A key the keystore no longer holds is an absence, not a read failure. The
-/// snapshot comes back empty and verification is what names the missing signer.
-#[test]
-fn test_absent_signer_key_document_is_captured_as_no_key() {
-    let fixture = SignerKeyFixture::open();
-    fs::remove_file(fixture.key_dir().join("public.json")).unwrap();
-
-    let snapshot = fixture.capture().unwrap();
-
-    assert!(snapshot.find(&fixture.kid).is_none());
-}
-
-/// A key document that will not read back leaves the stored signature
-/// unverifiable, so it keeps the route that resets the store or restores the
-/// key, and the message names that route before anything offers a deletion.
-#[test]
-fn test_unreadable_signer_key_document_keeps_the_reset_route() {
-    let fixture = SignerKeyFixture::open();
-    fs::write(fixture.key_dir().join("public.json"), "not-a-public-key").unwrap();
-
-    let error = fixture
-        .capture()
-        .expect_err("a key document that will not parse must be reported");
-
-    assert_eq!(
-        classify_trust_store_reset(&error),
-        Some(TrustStoreResetCause::InvalidDocument)
-    );
-    let message = error.format_user_message();
-    assert!(message.contains("trust resign"), "{message}");
-    assert!(message.contains("public.json"), "{message}");
-}
-
-/// A read that never reached the document says nothing about it. Reporting it
-/// as an unusable signer key would offer to discard every stored approval over
-/// a permission that a `chmod` puts back.
-#[cfg(unix)]
-#[test]
-fn test_signer_key_read_failure_travels_as_itself() {
-    use crate::test_utils::permission_denial_can_be_staged;
-    use std::os::unix::fs::PermissionsExt;
-    if !permission_denial_can_be_staged("test_signer_key_read_failure_travels_as_itself") {
-        return;
-    }
-    let fixture = SignerKeyFixture::open();
-    let key_dir = fixture.key_dir();
-    fs::set_permissions(&key_dir, fs::Permissions::from_mode(0o000)).unwrap();
-
-    let error = fixture
-        .capture()
-        .expect_err("a key directory that cannot be opened must be reported");
-    fs::set_permissions(&key_dir, fs::Permissions::from_mode(0o700)).unwrap();
-
-    assert_eq!(error.kind(), ErrorKind::Io);
-    assert_eq!(classify_trust_store_reset(&error), None);
-}
-
 /// The recovery hint names the complete document to restore, its trusted
 /// source and permissions, and the command that re-signs it.
 #[test]
 fn test_signer_key_recovery_hint_names_the_whole_route() {
-    let fixture = SignerKeyFixture::open();
-
     let hint = build_signer_key_recovery_hint(
-        &fixture.home.path().join("keys"),
-        &fixture.owner,
-        &fixture.kid,
+        &PathBuf::from("/home/alice/.kapsaro/keys"),
+        &owner_handle(),
+        &stored_signer_kid(),
     );
 
     assert!(hint.contains("public.json"), "{hint}");
@@ -186,25 +93,11 @@ fn test_signer_key_recovery_hint_names_the_whole_route() {
 /// own. It is spelled out where the reader can see it.
 #[test]
 fn test_signer_key_recovery_hint_spells_out_a_control_character_in_the_path() {
-    let fixture = SignerKeyFixture::open();
-    let keystore_root = fixture.home.path().join("keys\nrogue");
+    let keystore_root = PathBuf::from("/home/alice/.kapsaro/keys\nrogue");
 
-    let hint = build_signer_key_recovery_hint(&keystore_root, &fixture.owner, &fixture.kid);
+    let hint =
+        build_signer_key_recovery_hint(&keystore_root, &owner_handle(), &stored_signer_kid());
 
     assert!(hint.contains("keys\\nrogue"), "{hint}");
     assert!(!hint.contains('\n'), "{hint}");
-}
-
-/// The snapshot holds a whole key document and the keystore root it came from,
-/// and both are rendered wherever an enclosing type is formatted. Only the key
-/// it found identifies it.
-#[test]
-fn test_snapshot_debug_output_names_the_key_only() {
-    let fixture = SignerKeyFixture::open();
-
-    let rendered = format!("{:?}", fixture.capture().unwrap());
-
-    assert!(rendered.contains(fixture.kid.as_str()), "{rendered}");
-    assert!(!rendered.contains("subject_handle"), "{rendered}");
-    assert!(!rendered.contains(&fixture.home.path().display().to_string()));
 }

@@ -107,7 +107,7 @@ impl SshKeygen for DefaultSshKeygen {
             is_public_key,
             self.agent_socket.clone(),
         )?;
-        check_sign_output(&output, is_public_key)?;
+        enforce_sign_output_success(&output, is_public_key)?;
         parse_sign_stdout(output.stdout, namespace, ssh_pubkey)
     }
 }
@@ -148,7 +148,7 @@ fn execute_sign_command(
     )
 }
 
-fn check_sign_output(output: &Output, is_public_key: bool) -> Result<()> {
+fn enforce_sign_output_success(output: &Output, is_public_key: bool) -> Result<()> {
     if output.status.success() {
         return Ok(());
     }
@@ -195,5 +195,5 @@ fn parse_sign_stdout(
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/internal/ssh_external_keygen_helpers_test.rs"]
-mod helper_tests;
+#[path = "../../../../tests/unit/internal/io_ssh_external_keygen_helpers_test.rs"]
+mod io_ssh_external_keygen_helpers_test;

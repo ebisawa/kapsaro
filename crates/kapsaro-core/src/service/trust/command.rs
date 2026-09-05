@@ -151,5 +151,5 @@ fn ensure_key_home_matches(home: &AnchoredDir, keystore: &KeystoreAccess) -> Res
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/internal/trust_command_session_test.rs"]
-mod tests;
+#[path = "../../../tests/unit/internal/service_trust_command_test.rs"]
+mod service_trust_command_test;

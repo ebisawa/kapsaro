@@ -25,7 +25,7 @@ use assert_cmd::Command;
 
 use crate::cli::common::{
     assert_member_set_review_success, encrypt_file_with_member_set_review,
-    generate_temp_ssh_keypair, kapsaro_std_cmd, make_secret_home, setup_workspace,
+    generate_temp_ssh_keypair, kapsaro_std_cmd, setup_secret_home, setup_workspace,
     TEST_MEMBER_HANDLE,
 };
 
@@ -103,7 +103,7 @@ fn test_decrypt_writes_plaintext_readable_only_by_its_owner() {
 /// the only copy an attacker needs to start guessing at it offline.
 #[test]
 fn test_key_export_private_writes_a_key_file_readable_only_by_its_owner() {
-    let temp_dir = make_secret_home();
+    let temp_dir = setup_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
     let export_file = temp_dir.path().join("portable-private-key.txt");
 

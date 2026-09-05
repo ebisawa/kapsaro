@@ -7,49 +7,34 @@ pub mod file;
 
 use crate::feature::context::crypto::SigningContext;
 use crate::feature::encrypt::file::encrypt_file_document;
-use crate::model::common::normalize_recipients;
 use crate::model::public_key::VerifiedRecipientKey;
 use crate::{Error, Result};
 
-/// Validate that recipients count matches public keys count.
-fn validate_recipient_key_count(
-    recipients: &[String],
-    members: &[VerifiedRecipientKey],
-) -> Result<()> {
-    if recipients.len() != members.len() {
-        return Err(Error::build_invalid_argument_error(format!(
-            "Recipients count ({}) does not match public keys ({})",
-            recipients.len(),
-            members.len()
-        )));
-    }
-    Ok(())
-}
-
 /// Encrypt binary content to file-enc v5 format and return JSON string.
+///
+/// The recipient set is the handle of every member given, so a member without
+/// a matching recipient entry or a recipient without a key cannot occur.
 pub fn encrypt_file_content(
     content: &[u8],
-    recipients: &[String],
     members: &[VerifiedRecipientKey],
     signing: &SigningContext<'_>,
 ) -> Result<String> {
-    validate_recipient_key_count(recipients, members)?;
-
-    let normalized_ids = normalize_recipients(recipients);
-    let members_ordered: Vec<VerifiedRecipientKey> = normalized_ids
+    let mut members_ordered = members.to_vec();
+    members_ordered.sort_by(|a, b| {
+        a.document()
+            .protected
+            .subject_handle
+            .cmp(&b.document().protected.subject_handle)
+    });
+    members_ordered.dedup_by(|a, b| {
+        a.document().protected.subject_handle == b.document().protected.subject_handle
+    });
+    let recipient_ids: Vec<String> = members_ordered
         .iter()
-        .map(|id| {
-            members
-                .iter()
-                .find(|m| m.document().protected.subject_handle == *id)
-                .ok_or_else(|| {
-                    Error::build_not_found_error(format!("Member not found for recipient: {}", id))
-                })
-                .cloned()
-        })
-        .collect::<Result<Vec<_>>>()?;
+        .map(|member| member.document().protected.subject_handle.clone())
+        .collect();
 
-    let file_enc_doc = encrypt_file_document(content, &normalized_ids, &members_ordered, signing)?;
+    let file_enc_doc = encrypt_file_document(content, &recipient_ids, &members_ordered, signing)?;
 
     serde_json::to_string_pretty(&file_enc_doc).map_err(|e| {
         Error::build_parse_error_with_source(

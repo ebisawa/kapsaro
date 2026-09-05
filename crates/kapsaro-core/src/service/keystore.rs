@@ -1,7 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! App-layer opening of the local keystore.
+//! Service-layer opening of the local keystore.
 //! Reports a keystore that was never created as the step that creates one.
 
 use std::path::Path;
@@ -15,10 +15,10 @@ use crate::{Error, ErrorKind, Result};
 /// that needs one gets the step that fixes it instead of the path that happened
 /// to be missing.
 pub(crate) fn open_local_keystore(base_dir: &Path) -> Result<KeystoreAccess> {
-    KeystoreAccess::open_from_home(base_dir).map_err(map_absent_keystore)
+    KeystoreAccess::open_from_home(base_dir).map_err(build_absent_keystore_error)
 }
 
-fn map_absent_keystore(error: Error) -> Error {
+fn build_absent_keystore_error(error: Error) -> Error {
     if error.kind() == ErrorKind::NotFound {
         return build_empty_keystore_error();
     }

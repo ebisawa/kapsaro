@@ -5,7 +5,11 @@
 
 mod core;
 
-pub use core::*;
+pub use core::{
+    AuthorizedRewrapInput, RewrapAcceptance, RewrapDirectories, RewrapNonMemberReview,
+    RewrapOptions, RewrapPromotionOutcome, RewrapPromotionReview, RewrapReview, RewrapSession,
+    RewrapSessionDecision, RewrapTarget, RewrapTargetListing,
+};
 
 mod plan;
 pub(crate) mod promotion;

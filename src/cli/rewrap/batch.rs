@@ -19,7 +19,7 @@ use kapsaro_core::api::operation::OperationOptions;
 use kapsaro_core::api::rewrap::{
     RewrapAcceptance, RewrapOptions, RewrapSession, RewrapSessionDecision, RewrapTarget,
 };
-use kapsaro_core::api::trust::recovery::classify_trust_store_reset;
+use kapsaro_core::api::trust::recovery::evaluate_trust_store_reset;
 use kapsaro_core::{Error, Result};
 
 pub(crate) fn run_batch_rewrap(
@@ -110,7 +110,7 @@ fn execute_targets(
                 .processed_files
                 .push(RewrapFileSuccess { output_path }),
             Err(error) => {
-                if classify_trust_store_reset(&error).is_some() {
+                if evaluate_trust_store_reset(&error).is_some() {
                     return Err(error);
                 }
                 outcome.failed_files.push(RewrapFileFailure {

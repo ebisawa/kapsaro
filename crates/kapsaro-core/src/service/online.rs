@@ -6,7 +6,7 @@
 use crate::io::github::account::resolve_github_account_by_login;
 use crate::io::verify_online::github::preflight::verify_ssh_key_on_github;
 use crate::io::verify_online::github::verify_github_account;
-use crate::io::verify_online::{VerificationResult, VerificationStatus};
+use crate::io::verify_online::{VerificationResult, VerificationStatus, VerifiedGithubIdentity};
 use crate::model::public_key::GithubAccount as InternalGithubAccount;
 use crate::support::runtime::block_on_result;
 use crate::Result;
@@ -125,7 +125,8 @@ impl GitHubAccount {
         Self::new(account.id, account.login)
     }
 
-    fn to_inner(&self) -> InternalGithubAccount {
+    /// Return the wire form a generated key document records the binding as.
+    pub(crate) fn to_inner(&self) -> InternalGithubAccount {
         InternalGithubAccount {
             id: self.id,
             login: self.login.clone(),
@@ -169,33 +170,12 @@ impl VerifiedGitHubEvidence {
                     .to_string(),
             )
         })?;
-        if result.member_handle != candidate.subject_handle().as_str() {
-            return Err(crate::Error::build_verification_error(
-                "E_ONLINE_VERIFICATION_IDENTITY_MISMATCH".to_string(),
-                "GitHub verification result belongs to a different member".to_string(),
-            ));
-        }
-        if candidate.github_account_id() != Some(verified.id) {
-            return Err(crate::Error::build_verification_error(
-                "E_ONLINE_VERIFICATION_IDENTITY_MISMATCH".to_string(),
-                "Verified GitHub account id differs from the reviewed binding claim".to_string(),
-            ));
-        }
-        if candidate.fingerprint() != Some(verified.fingerprint.as_str()) {
-            return Err(build_evidence_mismatch_error(
-                "Verified SSH fingerprint differs from the reviewed candidate",
-            ));
-        }
-        if result.fingerprint.as_deref() != Some(verified.fingerprint.as_str()) {
-            return Err(build_evidence_mismatch_error(
-                "Verification result fingerprint differs from its verified identity",
-            ));
-        }
-        if result.matched_key_id != Some(verified.matched_key_id) {
-            return Err(build_evidence_mismatch_error(
-                "Verification result matched key id differs from its verified identity",
-            ));
-        }
+        enforce_reviewed_candidate_identity(candidate, &result.member_handle, &verified)?;
+        enforce_result_matches_identity(
+            result.fingerprint.as_deref(),
+            result.matched_key_id,
+            &verified,
+        )?;
         Ok(Self {
             account: GitHubAccount::new(verified.id, verified.login),
             fingerprint: verified.fingerprint,
@@ -227,6 +207,51 @@ impl VerifiedGitHubEvidence {
             && self.ssh_attestor_public_key == candidate.ssh_attestor_public_key()
             && candidate.github_account_id() == Some(self.account.id())
     }
+}
+
+/// Refuse evidence that does not describe the exact candidate under review.
+fn enforce_reviewed_candidate_identity(
+    candidate: &KnownKeyReviewCandidate,
+    member_handle: &str,
+    verified: &VerifiedGithubIdentity,
+) -> Result<()> {
+    if member_handle != candidate.subject_handle().as_str() {
+        return Err(crate::Error::build_verification_error(
+            "E_ONLINE_VERIFICATION_IDENTITY_MISMATCH".to_string(),
+            "GitHub verification result belongs to a different member".to_string(),
+        ));
+    }
+    if candidate.github_account_id() != Some(verified.id) {
+        return Err(crate::Error::build_verification_error(
+            "E_ONLINE_VERIFICATION_IDENTITY_MISMATCH".to_string(),
+            "Verified GitHub account id differs from the reviewed binding claim".to_string(),
+        ));
+    }
+    if candidate.fingerprint() != Some(verified.fingerprint.as_str()) {
+        return Err(build_evidence_mismatch_error(
+            "Verified SSH fingerprint differs from the reviewed candidate",
+        ));
+    }
+    Ok(())
+}
+
+/// Refuse a result whose own fields disagree with the identity it carries.
+fn enforce_result_matches_identity(
+    fingerprint: Option<&str>,
+    matched_key_id: Option<i64>,
+    verified: &VerifiedGithubIdentity,
+) -> Result<()> {
+    if fingerprint != Some(verified.fingerprint.as_str()) {
+        return Err(build_evidence_mismatch_error(
+            "Verification result fingerprint differs from its verified identity",
+        ));
+    }
+    if matched_key_id != Some(verified.matched_key_id) {
+        return Err(build_evidence_mismatch_error(
+            "Verification result matched key id differs from its verified identity",
+        ));
+    }
+    Ok(())
 }
 
 fn build_evidence_mismatch_error(message: &str) -> crate::Error {

@@ -33,5 +33,5 @@ pub fn resolve_agent_socket_path(
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/internal/ssh_agent_socket_test.rs"]
-mod ssh_agent_socket_test;
+#[path = "../../../../tests/unit/internal/io_ssh_agent_socket_test.rs"]
+mod io_ssh_agent_socket_test;

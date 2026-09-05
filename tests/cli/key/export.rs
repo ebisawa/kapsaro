@@ -4,7 +4,7 @@
 //! Integration tests for `key export` command
 
 use crate::cli::common::{
-    cmd, generate_temp_ssh_keypair, make_secret_home, ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE,
+    cmd, generate_temp_ssh_keypair, setup_secret_home, ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE,
     TEST_MEMBER_HANDLE,
 };
 use crate::cli::key::{find_kid_in_member_dir, install_secondary_member_fixture};
@@ -33,7 +33,7 @@ fn generate_exportable_private_key(
 
 #[test]
 fn test_key_export_explicit_kid() {
-    let temp_dir = make_secret_home();
+    let temp_dir = setup_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     let member_handle = TEST_MEMBER_HANDLE;
@@ -79,7 +79,7 @@ fn test_key_export_explicit_kid() {
 
 #[test]
 fn test_key_export_active() {
-    let temp_dir = make_secret_home();
+    let temp_dir = setup_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     let member_handle = TEST_MEMBER_HANDLE;
@@ -146,7 +146,7 @@ fn test_key_export_public_with_config_member_handle_in_multi_member_home() {
 
 #[test]
 fn test_key_export_accepts_display_kid() {
-    let temp_dir = make_secret_home();
+    let temp_dir = setup_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
     let member_handle = TEST_MEMBER_HANDLE;
 
@@ -185,7 +185,7 @@ fn test_key_export_accepts_display_kid() {
 
 #[test]
 fn test_key_export_private_rejects_short_password_by_default() {
-    let temp_dir = make_secret_home();
+    let temp_dir = setup_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
     let member_handle = TEST_MEMBER_HANDLE;
     generate_exportable_private_key(&temp_dir, &ssh_priv, member_handle);
@@ -215,7 +215,7 @@ fn test_key_export_private_rejects_short_password_by_default() {
 
 #[test]
 fn test_key_export_private_colors_short_password_error_when_forced() {
-    let temp_dir = make_secret_home();
+    let temp_dir = setup_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
     let member_handle = TEST_MEMBER_HANDLE;
     generate_exportable_private_key(&temp_dir, &ssh_priv, member_handle);
@@ -252,7 +252,7 @@ fn test_key_export_private_colors_short_password_error_when_forced() {
 
 #[test]
 fn test_key_export_private_warns_for_allowed_weak_password_to_file() {
-    let temp_dir = make_secret_home();
+    let temp_dir = setup_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
     let member_handle = TEST_MEMBER_HANDLE;
     generate_exportable_private_key(&temp_dir, &ssh_priv, member_handle);
@@ -283,7 +283,7 @@ fn test_key_export_private_warns_for_allowed_weak_password_to_file() {
 
 #[test]
 fn test_key_export_private_colors_short_password_warning_when_forced() {
-    let temp_dir = make_secret_home();
+    let temp_dir = setup_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
     let member_handle = TEST_MEMBER_HANDLE;
     generate_exportable_private_key(&temp_dir, &ssh_priv, member_handle);
@@ -320,7 +320,7 @@ fn test_key_export_private_colors_short_password_warning_when_forced() {
 
 #[test]
 fn test_key_export_private_warns_for_accepted_short_password_only_on_stderr() {
-    let temp_dir = make_secret_home();
+    let temp_dir = setup_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
     let member_handle = TEST_MEMBER_HANDLE;
     generate_exportable_private_key(&temp_dir, &ssh_priv, member_handle);
@@ -365,7 +365,7 @@ fn test_key_export_private_warns_for_accepted_short_password_only_on_stderr() {
 
 #[test]
 fn test_key_export_private_does_not_warn_for_recommended_password() {
-    let temp_dir = make_secret_home();
+    let temp_dir = setup_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
     let member_handle = TEST_MEMBER_HANDLE;
     generate_exportable_private_key(&temp_dir, &ssh_priv, member_handle);
@@ -391,7 +391,7 @@ fn test_key_export_private_does_not_warn_for_recommended_password() {
 
 #[test]
 fn test_key_export_private_writes_password_protected_key_file() {
-    let temp_dir = make_secret_home();
+    let temp_dir = setup_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
     let member_handle = TEST_MEMBER_HANDLE;
 
@@ -429,7 +429,7 @@ fn test_key_export_private_writes_password_protected_key_file() {
 
 #[test]
 fn test_key_export_private_writes_base64url_to_stdout_with_stdout_flag() {
-    let temp_dir = make_secret_home();
+    let temp_dir = setup_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
     let member_handle = TEST_MEMBER_HANDLE;
 
@@ -475,7 +475,7 @@ fn test_key_export_private_writes_base64url_to_stdout_with_stdout_flag() {
 
 #[test]
 fn test_key_export_private_requires_member_handle_before_password_input() {
-    let temp_dir = make_secret_home();
+    let temp_dir = setup_secret_home();
 
     cmd()
         .arg("key")
@@ -494,7 +494,7 @@ fn test_key_export_private_requires_member_handle_before_password_input() {
 
 #[test]
 fn test_key_export_private_requires_explicit_output_destination() {
-    let temp_dir = make_secret_home();
+    let temp_dir = setup_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
     let member_handle = TEST_MEMBER_HANDLE;
 
@@ -529,7 +529,7 @@ fn test_key_export_private_requires_explicit_output_destination() {
 
 #[test]
 fn test_key_export_private_rejects_stdout_and_out_together() {
-    let temp_dir = make_secret_home();
+    let temp_dir = setup_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
     let member_handle = TEST_MEMBER_HANDLE;
 
@@ -578,7 +578,7 @@ fn test_key_export_private_refuses_a_private_key_others_can_read() {
     use std::fs;
     use std::os::unix::fs::PermissionsExt;
 
-    let temp_dir = make_secret_home();
+    let temp_dir = setup_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
     let member_handle = TEST_MEMBER_HANDLE;
     generate_exportable_private_key(&temp_dir, &ssh_priv, member_handle);
@@ -615,7 +615,7 @@ fn test_key_export_private_warns_about_a_public_key_others_can_read() {
     use std::fs;
     use std::os::unix::fs::PermissionsExt;
 
-    let temp_dir = make_secret_home();
+    let temp_dir = setup_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
     let member_handle = TEST_MEMBER_HANDLE;
     generate_exportable_private_key(&temp_dir, &ssh_priv, member_handle);

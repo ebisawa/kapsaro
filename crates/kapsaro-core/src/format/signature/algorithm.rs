@@ -8,7 +8,7 @@
 use crate::crypto::build_crypto_error;
 use crate::Result;
 
-pub(crate) fn verify_signature_algorithm(signature_alg: &str, expected_alg: &str) -> Result<()> {
+pub(crate) fn validate_signature_algorithm(signature_alg: &str, expected_alg: &str) -> Result<()> {
     if signature_alg == expected_alg {
         return Ok(());
     }

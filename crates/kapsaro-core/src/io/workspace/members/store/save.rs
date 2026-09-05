@@ -11,8 +11,8 @@ use super::uniqueness::ensure_member_document_kid_is_unique_in_open_dirs;
 use crate::format::schema::document::parse_public_key_str;
 use crate::support::fs::lock::with_exclusive_locked_directory;
 use crate::support::fs::relative::{
-    describe_unreplaceable_child_type, optional_child_type_at, save_text_at, ChildType,
-    DirectoryFd, OpenDir,
+    format_unreplaceable_child_type, optional_child_type_at, save_text_at, ChildType, DirectoryFd,
+    OpenDir,
 };
 use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
@@ -90,7 +90,7 @@ where
         let active_dir = open_status_dir_at(members_dir, MemberStatus::Active)?;
         let incoming_dir = open_status_dir_at(members_dir, MemberStatus::Incoming)?;
         run_post_open_save_dirs_hook();
-        write_member_document_locked(&active_dir, &incoming_dir, &request)
+        save_member_document_locked(&active_dir, &incoming_dir, &request)
     })
 }
 
@@ -105,7 +105,7 @@ struct MemberDocumentWriteRequest<'a> {
 
 /// Judge the name and the kid against the directories the lock opened, then
 /// write.
-fn write_member_document_locked(
+fn save_member_document_locked(
     active_dir: &OpenDir,
     incoming_dir: &OpenDir,
     request: &MemberDocumentWriteRequest<'_>,
@@ -146,7 +146,7 @@ fn enforce_replaceable_child_type(
     file_name: &str,
     existing: Option<ChildType>,
 ) -> Result<()> {
-    let Some(description) = existing.and_then(describe_unreplaceable_child_type) else {
+    let Some(description) = existing.and_then(format_unreplaceable_child_type) else {
         return Ok(());
     };
     Err(Error::build_invalid_operation_error(format!(

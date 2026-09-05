@@ -12,7 +12,7 @@ use crate::model::public_key::VerifiedRecipientKey;
 use crate::test_support::storage::keystore::storage::{list_kids, load_public_key};
 use crate::test_utils::keygen_helpers::build_verified_recipient_keys;
 use crate::test_utils::{
-    save_active_public_key_to_workspace, setup_member_key_context,
+    add_member_to_keystore, save_active_public_key_to_workspace, setup_member_key_context,
     setup_test_keystore_from_fixtures, update_active_private_key_expires_at,
 };
 use crate::test_utils::{ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE};
@@ -153,35 +153,7 @@ fn setup_two_member_keystore() -> (TempDir, String, String) {
 
     let alice_kids = list_kids(&keystore_root, ALICE_MEMBER_HANDLE).unwrap();
     let alice_kid = alice_kids.first().unwrap().clone();
-
-    let ssh_pub_content = std::fs::read_to_string(temp_dir.path().join(".ssh/test_ed25519.pub"))
-        .unwrap()
-        .trim()
-        .to_string();
-    let ssh_priv = temp_dir.path().join(".ssh/test_ed25519");
-    let (bob_private, bob_public) = crate::test_utils::keygen_helpers::keygen_test(
-        BOB_MEMBER_HANDLE,
-        &ssh_priv,
-        &ssh_pub_content,
-    )
-    .unwrap();
-    let bob_kid = bob_public.protected.kid.clone();
-    let bob_private_doc = crate::test_utils::keygen_helpers::build_test_private_key(
-        &bob_private,
-        &bob_public.protected.subject_handle,
-        &bob_public.protected.kid,
-        &ssh_priv,
-        &ssh_pub_content,
-    )
-    .unwrap();
-    crate::test_support::storage::keystore::storage::save_key_pair_atomic(
-        &keystore_root,
-        BOB_MEMBER_HANDLE,
-        &bob_kid,
-        &bob_private_doc,
-        &bob_public,
-    )
-    .unwrap();
+    let bob_kid = add_member_to_keystore(temp_dir.path(), BOB_MEMBER_HANDLE);
 
     (temp_dir, alice_kid, bob_kid)
 }

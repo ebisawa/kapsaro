@@ -262,7 +262,7 @@ impl TextFileSnapshot {
     ) -> Result<Self> {
         let path = dir.path().join(name);
         let reviewed = if file_exists_at(dir.as_ref(), name)? {
-            Some(read_reviewed_text(
+            Some(load_reviewed_text(
                 dir.as_ref(),
                 name,
                 max_bytes,
@@ -373,7 +373,7 @@ impl TextFileSnapshot {
 /// descriptor returned here, which stays on the inode it opened however the
 /// name moves afterwards.
 #[cfg(unix)]
-fn read_reviewed_text<D>(
+fn load_reviewed_text<D>(
     dir: &D,
     name: &str,
     max_bytes: usize,

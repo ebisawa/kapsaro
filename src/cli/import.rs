@@ -6,8 +6,7 @@
 use clap::Args;
 
 use crate::cli::common::command::{
-    resolve_cli_write_session, run_kv_write_command_with_recovery, CliWriteSession,
-    WriteCommandLabels,
+    open_cli_write_session, run_kv_write_command_with_recovery, CliWriteSession, WriteCommandLabels,
 };
 use crate::cli::common::context::CliContext;
 use crate::cli::common::output::kv::print_kv_import_result;
@@ -17,8 +16,6 @@ use crate::cli::options::{
 };
 use kapsaro_core::api::kv::load_import_text;
 use kapsaro_core::api::kv::mutation::import_kv_command_with_recipient_set_confirmation;
-use kapsaro_core::api::kv::types::KvWriteOutcome;
-use kapsaro_core::api::workspace::WorkspaceWriteDirectories;
 use kapsaro_core::Result;
 
 #[derive(Args)]
@@ -44,19 +41,14 @@ pub(crate) fn run(args: ImportArgs) -> Result<()> {
     let content = load_import_text(std::path::Path::new(&args.filename))?;
     let context = CliContext::resolve(&args.common)?;
     let allow_expired_key = context.allow_expired_key(args.allow_expired_key.allow_expired_key)?;
-    let workspace_path = context.workspace_path()?;
-    let directories = WorkspaceWriteDirectories::open(workspace_path)?;
-    let session = resolve_cli_write_session(
+    let session = open_cli_write_session(
         &context,
-        &args.common,
-        directories,
         args.member.member_handle.clone(),
         allow_expired_key,
     )?;
-    let (outcome, entry_count) = import_entries(&session, args.store.name.as_deref(), &content)?;
+    let entry_count = import_entries(&session, args.store.name.as_deref(), &content)?;
 
     print_kv_import_result(
-        outcome.message.as_deref(),
         entry_count,
         args.store.name.as_deref().unwrap_or("default"),
         args.common.json.json,
@@ -68,7 +60,7 @@ fn import_entries(
     session: &CliWriteSession,
     store_name: Option<&str>,
     content: &str,
-) -> Result<(KvWriteOutcome, usize)> {
+) -> Result<usize> {
     run_kv_write_command_with_recovery(
         session,
         store_name,
@@ -78,12 +70,9 @@ fn import_entries(
             recipient_context: "import recipients",
         },
         |trust_plan| {
-            import_kv_command_with_recipient_set_confirmation(
-                trust_plan,
-                content,
-                None,
-                confirm_recipient_set_approval,
-            )
+            import_kv_command_with_recipient_set_confirmation(trust_plan, content, |outcome, _| {
+                confirm_recipient_set_approval(outcome)
+            })
         },
     )
 }

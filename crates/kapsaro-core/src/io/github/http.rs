@@ -166,7 +166,7 @@ where
         ));
     }
 
-    let user: GitHubUser = read_capped_json(response, "GitHub user response").await?;
+    let user: GitHubUser = load_capped_json(response, "GitHub user response").await?;
     Ok(transform(user))
 }
 
@@ -174,11 +174,11 @@ where
 ///
 /// `Response::json` reads to the end with no ceiling, so the peer decides how
 /// much is allocated.
-async fn read_capped_json<T>(response: reqwest::Response, subject: &str) -> Result<T>
+async fn load_capped_json<T>(response: reqwest::Response, subject: &str) -> Result<T>
 where
     T: serde::de::DeserializeOwned,
 {
-    let body = read_capped_body(response, subject).await?;
+    let body = load_capped_body(response, subject).await?;
     serde_json::from_slice(&body).map_err(|e| {
         Error::build_verification_error(
             "V-GITHUB-API".to_string(),
@@ -187,7 +187,7 @@ where
     })
 }
 
-async fn read_capped_body(mut response: reqwest::Response, subject: &str) -> Result<Vec<u8>> {
+async fn load_capped_body(mut response: reqwest::Response, subject: &str) -> Result<Vec<u8>> {
     let mut body = Vec::new();
     while let Some(chunk) = response.chunk().await.map_err(|e| {
         Error::build_verification_error(
@@ -297,7 +297,7 @@ async fn parse_github_keys(response: reqwest::Response) -> Result<Vec<GitHubKeyR
         ));
     }
 
-    let keys: Vec<GitHubKey> = read_capped_json(response, "GitHub keys response").await?;
+    let keys: Vec<GitHubKey> = load_capped_json(response, "GitHub keys response").await?;
 
     Ok(keys
         .into_iter()
@@ -310,4 +310,4 @@ async fn parse_github_keys(response: reqwest::Response) -> Result<Vec<GitHubKeyR
 
 #[cfg(test)]
 #[path = "../../../tests/unit/internal/io_github_http_test.rs"]
-mod tests;
+mod io_github_http_test;

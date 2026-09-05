@@ -1,8 +1,8 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-// Shared decision for tests that stage a permission denial and need it to bite.
-// Root passes every permission check, so such a test is skipped or refused there.
+//! Shared decision for tests that stage a permission denial and need it to bite.
+//! Root passes every permission check, so such a test is skipped or refused there.
 
 #![cfg(unix)]
 

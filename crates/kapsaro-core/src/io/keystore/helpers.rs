@@ -65,5 +65,5 @@ pub(crate) fn find_member_by_kid(access: &KeystoreAccess, kid: &str) -> Result<M
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/internal/keystore_helpers_test.rs"]
-mod keystore_helpers_test;
+#[path = "../../../tests/unit/internal/io_keystore_helpers_test.rs"]
+mod io_keystore_helpers_test;

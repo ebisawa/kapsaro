@@ -11,6 +11,7 @@ use crate::feature::envelope::binding::{build_file_wrap_info, build_kv_wrap_info
 use crate::feature::envelope::wrap_set::{RecipientWrap, WrapSet};
 use crate::model::common::WrapItem;
 use crate::model::file_enc::VerifiedFileEncDocument;
+use crate::model::identity::MemberHandle;
 use crate::support::kid::format_kid_half_display_lossy;
 use crate::{Error, Result};
 use tracing::debug;
@@ -85,8 +86,9 @@ pub fn unwrap_master_key_for_file_with_context(
 ) -> Result<DecryptionResult<MasterKey>> {
     let secret = verified.document();
     let wrap_set = WrapSet::parse(&secret.protected.wrap, "Document")?;
+    let recipient_handle = MemberHandle::try_from(member_handle)?;
     let selected_key = key_ctx.select_local_decryption_key(&wrap_set, member_handle)?;
-    let wrap_item = wrap_set.find_by_kid_for_member(&selected_key.info().kid, member_handle)?;
+    let wrap_item = wrap_set.find_by_kid_for_member(&selected_key.info().kid, &recipient_handle)?;
     let kem_sk = decode_kem_secret_key(selected_key.private_key())?;
     let master_key = unwrap_master_key(
         wrap_item,
@@ -132,8 +134,9 @@ pub fn unwrap_master_key_for_kv_with_context(
     key_ctx: &CryptoContext,
 ) -> Result<DecryptionResult<MasterKey>> {
     let wrap_set = WrapSet::parse(wrap_items, "Document")?;
+    let recipient_handle = MemberHandle::try_from(member_handle)?;
     let selected_key = key_ctx.select_local_decryption_key(&wrap_set, member_handle)?;
-    let wrap_item = wrap_set.find_by_kid_for_member(&selected_key.info().kid, member_handle)?;
+    let wrap_item = wrap_set.find_by_kid_for_member(&selected_key.info().kid, &recipient_handle)?;
     let kem_sk = decode_kem_secret_key(selected_key.private_key())?;
     let master_key = unwrap_master_key_from_item(sid, wrap_item, &kem_sk)?;
     Ok(DecryptionResult {
@@ -143,9 +146,9 @@ pub fn unwrap_master_key_for_kv_with_context(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/internal/feature_decrypt_unwrap_test.rs"]
-mod feature_decrypt_unwrap_test;
+#[path = "../../../tests/unit/internal/feature_envelope_unwrap_test.rs"]
+mod feature_envelope_unwrap_test;
 
 #[cfg(test)]
-#[path = "../../../tests/unit/internal/feature_decrypt_unwrap_validation_test.rs"]
-mod feature_decrypt_unwrap_validation_test;
+#[path = "../../../tests/unit/internal/feature_envelope_unwrap_validation_test.rs"]
+mod feature_envelope_unwrap_validation_test;

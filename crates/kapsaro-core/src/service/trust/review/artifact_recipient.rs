@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! Artifact output recipient-set review helper.
-//! Keeps app commands from duplicating artifact evidence extraction.
+//! Keeps service operations from duplicating artifact evidence extraction.
 
 use crate::feature::artifact::artifact_recipient_evidence;
 use crate::format::content::EncContent;
@@ -10,12 +10,6 @@ use crate::service::trust::{ArtifactRecipientTrustOutcome, TrustCommandSession, 
 use crate::Result;
 
 use super::execution::{review_artifact_recipient_set_output, ArtifactRecipientSetReviewInput};
-
-struct ArtifactContentReviewInput<'a> {
-    trust_ctx: &'a TrustContext,
-    content: &'a EncContent,
-    context_label: &'a str,
-}
 
 pub struct ArtifactOutputRecipientSetReviewInput<'a> {
     pub session: &'a TrustCommandSession,
@@ -31,28 +25,9 @@ pub fn review_artifact_output_recipient_set<ConfirmRecipientSet>(
 where
     ConfirmRecipientSet: FnMut(&ArtifactRecipientTrustOutcome, &str) -> Result<bool>,
 {
-    review_artifact_content_recipient_set_output(
-        review.session,
-        ArtifactContentReviewInput {
-            trust_ctx: review.trust_ctx,
-            content: review.content,
-            context_label: review.context_label,
-        },
-        confirm_recipient_set,
-    )
-}
-
-fn review_artifact_content_recipient_set_output<ConfirmRecipientSet>(
-    session: &TrustCommandSession,
-    review: ArtifactContentReviewInput<'_>,
-    confirm_recipient_set: ConfirmRecipientSet,
-) -> Result<()>
-where
-    ConfirmRecipientSet: FnMut(&ArtifactRecipientTrustOutcome, &str) -> Result<bool>,
-{
     let evidence = artifact_recipient_evidence(review.content)?;
     review_artifact_recipient_set_output(
-        session,
+        review.session,
         ArtifactRecipientSetReviewInput {
             trust_ctx: review.trust_ctx,
             recipient_set: &evidence.recipient_set,

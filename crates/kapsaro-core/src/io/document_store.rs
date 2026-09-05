@@ -13,7 +13,7 @@ use std::path::Path;
 use zeroize::{Zeroize, Zeroizing};
 
 #[derive(Debug)]
-pub(crate) struct LoadedDocument<T> {
+pub(crate) struct DocumentLoadResult<T> {
     pub(crate) document: T,
     /// Serialized bytes as they were read, kept only where a caller needs to
     /// pin the exact reviewed content. Private key documents never retain it.
@@ -52,7 +52,7 @@ pub(crate) fn load_required_at<D, T>(
     max_size: usize,
     subject: &str,
     parse: impl FnOnce(&str) -> Result<T>,
-) -> Result<LoadedDocument<T>>
+) -> Result<DocumentLoadResult<T>>
 where
     D: DirectoryFd,
 {
@@ -76,7 +76,7 @@ pub(crate) fn load_required_with_raw_at<D, T>(
     max_size: usize,
     subject: &str,
     parse: impl FnOnce(&str) -> Result<T>,
-) -> Result<LoadedDocument<T>>
+) -> Result<DocumentLoadResult<T>>
 where
     D: DirectoryFd,
 {
@@ -104,7 +104,7 @@ fn load_at_with_retention<D, T>(
     subject: &str,
     parse: impl FnOnce(&str) -> Result<T>,
     retention: RawContentRetention,
-) -> Result<LoadedDocument<T>>
+) -> Result<DocumentLoadResult<T>>
 where
     D: DirectoryFd,
 {
@@ -113,7 +113,7 @@ where
     let parsed = parse(&content);
     let raw_content = retention.apply(content);
     let document = parsed?;
-    Ok(LoadedDocument {
+    Ok(DocumentLoadResult {
         document,
         raw_content,
     })
@@ -126,7 +126,7 @@ pub(crate) fn load_optional_at<D, T>(
     max_size: usize,
     subject: &str,
     parse: impl FnOnce(&str) -> Result<T>,
-) -> Result<Option<LoadedDocument<T>>>
+) -> Result<Option<DocumentLoadResult<T>>>
 where
     D: DirectoryFd,
 {
@@ -144,7 +144,7 @@ pub(crate) fn load_optional_with_raw_at<D, T>(
     max_size: usize,
     subject: &str,
     parse: impl FnOnce(&str) -> Result<T>,
-) -> Result<Option<LoadedDocument<T>>>
+) -> Result<Option<DocumentLoadResult<T>>>
 where
     D: DirectoryFd,
 {

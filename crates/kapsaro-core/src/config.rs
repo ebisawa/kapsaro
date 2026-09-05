@@ -3,9 +3,9 @@
 
 //! Configuration model and resolution logic.
 //!
-//! This module contains configuration type definitions and resolution logic
-//! for resolving configuration values from CLI arguments, environment variables,
-//! config files, and defaults.
+//! Defines the configuration key vocabulary and loads configured values from a
+//! local state root the caller has already chosen. Callers normalize the key
+//! spelling here rather than at each entry point that reads a value.
 
 pub(crate) mod resolution;
 pub(crate) mod types;

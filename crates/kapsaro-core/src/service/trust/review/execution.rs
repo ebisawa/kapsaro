@@ -6,7 +6,6 @@
 
 use std::collections::BTreeSet;
 
-use crate::feature::trust::known_keys::KnownKeyIdentity;
 use crate::feature::trust::recipient_sets::ArtifactRecipientSet;
 use crate::service::trust::approval::{
     observe_recipient_set_approval_store, save_reviewed_recipient_set_approval, ApprovedKnownKey,
@@ -35,29 +34,39 @@ pub struct TrustReviewContext<'a> {
     pub warnings: &'a [String],
 }
 
-pub fn execute_read_with_signer_trust<
-    T,
-    EmitWarnings,
-    ConfirmKnown,
-    ConfirmNonMember,
-    ConfirmRecipients,
-    Execute,
->(
-    review_context: TrustReviewContext<'_>,
-    trust_plan: ReadSignerTrustReviewPlan<'_>,
-    mut emit_warnings: EmitWarnings,
-    confirm_known: ConfirmKnown,
-    confirm_non_member: ConfirmNonMember,
-    confirm_recipients: ConfirmRecipients,
-    execute: Execute,
-) -> Result<T>
+/// The three confirmations one read's key trust review asks its caller for.
+///
+/// A single review pass may reach any of them, and which one it reaches depends
+/// on what the trust state turned out to be. Carrying them together means a
+/// caller supplies the whole set once instead of three positional callbacks a
+/// later signature change could silently reorder.
+pub struct ReadTrustConfirmations<ConfirmKnown, ConfirmNonMember, ConfirmRecipients>
 where
-    EmitWarnings: FnMut(&[String]),
     ConfirmKnown: FnMut(&TrustApprovalCandidate, &str) -> Result<bool>,
     ConfirmNonMember: FnMut(&TrustApprovalCandidate, &str, &[String]) -> Result<bool>,
     ConfirmRecipients:
         FnMut(&[TrustApprovalCandidate], &str) -> Result<Vec<TrustApprovalCandidate>>,
-    Execute: FnOnce() -> Result<T>,
+{
+    /// Approve a signer key the local trust store does not yet know.
+    pub known_key: ConfirmKnown,
+    /// Accept a signer who is not a workspace member.
+    pub non_member_signer: ConfirmNonMember,
+    /// Choose which of the artifact's recipient keys to approve.
+    pub recipients: ConfirmRecipients,
+}
+
+pub fn execute_read_with_signer_trust<T, ConfirmKnown, ConfirmNonMember, ConfirmRecipients>(
+    review_context: TrustReviewContext<'_>,
+    trust_plan: ReadSignerTrustReviewPlan<'_>,
+    mut emit_warnings: impl FnMut(&[String]),
+    confirmations: ReadTrustConfirmations<ConfirmKnown, ConfirmNonMember, ConfirmRecipients>,
+    execute: impl FnOnce() -> Result<T>,
+) -> Result<T>
+where
+    ConfirmKnown: FnMut(&TrustApprovalCandidate, &str) -> Result<bool>,
+    ConfirmNonMember: FnMut(&TrustApprovalCandidate, &str, &[String]) -> Result<bool>,
+    ConfirmRecipients:
+        FnMut(&[TrustApprovalCandidate], &str) -> Result<Vec<TrustApprovalCandidate>>,
 {
     emit_warnings(review_context.warnings);
     if !trust_plan.allow_non_member {
@@ -70,13 +79,12 @@ where
             context_label: trust_plan.labels.context,
             approval_subject: trust_plan.labels.subject,
         },
-        confirm_known,
-        confirm_non_member,
-        confirm_recipients,
+        confirmations.known_key,
+        confirmations.non_member_signer,
+        confirmations.recipients,
     )?;
     save_approved_known_key_documents(review_context.trust, &approvals)?;
-    let result = execute()?;
-    Ok(result)
+    execute()
 }
 
 struct ReadKeyTrustReview<'a> {
@@ -318,8 +326,6 @@ fn is_approved_candidate(
     approved_keys: &[ApprovedKnownKey],
 ) -> bool {
     approved_keys.iter().any(|approval| {
-        let identity = KnownKeyIdentity::from(approval);
-        identity.member_handle() == candidate.member_handle().as_str()
-            && identity.kid() == candidate.kid().as_str()
+        approval.member_handle() == candidate.member_handle() && approval.kid() == candidate.kid()
     })
 }

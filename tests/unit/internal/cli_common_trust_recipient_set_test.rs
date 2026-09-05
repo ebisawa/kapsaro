@@ -3,7 +3,8 @@
 
 use crate::cli::common::trust::{
     format_member_key_review_lines, format_non_member_signer_review_lines,
-    format_recipient_set_review_lines, format_signer_key_review_lines, recipient_set_review_prompt,
+    format_recipient_set_member_review_lines, format_recipient_set_review_lines,
+    format_signer_key_review_lines, recipient_set_review_prompt, ArtifactRecipientReviewRow,
 };
 use crate::cli::stderr_color_guard::StderrColorGuard;
 use console::strip_ansi_codes;
@@ -235,6 +236,57 @@ fn test_format_recipient_set_review_lines_keeps_long_handles_inline() {
 
     assert!(rendered.contains(&long_handle));
     assert!(rendered.contains("KAD1-AAAA-1111-BBBB-2222-CCCC-3333-DDDD"));
+}
+
+/// The read and rewrap paths reach the review with the set the last approval
+/// stored, so a changed set is listed as the members it adds and removes.
+#[test]
+fn test_format_recipient_set_member_review_lines_lists_the_changed_members() {
+    let current = [
+        ArtifactRecipientReviewRow::new(
+            "alice@example.com".to_string(),
+            "KAD1AAAA1111BBBB2222CCCC3333DDDD".to_string(),
+        ),
+        ArtifactRecipientReviewRow::new(
+            "carol@example.com".to_string(),
+            "KCD3AAAA1111BBBB2222CCCC3333DDDD".to_string(),
+        ),
+    ];
+    let approved = [
+        ArtifactRecipientReviewRow::new(
+            "alice@example.com".to_string(),
+            "KAD1AAAA1111BBBB2222CCCC3333DDDD".to_string(),
+        ),
+        ArtifactRecipientReviewRow::new(
+            "bob@example.com".to_string(),
+            "KBD2AAAA1111BBBB2222CCCC3333DDDD".to_string(),
+        ),
+    ];
+
+    let rendered = format_recipient_set_member_review_lines(&current, Some(&approved)).join("\n");
+    let plain = strip_ansi_codes(&rendered);
+
+    assert!(plain.contains("This secret's member set differs from your last review."));
+    assert!(plain.contains("Approve only if this member change is expected."));
+    assert!(plain.contains("Approval updates the remembered member set on this device."));
+    assert!(plain.contains("Member changes"));
+    assert!(plain.contains("  + carol@example.com"));
+    assert!(plain.contains("  - bob@example.com"));
+    assert!(plain.contains("    alice@example.com"));
+}
+
+#[test]
+fn test_format_recipient_set_member_review_lines_introduces_a_first_review() {
+    let rows = [ArtifactRecipientReviewRow::new(
+        "alice@example.com".to_string(),
+        "KAD1AAAA1111BBBB2222CCCC3333DDDD".to_string(),
+    )];
+
+    let rendered = format_recipient_set_member_review_lines(&rows, None).join("\n");
+
+    assert!(rendered.contains("This secret is shared with the members below."));
+    assert!(rendered.contains("Approve only if this member set is expected for this secret."));
+    assert!(rendered.contains("Current members"));
 }
 
 fn recipient_set_record(kid: &str, hints: Option<Vec<RecipientHandleHint>>) -> RecipientSetRecord {

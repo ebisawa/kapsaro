@@ -16,15 +16,12 @@ use crate::{Error, Result};
 
 use super::parse::token_source;
 
-pub(super) struct ValidatedKvTokens {
+pub(super) struct KvTokenSet {
     pub entries: Vec<KvEncEntry>,
     pub signature: KvFileSignature,
 }
 
-pub(super) fn validate_kv_tokens(
-    lines: &[KvEncLine],
-    source_name: &str,
-) -> Result<ValidatedKvTokens> {
+pub(super) fn validate_kv_tokens(lines: &[KvEncLine], source_name: &str) -> Result<KvTokenSet> {
     let mut entries = Vec::new();
     let mut signature = None;
 
@@ -42,7 +39,7 @@ pub(super) fn validate_kv_tokens(
     }
 
     let signature = signature.ok_or_else(missing_sig_error)?;
-    Ok(ValidatedKvTokens { entries, signature })
+    Ok(KvTokenSet { entries, signature })
 }
 
 pub(super) fn validate_kv_file_structure(lines: &[KvEncLine]) -> Result<()> {

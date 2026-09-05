@@ -8,6 +8,7 @@ pub mod encrypt;
 pub(crate) mod entry_codec;
 pub(crate) mod error;
 pub(crate) mod header;
+pub mod import;
 pub mod mutate;
 pub mod query;
 pub(crate) mod rewrite_session;

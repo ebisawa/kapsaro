@@ -10,7 +10,7 @@ pub mod internal_cli;
 
 #[allow(unused_imports)]
 pub use kapsaro_test_support::fixture::{
-    create_local_state_dir, local_state_temp_dir, restrict_local_state_file, write_local_state_file,
+    ensure_local_state_dir, local_state_temp_dir, restrict_local_state_file, save_local_state_file,
 };
 #[allow(unused_imports)]
 pub use kapsaro_test_support::guards::{with_temp_cwd, EnvGuard, ENV_MUTEX};

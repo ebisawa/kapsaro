@@ -8,8 +8,11 @@ use crate::Error;
 
 mod core;
 
+pub use crate::support::kid::{format_kid_display, format_kid_display_lossy};
+pub use crate::support::time::parse_relative_duration_days;
+pub use crate::support::validation::validate_github_login;
 pub use core::{
-    save_private_export_text, validate_environment_key, KeyContext, KeyContextOptions, Kid,
+    load_environment_key, save_private_export_text, KeyContext, KeyContextOptions, Kid,
     LocalKeyContextRequest, LocalKeyStore, MemberHandle, RecipientKeys,
 };
 

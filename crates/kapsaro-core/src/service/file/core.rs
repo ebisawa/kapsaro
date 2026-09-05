@@ -13,9 +13,13 @@ use crate::feature::encrypt::encrypt_file_content;
 use crate::feature::envelope::key_possession::verify_file_key_possession;
 use crate::feature::envelope::unwrap::unwrap_master_key_for_file_with_context;
 use crate::feature::verify::file::verify_file_content_for_operation;
-use crate::format::content::FileEncContent;
+use crate::format::content::{EncContent, FileEncContent};
+use crate::model::common::WrapItem;
 use crate::model::file_enc::VerifiedFileEncDocument;
 use crate::model::verification::SignatureVerificationProof;
+use crate::service::artifact::verified::{
+    EncArtifactKind, ReadableEncArtifact, VerifiedEncArtifact,
+};
 use crate::service::artifact_text::{ArtifactLoadPolicy, ArtifactText};
 use crate::support::fs::atomic::{save_bytes_restricted, save_text};
 use crate::support::fs::load_bytes;
@@ -28,7 +32,9 @@ use crate::Result;
 use crate::service::key::{KeyContext, RecipientKeys};
 use crate::service::operation::OperationOptions;
 use crate::service::secret::SecretBytes;
-use crate::service::trust::{push_signature_verification_warnings, RecipientSetSubject};
+use crate::service::trust::{
+    push_signature_verification_warnings, ReadTrustExceptions, RecipientSetSubject,
+};
 
 /// Parsed file-enc artifact.
 #[derive(Debug, Clone)]
@@ -114,8 +120,7 @@ impl FileEncArtifact {
         key_ctx: &KeyContext,
     ) -> Result<Self> {
         let signing = build_signing_context(key_ctx.inner())?;
-        let content =
-            encrypt_file_content(plaintext, recipients.handles(), recipients.keys(), &signing)?;
+        let content = encrypt_file_content(plaintext, recipients.keys(), &signing)?;
         Self::parse(content)
     }
 
@@ -144,56 +149,80 @@ impl VerifiedFileEncArtifact {
         &self.inner
     }
 
-    pub(crate) fn content(&self) -> &FileEncContent {
-        &self.content
-    }
-
-    pub(crate) fn binding_digest(&self) -> Result<[u8; 32]> {
-        Ok(Sha256::digest(self.content.as_str().as_bytes()).into())
-    }
-
     /// Extract the recipient-set subject for trust policy evaluation.
     pub fn recipient_set_subject(&self) -> Result<RecipientSetSubject> {
         RecipientSetSubject::from_verified_file(self.inner())
     }
 }
 
-impl<'a> TrustedFileEncArtifact<'a> {
-    pub(crate) fn from_authorized(
-        artifact: &'a VerifiedFileEncArtifact,
-        key_ctx: &'a KeyContext,
-        options: OperationOptions,
-    ) -> Result<Self> {
-        let master_key = unwrap_master_key_for_file_with_context(
-            artifact.inner(),
-            key_ctx.member_handle(),
-            key_ctx.inner(),
-        )?;
-        let key_info = master_key.key_info.clone();
-        verify_file_key_possession(artifact.inner(), master_key.value)?;
-        let warnings = collect_file_read_warnings(artifact.inner().proof(), &key_info, options)?;
-        Ok(Self {
-            artifact: Cow::Borrowed(artifact),
-            key_ctx,
-            warnings,
-        })
+impl VerifiedEncArtifact for VerifiedFileEncArtifact {
+    const KIND: EncArtifactKind = EncArtifactKind::File;
+
+    fn verify_text(text: &str, options: OperationOptions) -> Result<Self> {
+        FileEncArtifact::parse(text)?.verify(options)
     }
 
-    pub(crate) fn from_authorized_owned(
-        artifact: VerifiedFileEncArtifact,
+    fn binding_digest(&self) -> [u8; 32] {
+        Sha256::digest(self.content.as_str().as_bytes()).into()
+    }
+
+    fn proof(&self) -> &SignatureVerificationProof {
+        self.inner.proof()
+    }
+
+    fn recipient_set_subject(&self) -> Result<RecipientSetSubject> {
+        VerifiedFileEncArtifact::recipient_set_subject(self)
+    }
+
+    fn wrap_items(&self) -> &[WrapItem] {
+        &self.inner.document().protected.wrap
+    }
+
+    fn verify_key_possession(&self, key_ctx: &KeyContext) -> Result<DecryptionKeyInfo> {
+        verify_file_key_possession_with_context(self, key_ctx)
+    }
+
+    fn into_enc_content(self) -> EncContent {
+        EncContent::FileEnc(self.content)
+    }
+}
+
+impl ReadableEncArtifact for VerifiedFileEncArtifact {
+    type Operation = FileReadOperation;
+    type Trusted<'a> = TrustedFileEncArtifact<'a>;
+
+    fn enforce_read_exceptions(
+        operation: &Self::Operation,
+        _exceptions: &ReadTrustExceptions,
+    ) -> Result<()> {
+        let FileReadOperation::Decrypt = operation;
+        Ok(())
+    }
+
+    fn into_trusted<'a>(
+        artifact: Cow<'a, Self>,
+        key_ctx: &'a KeyContext,
+        operation: Self::Operation,
+        options: OperationOptions,
+    ) -> Result<Self::Trusted<'a>>
+    where
+        Self: 'a,
+    {
+        let FileReadOperation::Decrypt = operation;
+        TrustedFileEncArtifact::from_authorized(artifact, key_ctx, options)
+    }
+}
+
+impl<'a> TrustedFileEncArtifact<'a> {
+    pub(crate) fn from_authorized(
+        artifact: Cow<'a, VerifiedFileEncArtifact>,
         key_ctx: &'a KeyContext,
         options: OperationOptions,
     ) -> Result<Self> {
-        let master_key = unwrap_master_key_for_file_with_context(
-            artifact.inner(),
-            key_ctx.member_handle(),
-            key_ctx.inner(),
-        )?;
-        let key_info = master_key.key_info.clone();
-        verify_file_key_possession(artifact.inner(), master_key.value)?;
+        let key_info = verify_file_key_possession_with_context(artifact.as_ref(), key_ctx)?;
         let warnings = collect_file_read_warnings(artifact.inner().proof(), &key_info, options)?;
         Ok(Self {
-            artifact: Cow::Owned(artifact),
+            artifact,
             key_ctx,
             warnings,
         })
@@ -213,6 +242,20 @@ impl<'a> TrustedFileEncArtifact<'a> {
         )
         .map(|result| SecretBytes::from_zeroizing(result.value))
     }
+}
+
+fn verify_file_key_possession_with_context(
+    artifact: &VerifiedFileEncArtifact,
+    key_ctx: &KeyContext,
+) -> Result<DecryptionKeyInfo> {
+    let master_key = unwrap_master_key_for_file_with_context(
+        artifact.inner(),
+        key_ctx.member_handle(),
+        key_ctx.inner(),
+    )?;
+    let key_info = master_key.key_info.clone();
+    verify_file_key_possession(artifact.inner(), master_key.value)?;
+    Ok(key_info)
 }
 
 fn collect_file_read_warnings(

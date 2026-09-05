@@ -5,7 +5,7 @@
 //! Reads and publishes the `active` marker and resolves which key it names.
 
 use super::inspection::list_kids_in_verified_namespace;
-use super::key_pair::{PrivateHalfCheck, StoredKeyPair};
+use super::key_pair::{KeyPairRecord, PrivateHalfCheck};
 use super::{
     ensure_member_namespace_safe, finish_member_mutation, key_not_found, KeystoreAccess,
     ACTIVE_FILE,
@@ -22,8 +22,8 @@ use crate::support::post_write::{format_post_change_failure, CompletedChange};
 use crate::{Error, Result};
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/internal/keystore_access_active_test.rs"]
-mod keystore_access_active_test;
+#[path = "../../../../tests/unit/internal/io_keystore_access_active_test.rs"]
+mod io_keystore_access_active_test;
 
 impl KeystoreAccess {
     pub(crate) fn resolve_kid(&self, member: &MemberHandle, query: Option<&str>) -> Result<Kid> {
@@ -226,7 +226,7 @@ impl KeystoreAccess {
     where
         D: DirectoryFd,
     {
-        match self.read_key_activability(member_dir, member, kid, now, selection) {
+        match self.load_key_activability(member_dir, member, kid, now, selection) {
             Ok(activability) => activability,
             Err(error) => KeyActivability::Unreadable(error),
         }
@@ -234,7 +234,7 @@ impl KeystoreAccess {
 
     /// Read the key's documents to the depth `selection` asks for and say what
     /// the key is at `now`.
-    fn read_key_activability<D>(
+    fn load_key_activability<D>(
         &self,
         member_dir: &D,
         member: &MemberHandle,
@@ -248,9 +248,9 @@ impl KeystoreAccess {
         let stored =
             self.inspect_stored_key_pair(member_dir, member, kid, selection.private_half_check())?;
         let public_key = match stored {
-            StoredKeyPair::NoKeyDirectory => return Ok(KeyActivability::Missing),
-            StoredKeyPair::HalfMissing => return Ok(KeyActivability::HalfMissing),
-            StoredKeyPair::Present(public_key) => *public_key,
+            KeyPairRecord::NoKeyDirectory => return Ok(KeyActivability::Missing),
+            KeyPairRecord::HalfMissing => return Ok(KeyActivability::HalfMissing),
+            KeyPairRecord::Present(public_key) => *public_key,
         };
         let expires_at = parse_expires_at(&public_key)?;
         let created_at = parse_created_at(&public_key)?;
@@ -267,7 +267,7 @@ impl KeystoreAccess {
     /// `activate_existing_key`, which refuses a marker pointing at nothing.
     #[cfg(any(test, feature = "cli-test-support"))]
     pub(crate) fn set_active_kid_unchecked(&self, member: &MemberHandle, kid: &Kid) -> Result<()> {
-        self.write_active_kid_unchecked(member, kid, |_| Ok(()))
+        self.save_active_kid_unchecked(member, kid, |_| Ok(()))
     }
 
     /// Test-only seam around the active-kid write. Compiled out of production.
@@ -281,7 +281,7 @@ impl KeystoreAccess {
     where
         H: FnOnce(),
     {
-        self.write_active_kid_unchecked(member, kid, |member_dir| {
+        self.save_active_kid_unchecked(member, kid, |member_dir| {
             stage_active_update_for_test(member_dir, staging_hook)
         })
     }
@@ -289,12 +289,7 @@ impl KeystoreAccess {
     /// The one locked sequence both unchecked active-kid writes run, with
     /// `stage` marking the window before the marker is published.
     #[cfg(any(test, feature = "cli-test-support"))]
-    fn write_active_kid_unchecked<S>(
-        &self,
-        member: &MemberHandle,
-        kid: &Kid,
-        stage: S,
-    ) -> Result<()>
+    fn save_active_kid_unchecked<S>(&self, member: &MemberHandle, kid: &Kid, stage: S) -> Result<()>
     where
         S: FnOnce(&ExclusiveLockedDir<'_>) -> Result<()>,
     {
@@ -495,7 +490,7 @@ fn no_activatable_key_found(
          one of its halves, or unreadable.",
         member
     );
-    message.push_str(&describe_ruled_out_keys(half_missing, unreadable));
+    message.push_str(&format_ruled_out_keys(half_missing, unreadable));
     Error::build_not_found_error(message)
 }
 
@@ -513,12 +508,12 @@ fn no_usable_key_found(member: &MemberHandle, half_missing: &[Kid]) -> Error {
         "No usable key found for member: {}. Every key this member holds is incomplete, so the \
          keystore has to be repaired before a key can be resolved without naming one.{}",
         member,
-        describe_ruled_out_keys(half_missing, &[])
+        format_ruled_out_keys(half_missing, &[])
     ))
 }
 
 /// Name the keys a selection had to pass over, one line each.
-fn describe_ruled_out_keys(half_missing: &[Kid], unreadable: &[Error]) -> String {
+fn format_ruled_out_keys(half_missing: &[Kid], unreadable: &[Error]) -> String {
     let mut detail = String::new();
     for kid in half_missing {
         detail.push_str(&format!(
@@ -547,7 +542,7 @@ pub(super) fn clear_active_kid_locked(
         return Ok(());
     }
     relative::remove_file_if_exists_at(member_dir, ACTIVE_FILE)
-        .map_err(|error| describe_active_removal_failure(error, member_dir, member))
+        .map_err(|error| build_active_removal_failure_error(error, member_dir, member))
 }
 
 /// Tell a marker that is still standing from one that is gone but not persisted.
@@ -558,7 +553,7 @@ pub(super) fn clear_active_kid_locked(
 /// happened, so nothing changed and the failure is passed on as it came.
 /// Whatever cannot be settled keeps that reading, because claiming a removal
 /// that did not happen is what sends the operator looking for the wrong repair.
-fn describe_active_removal_failure(
+fn build_active_removal_failure_error(
     error: Error,
     member_dir: &ExclusiveLockedDir<'_>,
     member: &MemberHandle,

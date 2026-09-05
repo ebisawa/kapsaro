@@ -14,6 +14,7 @@ pub mod kv;
 pub mod member;
 pub mod online;
 pub mod operation;
+pub mod process;
 pub mod registration;
 pub mod rewrap;
 pub mod secret;

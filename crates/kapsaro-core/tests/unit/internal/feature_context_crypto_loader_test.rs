@@ -9,7 +9,7 @@ use crate::io::keystore::access::KeystoreAccess;
 use crate::model::identity::MemberHandle;
 use crate::test_utils::ed25519_backend::Ed25519DirectBackend;
 use crate::test_utils::{
-    build_test_private_key, create_local_state_dir, keygen_test, restrict_local_state_file,
+    build_test_private_key, ensure_local_state_dir, keygen_test, restrict_local_state_file,
     setup_test_keystore_from_fixtures, ALICE_MEMBER_HANDLE,
 };
 use std::fs;
@@ -22,7 +22,7 @@ use std::path::Path;
 fn copy_key_pair_under_other_kid(member_dir: &Path, source_kid: &str, other_kid: &str) {
     let source = member_dir.join(source_kid);
     let destination = member_dir.join(other_kid);
-    create_local_state_dir(&destination);
+    ensure_local_state_dir(&destination);
     for name in ["private.json", "public.json"] {
         fs::copy(source.join(name), destination.join(name)).unwrap();
         restrict_local_state_file(&destination.join(name));

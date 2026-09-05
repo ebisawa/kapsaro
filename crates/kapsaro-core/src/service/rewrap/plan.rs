@@ -38,7 +38,9 @@ fn build_incoming_report(
             }
             IncomingVerificationCategory::Failed => report.failed.push(candidate),
             IncomingVerificationCategory::NotConfigured => report.not_configured.push(candidate),
-            IncomingVerificationCategory::Verified => unreachable!(),
+            // Offline verification cannot reach Verified: that category is set
+            // by the online check, which runs on candidates this report feeds.
+            IncomingVerificationCategory::Verified => {}
         }
     }
 

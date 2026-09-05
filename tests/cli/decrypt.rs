@@ -117,8 +117,7 @@ fn test_decrypt_missing_output_fails_before_signer_review() {
         .arg(&fixture.workspace)
         .env("KAPSARO_HOME", fixture.home.path())
         .env("KAPSARO_SSH_IDENTITY", &fixture.ssh_identity)
-        .env("KAPSARO_STRICT_KEY_CHECKING", "yes")
-        .env_remove("CI");
+        .env("KAPSARO_STRICT_KEY_CHECKING", "yes");
 
     let result = run_command_with_optional_prompt_pty(&mut command, "Approve this key?", b"n\r");
 
@@ -233,8 +232,7 @@ fn test_decrypt_non_member_cli_acceptance_is_one_shot() {
         .arg("--workspace")
         .arg(&fixture.workspace)
         .env("KAPSARO_HOME", fixture.home.path())
-        .env("KAPSARO_SSH_IDENTITY", &fixture.ssh_identity)
-        .env_remove("CI");
+        .env("KAPSARO_SSH_IDENTITY", &fixture.ssh_identity);
 
     let result = run_command_with_pty(&mut command, "Accept this signed artifact once?", b"y\r");
 
@@ -274,8 +272,7 @@ fn test_decrypt_non_member_cli_rejection_has_no_side_effect() {
         .arg("--workspace")
         .arg(&fixture.workspace)
         .env("KAPSARO_HOME", fixture.home.path())
-        .env("KAPSARO_SSH_IDENTITY", &fixture.ssh_identity)
-        .env_remove("CI");
+        .env("KAPSARO_SSH_IDENTITY", &fixture.ssh_identity);
 
     let result = run_command_with_pty(&mut command, "Accept this signed artifact once?", b"n\r");
 

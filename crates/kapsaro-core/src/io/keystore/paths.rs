@@ -69,5 +69,5 @@ fn get_key_dir_from_root(keystore_root: &Path, member_handle: &MemberHandle, kid
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/internal/keystore_paths_test.rs"]
-mod keystore_paths_test;
+#[path = "../../../tests/unit/internal/io_keystore_paths_test.rs"]
+mod io_keystore_paths_test;

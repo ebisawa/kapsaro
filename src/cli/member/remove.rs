@@ -110,4 +110,4 @@ fn member_remove_cancelled_error(member_handle: &str) -> String {
 
 #[cfg(test)]
 #[path = "../../../tests/unit/internal/cli_member_remove_test.rs"]
-mod tests;
+mod cli_member_remove_test;

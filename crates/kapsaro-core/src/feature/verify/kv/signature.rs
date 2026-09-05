@@ -6,11 +6,11 @@
 
 use crate::feature::envelope::signature::verify_kv_signature;
 use crate::feature::verify::append_operational_signer_expiry_warning;
-use crate::feature::verify::key_loader::{
-    load_verifying_key_from_signature, SignatureVerificationKey,
-};
 use crate::feature::verify::report::{build_error_report, build_signature_verification_report};
 use crate::feature::verify::signature::verify_signature_with_loaded_key;
+use crate::feature::verify::verifying_key::{
+    build_verifying_key_from_signature, SignatureVerificationKey,
+};
 use crate::feature::verify::SignatureVerificationReport;
 use crate::format::content::KvEncContent;
 use crate::format::kv::document::parse_kv_document;
@@ -39,7 +39,7 @@ pub fn verify_kv_document_report(content: &str) -> SignatureVerificationReport {
         Ok(doc) => {
             let signature = doc.signature();
             build_signature_verification_report(
-                load_verifying_key_from_signature(signature),
+                build_verifying_key_from_signature(signature),
                 |loaded| verify_loaded_kv_signature(&doc, signature, loaded),
             )
         }
@@ -66,5 +66,5 @@ fn verify_loaded_kv_signature(
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/internal/feature_verify_kv_operation_test.rs"]
-mod tests;
+#[path = "../../../../tests/unit/internal/feature_verify_kv_signature_test.rs"]
+mod feature_verify_kv_signature_test;

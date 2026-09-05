@@ -282,5 +282,5 @@ pub fn parse_sshsig_armored(
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/internal/sshsig_format_test.rs"]
-mod sshsig_format_test;
+#[path = "../../../../tests/unit/internal/io_ssh_protocol_sshsig_test.rs"]
+mod io_ssh_protocol_sshsig_test;

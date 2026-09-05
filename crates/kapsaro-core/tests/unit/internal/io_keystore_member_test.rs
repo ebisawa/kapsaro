@@ -9,13 +9,13 @@ use crate::io::keystore::member::{
 use crate::model::identity::MemberHandle;
 use crate::test_utils::setup_test_keystore_from_fixtures;
 use crate::test_utils::ALICE_MEMBER_HANDLE;
-use crate::test_utils::{create_local_state_dir, local_state_temp_dir};
+use crate::test_utils::{ensure_local_state_dir, local_state_temp_dir};
 
 #[test]
 fn test_load_single_member_handle_from_keystore_returns_single_member() {
     let temp_dir = local_state_temp_dir();
     let keystore_root = temp_dir.path().join("keys");
-    create_local_state_dir(&keystore_root.join(ALICE_MEMBER_HANDLE));
+    ensure_local_state_dir(&keystore_root.join(ALICE_MEMBER_HANDLE));
 
     let access = KeystoreAccess::open(&keystore_root).unwrap();
     let member_handle = load_single_member_handle_from_keystore(&access).unwrap();

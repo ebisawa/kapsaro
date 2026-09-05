@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! Feature-facing DTOs for reusable key document generation.
-//! Keeps keystore persistence and activation orchestration in the app layer.
+//! Keeps keystore persistence and activation orchestration in the service layer.
 
 use crate::model::private_key::PrivateKey;
 use crate::model::public_key::PublicKey;

@@ -7,9 +7,9 @@ use crate::cli::common::output::text::layout;
 use crate::cli::common::output::trust::review::{
     format_candidate_review_lines, format_github_verification, print_trust_review_line,
 };
-use crate::cli::common::presentation::format_kid_display_lossy;
 use crate::cli::common::prompt::prompt_yes_no;
 use console::Style;
+use kapsaro_core::api::key::format_kid_display_lossy;
 use kapsaro_core::api::member::approval::MemberApprovalResult;
 use kapsaro_core::api::trust::enforcement::{
     ArtifactRecipientHandleHint, ArtifactRecipientSetReview, ArtifactRecipientSetSnapshot,
@@ -30,10 +30,7 @@ pub(crate) use recovery::{
     run_with_workspace_read_trust_store_reset_recovery, TrustStoreResetOutcome,
 };
 
-pub(crate) fn confirm_signer_key_approval(
-    candidate: &TrustApprovalCandidate,
-    _context_label: &str,
-) -> Result<bool> {
+pub(crate) fn confirm_signer_key_approval(candidate: &TrustApprovalCandidate) -> Result<bool> {
     for line in format_signer_key_review_lines(candidate) {
         print_trust_review_line(&line);
     }
@@ -42,7 +39,6 @@ pub(crate) fn confirm_signer_key_approval(
 
 pub(crate) fn confirm_non_member_acceptance(
     candidate: &TrustApprovalCandidate,
-    _context_label: &str,
     recipients: &[String],
 ) -> Result<bool> {
     for line in format_non_member_signer_review_lines(candidate, recipients) {
@@ -53,11 +49,10 @@ pub(crate) fn confirm_non_member_acceptance(
 
 pub(crate) fn confirm_recipient_approvals(
     candidates: &[TrustApprovalCandidate],
-    context_label: &str,
 ) -> Result<Vec<TrustApprovalCandidate>> {
     let mut approved = Vec::new();
     for candidate in candidates {
-        if confirm_recipient_key_approval(candidate, context_label)? {
+        if confirm_recipient_key_approval(candidate)? {
             approved.push(candidate.clone());
         }
     }
@@ -66,7 +61,6 @@ pub(crate) fn confirm_recipient_approvals(
 
 pub(crate) fn confirm_recipient_set_approval(
     outcome: &ArtifactRecipientTrustOutcome,
-    _context_label: &str,
 ) -> Result<bool> {
     let ArtifactRecipientTrustOutcome::NeedsManualApproval(review) = outcome else {
         return Ok(true);
@@ -78,20 +72,14 @@ pub(crate) fn confirm_recipient_set_approval(
     prompt_yes_no(&recipient_set_review_prompt(review), false)
 }
 
-pub(crate) fn confirm_recipient_key_approval(
-    candidate: &TrustApprovalCandidate,
-    _context_label: &str,
-) -> Result<bool> {
+pub(crate) fn confirm_recipient_key_approval(candidate: &TrustApprovalCandidate) -> Result<bool> {
     for line in format_recipient_key_review_lines(candidate) {
         print_trust_review_line(&line);
     }
     prompt_yes_no("Approve this key?", false)
 }
 
-pub(crate) fn confirm_member_key_approval(
-    candidate: &MemberApprovalResult,
-    _context_label: &str,
-) -> Result<bool> {
+pub(crate) fn confirm_member_key_approval(candidate: &MemberApprovalResult) -> Result<bool> {
     for line in format_member_key_review_lines(candidate) {
         print_trust_review_line(&line);
     }
@@ -203,18 +191,35 @@ pub(crate) fn format_key_approval_review_lines(intro: &str) -> Vec<String> {
 }
 
 fn format_recipient_set_review_lines(review: &ArtifactRecipientSetReview) -> Vec<String> {
-    let mut lines = recipient_set_review_intro(review.has_approved_set());
-    if review.has_approved_set() {
-        lines.push("Member changes".to_string());
-        lines.extend(format_recipient_diff_rows(&build_recipient_diff_rows(
-            review,
-        )));
-    } else {
+    let approved = review
+        .approved_snapshot()
+        .map(|snapshot| build_recipient_rows(&snapshot));
+    format_recipient_set_member_review_lines(
+        &build_recipient_rows(&review.current_snapshot()),
+        approved.as_deref(),
+    )
+}
+
+/// Recipient-set review body shared by the write, read, and rewrap paths.
+///
+/// A set that was approved before is shown as the change against it, so the
+/// operator decides on the members it adds and removes. A first review has no
+/// such set and lists the current members instead.
+pub(crate) fn format_recipient_set_member_review_lines(
+    current: &[ArtifactRecipientReviewRow],
+    approved: Option<&[ArtifactRecipientReviewRow]>,
+) -> Vec<String> {
+    let Some(approved) = approved else {
+        let mut lines = recipient_set_review_intro(false);
         lines.push("Current members".to_string());
-        lines.extend(format_recipient_lines(&build_recipient_rows(
-            &review.current_snapshot(),
-        )));
-    }
+        lines.extend(format_recipient_lines(current));
+        return lines;
+    };
+    let mut lines = recipient_set_review_intro(true);
+    lines.push("Member changes".to_string());
+    lines.extend(format_recipient_diff_rows(&build_recipient_diff_rows(
+        current, approved,
+    )));
     lines
 }
 
@@ -270,9 +275,15 @@ enum ArtifactRecipientReviewDiffStatus {
 }
 
 #[derive(Clone)]
-struct ArtifactRecipientReviewRow {
+pub(crate) struct ArtifactRecipientReviewRow {
     member_handle: String,
     kid: String,
+}
+
+impl ArtifactRecipientReviewRow {
+    pub(crate) fn new(member_handle: String, kid: String) -> Self {
+        Self { member_handle, kid }
+    }
 }
 
 struct ArtifactRecipientReviewDiffRow {
@@ -287,13 +298,11 @@ struct RecipientDisplayRow {
 }
 
 fn build_recipient_diff_rows(
-    review: &ArtifactRecipientSetReview,
+    current: &[ArtifactRecipientReviewRow],
+    approved: &[ArtifactRecipientReviewRow],
 ) -> Vec<ArtifactRecipientReviewDiffRow> {
-    let current = build_recipient_rows_by_kid(&review.current_snapshot());
-    let approved = review
-        .approved_snapshot()
-        .map(|snapshot| build_recipient_rows_by_kid(&snapshot))
-        .unwrap_or_default();
+    let current = index_recipient_rows_by_kid(current);
+    let approved = index_recipient_rows_by_kid(approved);
     let all_kids = current
         .keys()
         .chain(approved.keys())
@@ -319,16 +328,16 @@ fn build_recipient_diff_rows(
         .collect()
 }
 
-fn build_recipient_rows_by_kid(
-    snapshot: &ArtifactRecipientSetSnapshot,
+fn index_recipient_rows_by_kid(
+    rows: &[ArtifactRecipientReviewRow],
 ) -> BTreeMap<String, ArtifactRecipientReviewRow> {
-    build_recipient_rows(snapshot)
-        .into_iter()
-        .map(|row| (row.kid.clone(), row))
+    rows.iter()
+        .map(|row| (row.kid.clone(), row.clone()))
         .collect()
 }
 
-fn build_recipient_rows(
+/// Build the display rows one recipient-set snapshot contributes to a review.
+pub(crate) fn build_recipient_rows(
     snapshot: &ArtifactRecipientSetSnapshot,
 ) -> Vec<ArtifactRecipientReviewRow> {
     snapshot
@@ -447,8 +456,8 @@ fn recipient_diff_member_width(
 
 #[cfg(test)]
 #[path = "../../../tests/unit/internal/cli_common_trust_recovery_test.rs"]
-mod recovery_tests;
+mod cli_common_trust_recovery_test;
 
 #[cfg(test)]
 #[path = "../../../tests/unit/internal/cli_common_trust_recipient_set_test.rs"]
-mod recipient_set_tests;
+mod cli_common_trust_recipient_set_test;

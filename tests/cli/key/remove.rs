@@ -4,14 +4,14 @@
 //! Integration tests for `key remove` command
 
 use crate::cli::common::{
-    cmd, generate_temp_ssh_keypair, make_secret_home, save_trust_store_signed_by_active_key,
-    ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, TEST_MEMBER_HANDLE,
+    cmd, generate_temp_ssh_keypair, save_trust_store_signed_by_active_key, setup_secret_home,
+    ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, TEST_MEMBER_HANDLE, TRUST_STORE_STORED_AT,
 };
 use crate::cli::key::{find_kid_in_member_dir, install_secondary_member_fixture};
 use kapsaro_core::test_support::helpers::kid::format_kid_display;
 use kapsaro_core::test_support::storage::keystore::active::load_active_kid;
 #[cfg(unix)]
-use kapsaro_test_support::fixture::create_local_state_dir;
+use kapsaro_test_support::fixture::ensure_local_state_dir;
 use kapsaro_test_support::fixture::setup_test_keystore_from_fixtures;
 use predicates::prelude::*;
 use std::fs;
@@ -24,11 +24,11 @@ use std::os::unix::fs::symlink;
 #[cfg(unix)]
 #[test]
 fn test_key_remove_deletes_through_a_home_symlink() {
-    let temp = make_secret_home();
+    let temp = setup_secret_home();
     let real_home = temp.path().join("real-home");
     let selected_home = temp.path().join("selected-home");
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
-    create_local_state_dir(&real_home);
+    ensure_local_state_dir(&real_home);
     cmd()
         .arg("key")
         .arg("new")
@@ -61,7 +61,7 @@ fn test_key_remove_deletes_through_a_home_symlink() {
 
 #[test]
 fn test_key_remove_non_active() {
-    let temp_dir = make_secret_home();
+    let temp_dir = setup_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     let member_handle = TEST_MEMBER_HANDLE;
@@ -135,7 +135,7 @@ fn test_key_remove_non_active() {
 
 #[test]
 fn test_key_remove_active_without_force() {
-    let temp_dir = make_secret_home();
+    let temp_dir = setup_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     let member_handle = TEST_MEMBER_HANDLE;
@@ -186,7 +186,7 @@ fn test_key_remove_active_without_force() {
 
 #[test]
 fn test_key_remove_active_with_force() {
-    let temp_dir = make_secret_home();
+    let temp_dir = setup_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
 
     let member_handle = TEST_MEMBER_HANDLE;
@@ -237,7 +237,7 @@ fn test_key_remove_active_with_force() {
 
 #[test]
 fn test_key_remove_accepts_unique_prefix_without_member_handle() {
-    let temp_dir = make_secret_home();
+    let temp_dir = setup_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
     let member_handle = TEST_MEMBER_HANDLE;
 
@@ -292,7 +292,7 @@ fn test_key_remove_accepts_unique_prefix_without_member_handle() {
 
 #[test]
 fn test_key_remove_accepts_display_kid() {
-    let temp_dir = make_secret_home();
+    let temp_dir = setup_secret_home();
     let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
     let member_handle = TEST_MEMBER_HANDLE;
 
@@ -352,8 +352,13 @@ fn test_key_remove_accepts_display_kid() {
 #[test]
 fn test_key_remove_refuses_the_only_trust_store_signer() {
     let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
-    let signer_kid =
-        save_trust_store_signed_by_active_key(&home, ALICE_MEMBER_HANDLE, Vec::new(), Vec::new());
+    let signer_kid = save_trust_store_signed_by_active_key(
+        &home,
+        ALICE_MEMBER_HANDLE,
+        TRUST_STORE_STORED_AT,
+        Vec::new(),
+        Vec::new(),
+    );
 
     cmd()
         .arg("key")
@@ -383,9 +388,14 @@ fn test_key_remove_refuses_the_only_trust_store_signer() {
 #[test]
 fn test_key_remove_refuses_a_trust_store_it_cannot_read() {
     let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
-    let signer_kid =
-        save_trust_store_signed_by_active_key(&home, ALICE_MEMBER_HANDLE, Vec::new(), Vec::new());
-    write_later_trust_store_format(home.path(), ALICE_MEMBER_HANDLE);
+    let signer_kid = save_trust_store_signed_by_active_key(
+        &home,
+        ALICE_MEMBER_HANDLE,
+        TRUST_STORE_STORED_AT,
+        Vec::new(),
+        Vec::new(),
+    );
+    save_later_trust_store_format(home.path(), ALICE_MEMBER_HANDLE);
 
     cmd()
         .arg("key")
@@ -407,8 +417,8 @@ fn test_key_remove_refuses_a_trust_store_it_cannot_read() {
         .exists());
 }
 
-/// Rewrite the stored trust store as a document from a later format.
-fn write_later_trust_store_format(home: &std::path::Path, owner_handle: &str) {
+/// Save the stored trust store back as a document from a later format.
+fn save_later_trust_store_format(home: &std::path::Path, owner_handle: &str) {
     let path = home.join("trust").join(format!("{owner_handle}.json"));
     let mut document: serde_json::Value =
         serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
@@ -421,8 +431,13 @@ fn write_later_trust_store_format(home: &std::path::Path, owner_handle: &str) {
 fn test_key_remove_forced_reports_how_to_restore_the_trust_store_signer() {
     let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     install_secondary_member_fixture(&home, BOB_MEMBER_HANDLE);
-    let signer_kid =
-        save_trust_store_signed_by_active_key(&home, ALICE_MEMBER_HANDLE, Vec::new(), Vec::new());
+    let signer_kid = save_trust_store_signed_by_active_key(
+        &home,
+        ALICE_MEMBER_HANDLE,
+        TRUST_STORE_STORED_AT,
+        Vec::new(),
+        Vec::new(),
+    );
 
     let assert = cmd()
         .arg("key")

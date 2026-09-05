@@ -92,18 +92,19 @@ production の依存経路は `cli -> api -> service` の一本とする。
 ### レイヤー責務
 
 - **`cli/`**（ルート crate） — presentation 層。clap 引数定義、CLI・環境変数・設定の優先順位、対話入力（dialoguer）、stdout/stderr 出力、子 process 起動、標準 `api` の request/result 変換を担当する。`io::*` / `feature::*` への直接アクセス禁止
-- **`service/`** — 標準公開 API の実装層。caller が明示した入力と検証済み capability を受け取り、artifact、key、KV、trust、online verification、diagnostics の再利用可能な規則を実行する。入力の再解決、環境変数・設定優先順位・workspace 自動検出、TTY、CLI DTO を扱わず、`api` / `cli` に依存しない
+- **`service/`** — 標準公開 API の実装層。caller が明示した入力と検証済み capability を受け取り、artifact、key、KV、trust、online verification、diagnostics の再利用可能な規則を実行する。trust store の 2 相 transaction（観測、排他ロック下での snapshot 照合、再署名、原子的保存）は `trust/transaction.rs`、`trust/persistence.rs`、`trust/signer_snapshot.rs` が持つ。入力の再解決、環境変数・設定優先順位・workspace 自動検出、TTY、CLI DTO を扱わず、`api` / `cli` に依存しない
 - **`feature/`** — ドメイン処理本体。CLI の存在を知らず、再利用可能な機能を提供
   - `envelope/` — artifact key schedule、HPKE wrap/unwrap、key-possession proof、エントリ暗号化
-  - `kv/` — KV ドキュメント操作（builder, encrypt, decrypt, mutate, rewrite）
+  - `kv/` — KV ドキュメント操作（builder, encrypt, decrypt, mutate, rewrite）と dotenv からの入力変換（`import.rs`）
   - `decrypt/`, `encrypt/` — ファイル暗号化・復号
-  - `verify/` — 署名検証、鍵ローダー
+  - `verify/` — 署名検証、署名に埋め込まれた検証鍵の組み立て
   - `rewrap/` — 鍵ローテーション（ファイル用・KV用）
-  - `inspect/` — ドキュメント検査
-  - `key/` — 鍵生成・管理（保護付き秘密鍵含む）
-  - `member/`, `trust/`, `recipient/`, `disclosure/` — メンバー・信頼・受信者・開示処理
-  - `context/` — CryptoContext（鍵ロード）、env key、鍵期限の処理
-- **`config/`** — 設定モデル（`types.rs`）と設定解決ロジック（`resolution/`）。CLI > env > config > default の優先順
+  - `key/` — 鍵生成・管理（保護付き秘密鍵含む）、鍵の有効期間の解釈（`validity.rs`）
+  - `artifact.rs` — 形式によらない署名・受信者・wrap set の取り出し
+  - `member/`, `recipient.rs`, `disclosure.rs` — メンバー・受信者・開示処理
+  - `trust/` — trust store の純粋な規則。判定（`judgment/`）、known_keys と recipient_sets の操作、purge 述語、検証（`verification.rs`）、書き込み要否の判定（`store_mutation.rs`）、signer 鍵 snapshot の型（`signer_keys.rs`）。ロックと保存は持たない
+  - `context/` — CryptoContext（keystore からの鍵ロード）、env key の復号、鍵期限の処理
+- **`config/`** — 設定の型（`types.rs`）と、固定された local state からの設定ロード（`resolution/`）。`resolution/global.rs` が global config.toml の読み込みと設定キーの正規化を持つ。CLI > env > config > default の優先順は CLI 側の責務で、実体は `src/cli/common/context.rs` にある
 - **`model/`** — 共有ドメインモデル（`file_enc`, `kv_enc`, `public_key`, `private_key`, `signature`, `verified`, `trust_store` 等）
 - **`crypto/`** — 暗号プリミティブ（AEAD, KDF, KEM, Ed25519 署名）
 - **`format/`** — ワイヤーフォーマット（JSON 構造、JCS 正規化、トークンエンコーディング）
@@ -155,7 +156,7 @@ KV 暗号化: KV マップ → MK 生成 → エントリごとの CEK と MAC k
 
 どの層にテストを置くか、どこへ登録するか、テスト名の付け方、書いてはいけないテストは `kapsaro-testing` skill にある。テストを追加・移動するときは先にそれを読む。
 
-登録漏れのファイルはコンパイルされず、テストが存在しないまま緑になる。`.claude/hooks/pre-stop-checks.sh` が未登録を検出するが、登録は書いた本人が行う。
+登録漏れのファイルはコンパイルされず、テストが存在しないまま緑になる。`scripts/check-repo-conventions.sh` が未登録・stale な登録・二重登録を検出するが、登録は書いた本人が行う。
 
 #### production tree に置くテスト専用コード
 
@@ -183,7 +184,7 @@ KV 暗号化: KV マップ → MK 生成 → エントリごとの CEK と MAC k
 ## Conventions
 
 - Copyright ヘッダー: `// Copyright 2026 Satoshi Ebisawa` + `// SPDX-License-Identifier: Apache-2.0`
-- すべてのソースファイルの冒頭に、Copyright ヘッダーに続けて役割を述べる `//!` コメントを置く
+- production ソース（`src/` と `crates/*/src/`）の全ファイル冒頭に、Copyright ヘッダーに続けて役割を述べる `//!` コメントを置く。`tests/` ツリーは対象外
 - レイヤーの置き場所判断、依存方向、関数名・型名・モジュール名の規則は `kapsaro-conventions` skill にある。実装前に読む
 - テストの層選択と登録手順は `kapsaro-testing` skill、レビュー観点は `kapsaro-review` skill にある
 
@@ -197,11 +198,11 @@ KV 暗号化: KV マップ → MK 生成 → エントリごとの CEK と MAC k
 ```
 
 - `check-source-conventions.sh` — Copyright ヘッダー、`//!` コメント、`mod.rs` の新設、インラインテストモジュール
-- `check-repo-conventions.sh` — テストファイルの登録漏れ、`guides/` の行末スペース
+- `check-repo-conventions.sh` — テストファイルの登録漏れ、実体のないファイルを指す stale な `#[path]` 登録、同じテストバイナリへの二重登録、`guides/` の行末スペース
 
 違反があると標準エラーへ説明を出して終了コード 2 で終わる。Claude Code では `.claude/settings.json` が前者を PostToolUse、後者を Stop の hook として登録している。hook 機構を持たないエージェントは、ソースを追加・変更したあとに自分で実行する。
 
-これらが扱えない規約（stale な登録、`#[serial]` 指定、テスト層の選択、命名）は `kapsaro-review` の観点で確認する。
+これらが扱えない規約（`#[serial]` 指定、テスト層の選択、命名）は `kapsaro-review` の観点で確認する。
 
 ### skill の所在
 

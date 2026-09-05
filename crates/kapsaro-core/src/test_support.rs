@@ -165,11 +165,6 @@ pub mod wire {
     }
 }
 pub mod storage {
-    pub mod config {
-        pub mod paths {
-            pub use crate::io::config::paths::get_base_dir;
-        }
-    }
     pub mod keystore {
         pub mod active {
             use std::path::Path;
@@ -305,7 +300,7 @@ pub mod storage {
                 private_key: &PrivateKey,
                 public_key: &PublicKey,
             ) -> Result<()> {
-                let access = KeystoreAccess::create(keystore_root)?;
+                let access = KeystoreAccess::ensure(keystore_root)?;
                 access.save_key_pair_atomic(
                     &MemberHandle::try_from(member_handle)?,
                     &Kid::try_from(kid)?,
@@ -379,7 +374,7 @@ pub mod storage {
                 if trust_path.file_name().and_then(|name| name.to_str()) != Some(TRUST_DIR_NAME) {
                     return Err(invalid_trust_store_path());
                 }
-                let base = AnchoredDir::create(
+                let base = AnchoredDir::ensure(
                     base_path,
                     DirectoryScope::LocalState,
                     "test local state root",

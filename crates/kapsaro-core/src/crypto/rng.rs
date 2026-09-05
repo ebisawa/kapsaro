@@ -19,21 +19,21 @@ pub(crate) fn fill_random_bytes(bytes: &mut [u8]) -> Result<()> {
 }
 
 /// Generate a fixed-size random byte array.
-pub(crate) fn fill_random_array<const N: usize>() -> Result<[u8; N]> {
+pub(crate) fn generate_random_array<const N: usize>() -> Result<[u8; N]> {
     let mut bytes = [0u8; N];
     fill_random_bytes(&mut bytes)?;
     Ok(bytes)
 }
 
 /// Generate a fixed-size random byte array wrapped in `Zeroizing`.
-pub(crate) fn fill_secret_array<const N: usize>() -> Result<Zeroizing<[u8; N]>> {
+pub(crate) fn generate_secret_array<const N: usize>() -> Result<Zeroizing<[u8; N]>> {
     let mut bytes = Zeroizing::new([0u8; N]);
     fill_random_bytes(bytes.as_mut())?;
     Ok(bytes)
 }
 
 pub(crate) fn hpke_sender_setup_rng() -> Result<BufferedCryptoRng<32>> {
-    Ok(BufferedCryptoRng::new(fill_secret_array::<32>()?))
+    Ok(BufferedCryptoRng::new(generate_secret_array::<32>()?))
 }
 
 pub(crate) struct BufferedCryptoRng<const N: usize> {
@@ -97,4 +97,4 @@ impl<const N: usize> CryptoRng for BufferedCryptoRng<N> {}
 
 #[cfg(test)]
 #[path = "../../tests/unit/internal/crypto_rng_internal_test.rs"]
-mod internal_tests;
+mod crypto_rng_internal_test;

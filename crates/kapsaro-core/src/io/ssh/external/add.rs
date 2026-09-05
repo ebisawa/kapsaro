@@ -59,5 +59,5 @@ fn parse_list_keys_output(output: Output) -> Result<String> {
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/internal/ssh_external_add_test.rs"]
-mod ssh_external_add_test;
+#[path = "../../../../tests/unit/internal/io_ssh_external_add_test.rs"]
+mod io_ssh_external_add_test;

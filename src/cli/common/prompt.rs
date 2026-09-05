@@ -187,4 +187,4 @@ where
 
 #[cfg(test)]
 #[path = "../../../tests/unit/internal/cli_common_prompt_test.rs"]
-mod tests;
+mod cli_common_prompt_test;

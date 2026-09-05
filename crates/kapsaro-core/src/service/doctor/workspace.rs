@@ -190,7 +190,7 @@ fn check_gitless_workspace(workspace_root: &Path) -> Vec<DoctorCheck> {
     if !is_gitless_layout(workspace_root) {
         return Vec::new();
     }
-    vec![DoctorCheck::warn_with_next_action(
+    vec![DoctorCheck::build_warning_with_next_action(
         "workspace.gitless",
         DoctorCategory::Workspace,
         DoctorSubject::Path(format_path_relative_to_cwd(workspace_root)),

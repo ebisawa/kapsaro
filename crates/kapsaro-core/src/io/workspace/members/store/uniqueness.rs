@@ -38,7 +38,7 @@ where
 {
     let (candidate, ignored_existing) =
         build_saved_member_candidate(status, member_handle, kid, allow_replace_self);
-    check_workspace_member_kid_uniqueness_in_open_dirs(
+    enforce_workspace_member_kid_uniqueness_in_open_dirs(
         active_dir,
         incoming_dir,
         &[candidate],
@@ -69,7 +69,7 @@ fn build_saved_member_candidate(
     (candidate, ignored_existing)
 }
 
-pub(crate) fn check_workspace_member_kid_uniqueness_in_open_dirs<A, I>(
+pub(crate) fn enforce_workspace_member_kid_uniqueness_in_open_dirs<A, I>(
     active_dir: &A,
     incoming_dir: &I,
     candidates: &[MemberKidCandidate],
@@ -81,10 +81,10 @@ where
 {
     let existing =
         load_member_kid_candidates_from_open_dirs(active_dir, incoming_dir, ignored_existing)?;
-    check_member_kid_candidates(&existing, candidates)
+    enforce_member_kid_uniqueness(&existing, candidates)
 }
 
-fn check_member_kid_candidates(
+fn enforce_member_kid_uniqueness(
     existing: &[MemberKidCandidate],
     candidates: &[MemberKidCandidate],
 ) -> Result<()> {

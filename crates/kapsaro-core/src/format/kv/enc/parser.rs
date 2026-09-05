@@ -8,6 +8,16 @@ use crate::format::FormatError;
 use crate::model::kv_enc::line::{KvEncLine, KvEncVersion};
 use crate::{Error, Result};
 
+/// Prefix, display tag, and constructor of a control line that carries one token.
+type TokenControlLine = (&'static str, &'static str, fn(String) -> KvEncLine);
+
+/// Control lines carrying a single token, with the line each one builds.
+const TOKEN_CONTROL_LINES: [TokenControlLine; 3] = [
+    (":HEAD ", "HEAD", |token| KvEncLine::Head { token }),
+    (":WRAP ", "WRAP", |token| KvEncLine::Wrap { token }),
+    (":SIG ", "SIG", |token| KvEncLine::Sig { token }),
+];
+
 /// KV-enc format parser
 pub struct KvEncParser<'a> {
     content: &'a str,
@@ -22,64 +32,14 @@ impl<'a> KvEncParser<'a> {
     /// Parse a control line (starts with `:`).
     fn parse_control_line(line: &str) -> Result<KvEncLine> {
         // Header line: ":KAPSARO_KV 1" (v1 only)
-        if let Some(version_str) = line.strip_prefix(HEADER_LINE_PREFIX) {
-            let version_num: u32 = version_str.parse().map_err(|_| {
-                FormatError::build_parse_error(format!(
-                    "Invalid version in header: {}",
-                    version_str
-                ))
-            })?;
-            let version = KvEncVersion::from_u32(version_num)
-                .ok_or_else(|| {
-                    FormatError::build_parse_error(format!(
-                        "Unsupported kv-enc version: {} (only v1 is supported)",
-                        version_num
-                    ))
-                })
-                .map_err(Error::from)?;
-            return Ok(KvEncLine::Header { version });
+        if let Some(version_text) = line.strip_prefix(HEADER_LINE_PREFIX) {
+            return Self::parse_header_line(version_text);
         }
 
-        // HEAD line: ":HEAD {token}"
-        if let Some(token) = line.strip_prefix(":HEAD ") {
-            if token.is_empty() {
-                return Err(FormatError::build_parse_error(format!(
-                    "kv-enc v1: HEAD line must have a token: {}",
-                    line
-                ))
-                .into());
+        for (prefix, tag, build_line) in TOKEN_CONTROL_LINES {
+            if let Some(token) = line.strip_prefix(prefix) {
+                return Self::parse_token_control_line(tag, token, line, build_line);
             }
-            return Ok(KvEncLine::Head {
-                token: token.to_string(),
-            });
-        }
-
-        // WRAP line: ":WRAP {token}"
-        if let Some(token) = line.strip_prefix(":WRAP ") {
-            if token.is_empty() {
-                return Err(FormatError::build_parse_error(format!(
-                    "kv-enc v1: WRAP line must have a token: {}",
-                    line
-                ))
-                .into());
-            }
-            return Ok(KvEncLine::Wrap {
-                token: token.to_string(),
-            });
-        }
-
-        // SIG line: ":SIG {token}"
-        if let Some(token) = line.strip_prefix(":SIG ") {
-            if token.is_empty() {
-                return Err(FormatError::build_parse_error(format!(
-                    "kv-enc v1: SIG line must have a token: {}",
-                    line
-                ))
-                .into());
-            }
-            return Ok(KvEncLine::Sig {
-                token: token.to_string(),
-            });
         }
 
         // Unknown control tag
@@ -87,6 +47,34 @@ impl<'a> KvEncParser<'a> {
             FormatError::build_parse_error(format!("Unknown control tag in kv-enc line: {}", line))
                 .into(),
         )
+    }
+
+    /// Parse the version of a header line: ":KAPSARO_KV 1" (v1 only).
+    fn parse_header_line(version_text: &str) -> Result<KvEncLine> {
+        let version = KvEncVersion::parse(version_text).ok_or_else(|| {
+            Error::from(FormatError::build_parse_error(format!(
+                "Unsupported kv-enc version: {} (only v1 is supported)",
+                version_text
+            )))
+        })?;
+        Ok(KvEncLine::Header { version })
+    }
+
+    /// Parse a control line whose payload is a single token: ":HEAD", ":WRAP", ":SIG".
+    fn parse_token_control_line(
+        tag: &str,
+        token: &str,
+        line: &str,
+        build_line: fn(String) -> KvEncLine,
+    ) -> Result<KvEncLine> {
+        if token.is_empty() {
+            return Err(FormatError::build_parse_error(format!(
+                "kv-enc v1: {} line must have a token: {}",
+                tag, line
+            ))
+            .into());
+        }
+        Ok(build_line(token.to_string()))
     }
 
     /// Parse a single line
@@ -157,8 +145,8 @@ impl<'a> KvEncParser<'a> {
 
 #[cfg(test)]
 #[path = "../../../../tests/unit/internal/format_kv_enc_parser_internal_test.rs"]
-mod internal_tests;
+mod format_kv_enc_parser_internal_test;
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/internal/format_kv_enc_test.rs"]
-mod format_kv_enc_test;
+#[path = "../../../../tests/unit/internal/format_kv_enc_parser_test.rs"]
+mod format_kv_enc_parser_test;

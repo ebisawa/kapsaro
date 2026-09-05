@@ -1,7 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Shared trust review orchestration for app-layer commands.
+//! Shared trust review orchestration for the service-layer operations.
 
 mod artifact_recipient;
 mod error;
@@ -18,7 +18,8 @@ pub use artifact_recipient::{
 pub(crate) use execution::review_and_save_artifact_recipient_set;
 pub use execution::{
     execute_read_with_signer_trust, review_artifact_recipient_set_output,
-    review_write_recipient_trust, ArtifactRecipientSetReviewInput, TrustReviewContext,
+    review_write_recipient_trust, ArtifactRecipientSetReviewInput, ReadTrustConfirmations,
+    TrustReviewContext,
 };
 #[cfg(test)]
 pub use recipient::review_recipient_trust_with_confirmation;
@@ -35,5 +36,5 @@ pub use signer::{
 pub use types::{ReadSignerTrustReviewPlan, SignerTrustLabels, WriteRecipientTrustReviewPlan};
 
 #[cfg(test)]
-#[path = "../../../tests/unit/internal/app_trust_review_test.rs"]
-mod tests;
+#[path = "../../../tests/unit/internal/service_trust_review_test.rs"]
+mod service_trust_review_test;

@@ -150,5 +150,5 @@ pub type VerifiedFileEncDocument = VerifiedDocument<FileEncDocument>;
 mod model_file_enc_test;
 
 #[cfg(test)]
-#[path = "../../tests/unit/internal/model_verified_test.rs"]
-mod model_verified_test;
+#[path = "../../tests/unit/internal/model_file_enc_verified_test.rs"]
+mod model_file_enc_verified_test;

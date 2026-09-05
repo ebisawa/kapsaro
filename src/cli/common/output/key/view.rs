@@ -39,39 +39,40 @@ pub(super) fn build_key_list_view(result: &KeyListResult) -> KeyListView<'_> {
             .iter()
             .map(|(member_handle, keys)| KeyMemberView {
                 member_handle,
-                keys: keys
-                    .iter()
-                    .map(|key| match key {
-                        KeyInfo::Complete {
-                            kid,
-                            member_handle,
-                            created_at,
-                            expires_at,
-                            active,
-                            format,
-                        } => KeyInfoView::Complete {
-                            kid,
-                            member_handle,
-                            created_at: created_at.as_deref(),
-                            expires_at,
-                            active: *active,
-                            format,
-                        },
-                        KeyInfo::Incomplete {
-                            kid,
-                            member_handle,
-                            active,
-                            missing_document,
-                        } => KeyInfoView::Incomplete {
-                            kid,
-                            member_handle,
-                            active: *active,
-                            missing_document: missing_document.as_str(),
-                        },
-                    })
-                    .collect(),
+                keys: keys.iter().map(build_key_info_view).collect(),
             })
             .collect(),
         total_keys: result.total_keys,
+    }
+}
+
+fn build_key_info_view(key: &KeyInfo) -> KeyInfoView<'_> {
+    match key {
+        KeyInfo::Complete {
+            kid,
+            member_handle,
+            created_at,
+            expires_at,
+            active,
+            format,
+        } => KeyInfoView::Complete {
+            kid,
+            member_handle,
+            created_at: created_at.as_deref(),
+            expires_at,
+            active: *active,
+            format,
+        },
+        KeyInfo::Incomplete {
+            kid,
+            member_handle,
+            active,
+            missing_document,
+        } => KeyInfoView::Incomplete {
+            kid,
+            member_handle,
+            active: *active,
+            missing_document: missing_document.as_str(),
+        },
     }
 }

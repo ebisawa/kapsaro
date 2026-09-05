@@ -5,9 +5,10 @@
 //! Re-exports the stable service contract without implementation logic.
 
 pub use crate::service::key::{
-    build_missing_member_handle_error, save_private_export_text, validate_environment_key,
-    KeyContext, KeyContextOptions, Kid, LocalKeyContextRequest, LocalKeyStore, MemberHandle,
-    RecipientKeys,
+    build_missing_member_handle_error, format_kid_display, format_kid_display_lossy,
+    load_environment_key, parse_relative_duration_days, save_private_export_text,
+    validate_github_login, KeyContext, KeyContextOptions, Kid, LocalKeyContextRequest,
+    LocalKeyStore, MemberHandle, RecipientKeys,
 };
 
 pub mod generate {

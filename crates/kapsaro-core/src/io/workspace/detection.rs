@@ -12,9 +12,9 @@ pub(crate) use search::detect_workspace_root;
 pub use search::WorkspaceRoot;
 
 #[cfg(test)]
-#[path = "../../../tests/unit/internal/workspace_detection_internal_test.rs"]
-mod internal_tests;
+#[path = "../../../tests/unit/internal/io_workspace_detection_internal_test.rs"]
+mod io_workspace_detection_internal_test;
 
 #[cfg(test)]
-#[path = "../../../tests/unit/internal/workspace_detection_test.rs"]
-mod workspace_detection_test;
+#[path = "../../../tests/unit/internal/io_workspace_detection_test.rs"]
+mod io_workspace_detection_test;

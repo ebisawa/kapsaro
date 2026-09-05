@@ -12,5 +12,5 @@ pub use workspace::{
 };
 
 #[cfg(test)]
-#[path = "../../tests/unit/internal/app_registration_test.rs"]
-mod tests;
+#[path = "../../tests/unit/internal/service_registration_test.rs"]
+mod service_registration_test;

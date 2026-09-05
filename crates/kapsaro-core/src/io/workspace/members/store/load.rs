@@ -191,7 +191,7 @@ impl MemberDocuments {
     /// A caller that stores what it reviewed needs both halves out of the one
     /// read: reading the name a second time for the bytes would store a document
     /// nobody looked at.
-    pub(crate) fn load_verified_document(&self, name: &str) -> Result<LoadedMemberDocument> {
+    pub(crate) fn load_verified_document(&self, name: &str) -> Result<MemberDocumentLoadResult> {
         load_verified_member_document_at(self.require_dir()?, name)
     }
 
@@ -284,13 +284,13 @@ pub fn load_member_file_from_path(path: &Path) -> Result<PublicKey> {
 /// reads of the same name can reach two documents, and only one of them would
 /// have been looked at.
 #[derive(Debug, Clone)]
-pub(crate) struct LoadedMemberDocument {
+pub(crate) struct MemberDocumentLoadResult {
     pub(crate) content: String,
     pub(crate) public_key: PublicKey,
 }
 
 /// Read one member document, keeping the bytes it was parsed from.
-pub(crate) fn load_member_document_at<D>(dir: &D, name: &str) -> Result<LoadedMemberDocument>
+pub(crate) fn load_member_document_at<D>(dir: &D, name: &str) -> Result<MemberDocumentLoadResult>
 where
     D: DirectoryFd,
 {
@@ -303,7 +303,7 @@ where
         "PublicKey file",
     )?;
     let public_key = parse_public_key_str(&content, &source_name)?;
-    Ok(LoadedMemberDocument {
+    Ok(MemberDocumentLoadResult {
         content,
         public_key,
     })
@@ -325,7 +325,7 @@ pub fn load_verified_member_file_from_path(path: &Path) -> Result<PublicKey> {
 pub(crate) fn load_verified_member_document_at<D>(
     dir: &D,
     name: &str,
-) -> Result<LoadedMemberDocument>
+) -> Result<MemberDocumentLoadResult>
 where
     D: DirectoryFd,
 {
@@ -371,5 +371,5 @@ where
 }
 
 #[cfg(test)]
-#[path = "../../../../../tests/unit/internal/io_workspace_members_load_test.rs"]
-mod io_workspace_members_load_test;
+#[path = "../../../../../tests/unit/internal/io_workspace_members_store_load_test.rs"]
+mod io_workspace_members_store_load_test;

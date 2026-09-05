@@ -4,10 +4,10 @@
 //! Recipient-set trust-store record mutations.
 //! Applies upsert, remove, and timestamp-based purge operations to record lists.
 
-use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 use uuid::Uuid;
 
+use crate::feature::trust::purge::purge_records;
 use crate::model::trust_store::RecipientSetRecord;
 use crate::{Error, Result};
 
@@ -60,24 +60,5 @@ pub fn purge_recipient_sets(
     records: &mut Vec<RecipientSetRecord>,
     older_than: OffsetDateTime,
 ) -> Result<Vec<RecipientSetRecord>> {
-    let mut removed = Vec::new();
-    let mut retained = Vec::with_capacity(records.len());
-    for record in records.drain(..) {
-        let approved_at = OffsetDateTime::parse(&record.approved_at, &Rfc3339).map_err(|e| {
-            Error::build_parse_error_with_source(
-                format!(
-                    "Failed to parse recipient_sets[].approved_at '{}': {}",
-                    record.approved_at, e
-                ),
-                e,
-            )
-        })?;
-        if approved_at < older_than {
-            removed.push(record);
-        } else {
-            retained.push(record);
-        }
-    }
-    *records = retained;
-    Ok(removed)
+    purge_records(records, older_than)
 }

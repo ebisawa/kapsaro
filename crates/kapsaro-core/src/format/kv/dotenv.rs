@@ -135,5 +135,5 @@ fn validate_dotenv_line(line: &str, line_number: usize) -> Result<bool> {
 // ============================================================================
 
 #[cfg(test)]
-#[path = "../../../tests/unit/internal/format_dotenv_test.rs"]
-mod format_dotenv_test;
+#[path = "../../../tests/unit/internal/format_kv_dotenv_test.rs"]
+mod format_kv_dotenv_test;

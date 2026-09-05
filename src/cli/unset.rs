@@ -12,7 +12,7 @@ use crate::cli::common::command::{
     run_kv_write_command_with_recovery, CliWriteSession, WriteCommandLabels,
 };
 use crate::cli::common::context::CliContext;
-use crate::cli::common::output::text::print_optional_status;
+use crate::cli::common::output::text::print_status;
 use crate::cli::common::prompt::confirm_destructive_action;
 #[cfg(test)]
 use crate::cli::common::prompt::confirm_destructive_action_with_reader;
@@ -21,7 +21,6 @@ use crate::cli::options::{
     AllowExpiredKeyOption, ForceOption, KvStoreNameOption, MemberHandleOption, SigningQuietOptions,
 };
 use kapsaro_core::api::kv::mutation::unset_kv_command_with_recipient_set_confirmation;
-use kapsaro_core::api::kv::types::KvWriteOutcome;
 use kapsaro_core::api::workspace::WorkspaceWriteDirectories;
 use kapsaro_core::Result;
 
@@ -47,6 +46,13 @@ pub(crate) struct UnsetArgs {
     pub key: String,
 }
 
+/// Remove one key from a KV store.
+///
+/// The steps are kept apart instead of using `open_cli_write_session` because
+/// the order matters here. A missing member handle must fail before the
+/// destructive-action confirmation, so the user is never asked to confirm a
+/// removal the command cannot perform. Signing key access comes last, after
+/// the confirmation.
 pub(crate) fn run(args: UnsetArgs) -> Result<()> {
     let context = CliContext::resolve(&args.common)?;
     let allow_expired_key = context.allow_expired_key(args.allow_expired_key.allow_expired_key)?;
@@ -57,26 +63,28 @@ pub(crate) fn run(args: UnsetArgs) -> Result<()> {
     confirm_unset_operation(args.force.force, &args.key)?;
     let session = resolve_cli_write_session(
         &context,
-        &args.common,
         directories,
         Some(member_handle),
         allow_expired_key,
     )?;
-    let outcome = remove_entry(&session, args.store.name.as_deref(), &args.key)?;
-    print_optional_status(outcome.message.as_deref(), args.common.quiet.quiet);
+    let store_name = args.store.name.as_deref();
+    remove_entry(&session, store_name, &args.key)?;
+    print_status(
+        &unset_status_message(&args.key, store_name),
+        args.common.quiet.quiet,
+    );
     Ok(())
 }
 
-fn remove_entry(
-    session: &CliWriteSession,
-    store_name: Option<&str>,
-    key: &str,
-) -> Result<KvWriteOutcome> {
-    let success_message = format!(
+fn unset_status_message(key: &str, store_name: Option<&str>) -> String {
+    format!(
         "Removed key '{}' from '{}'",
         key,
         store_name.unwrap_or("default")
-    );
+    )
+}
+
+fn remove_entry(session: &CliWriteSession, store_name: Option<&str>, key: &str) -> Result<()> {
     run_kv_write_command_with_recovery(
         session,
         store_name,
@@ -86,12 +94,9 @@ fn remove_entry(
             recipient_context: "unset recipients",
         },
         |trust_plan| {
-            unset_kv_command_with_recipient_set_confirmation(
-                trust_plan,
-                key,
-                Some(&success_message),
-                confirm_recipient_set_approval,
-            )
+            unset_kv_command_with_recipient_set_confirmation(trust_plan, key, |outcome, _| {
+                confirm_recipient_set_approval(outcome)
+            })
         },
     )
 }
@@ -150,4 +155,4 @@ fn unset_cancelled_error(key: &str) -> String {
 
 #[cfg(test)]
 #[path = "../../tests/unit/internal/cli_unset_test.rs"]
-mod tests;
+mod cli_unset_test;

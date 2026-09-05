@@ -1304,7 +1304,7 @@ Accepted options differ by command. These options are shared by multiple command
 | `kapsaro encrypt [-m <handle>] --stdin (--out <path> \| --stdout)` | Encrypt stdin input as file-enc |
 | `kapsaro decrypt [-m <handle>] [--kid <kid>] [--allow-expired-key] [--allow-non-member] <file> (--out <path> \| --stdout)` | Decrypt a file |
 | `kapsaro decrypt [-m <handle>] [--kid <kid>] [--allow-expired-key] [--allow-non-member] --stdin (--out <path> \| --stdout)` | Read file-enc JSON from stdin and decrypt it |
-| `kapsaro inspect <file> [--json] [--verbose]` | Display encrypted file metadata (no decryption needed) |
+| `kapsaro inspect <file> [--json]` | Display encrypted file metadata (no decryption needed) |
 
 ### Diagnostics
 

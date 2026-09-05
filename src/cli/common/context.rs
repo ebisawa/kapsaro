@@ -8,14 +8,15 @@ use std::cell::OnceCell;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use crate::cli::common::presentation::{format_path_relative_to_cwd, validate_github_login};
+use crate::cli::common::presentation::format_path_relative_to_cwd;
 use crate::cli::options::{CommonOptions, ToCommonOptions};
 use kapsaro_core::api::config::LocalStateSession;
 use kapsaro_core::api::doctor::{DoctorWorkspaceResolution, DoctorWorkspaceSource};
-use kapsaro_core::api::key::MemberHandle;
+use kapsaro_core::api::key::{validate_github_login, MemberHandle};
 use kapsaro_core::api::ssh::{resolve_ssh_agent_socket, SshSigningInputs, SshSigningMethod};
+use kapsaro_core::api::trust::{StrictKeyChecking, StrictKeyCheckingResolution};
 use kapsaro_core::api::workspace::select_workspace_creation_path;
-use kapsaro_core::api::workspace::{detect_workspace_path, validate_workspace_path};
+use kapsaro_core::api::workspace::{detect_workspace_path, resolve_workspace_path};
 use kapsaro_core::{Error, ErrorKind, Result};
 use tracing::debug;
 
@@ -24,6 +25,7 @@ const ENV_WORKSPACE: &str = "KAPSARO_WORKSPACE";
 const ENV_ALLOW_EXPIRED_KEY: &str = "KAPSARO_ALLOW_EXPIRED_KEY";
 const ENV_ALLOW_NON_MEMBER: &str = "KAPSARO_ALLOW_NON_MEMBER";
 const ENV_MEMBER_HANDLE: &str = "KAPSARO_MEMBER_HANDLE";
+const ENV_STRICT_KEY_CHECKING: &str = "KAPSARO_STRICT_KEY_CHECKING";
 const ENV_GITHUB_USER: &str = "KAPSARO_GITHUB_USER";
 const ENV_SSH_IDENTITY: &str = "KAPSARO_SSH_IDENTITY";
 const ENV_SSH_SIGNING_METHOD: &str = "KAPSARO_SSH_SIGNING_METHOD";
@@ -34,7 +36,7 @@ pub(crate) struct CliContext {
     base_dir: OnceCell<Option<PathBuf>>,
     local_state: OnceCell<Option<LocalStateSession>>,
     current_dir: OnceCell<PathBuf>,
-    process_home: OnceCell<Option<PathBuf>>,
+    home: OnceCell<Option<PathBuf>>,
     agent_socket: OnceCell<Option<PathBuf>>,
 }
 
@@ -45,7 +47,7 @@ impl CliContext {
             base_dir: OnceCell::new(),
             local_state: OnceCell::new(),
             current_dir: OnceCell::new(),
-            process_home: OnceCell::new(),
+            home: OnceCell::new(),
             agent_socket: OnceCell::new(),
         })
     }
@@ -92,7 +94,7 @@ impl CliContext {
 
     pub(crate) fn workspace_path(&self) -> Result<PathBuf> {
         if let Some(path) = self.selected_workspace_path()? {
-            return validate_workspace_path(&path);
+            return resolve_workspace_path(&path);
         }
         detect_workspace_path(self.current_dir()?).map_err(|error| {
             if error.kind() == ErrorKind::NotFound {
@@ -145,22 +147,30 @@ impl CliContext {
         self.resolve_yes_no(cli_value, ENV_ALLOW_NON_MEMBER, "allow_non_member")
     }
 
-    pub(crate) fn strict_key_checking(&self) -> bool {
-        std::env::var("KAPSARO_STRICT_KEY_CHECKING")
-            .map(|value| !value.eq_ignore_ascii_case("no"))
-            .unwrap_or(true)
+    /// Read strict key checking together with where the value came from.
+    ///
+    /// The source travels with the value because a caller that refuses a
+    /// disabled mode has to say whether the environment turned it off or the
+    /// default left it on.
+    pub(crate) fn strict_key_checking(&self) -> Result<StrictKeyCheckingResolution> {
+        let Some(value) = optional_env(ENV_STRICT_KEY_CHECKING)? else {
+            return Ok(StrictKeyCheckingResolution::strict());
+        };
+        let mode = if parse_yes_no(ENV_STRICT_KEY_CHECKING, &value)? {
+            StrictKeyChecking::Yes
+        } else {
+            StrictKeyChecking::No
+        };
+        Ok(StrictKeyCheckingResolution::explicit(mode))
     }
 
     pub(crate) fn member_handle(&self, explicit: Option<String>) -> Result<Option<String>> {
-        if let Some(member_handle) = self.resolve_member_handle_override(explicit)? {
+        if let Some(member_handle) = self.configured_member_handle(explicit)? {
             return Ok(Some(member_handle));
         }
         let Some(local_state) = self.optional_local_state()? else {
             return Ok(None);
         };
-        if let Some(value) = local_state.load_config()?.get("member_handle").cloned() {
-            return MemberHandle::try_from(value).map(|handle| Some(handle.into_string()));
-        }
         let Some(keys) = local_state.open_optional_key_store()? else {
             return Ok(None);
         };
@@ -168,10 +178,31 @@ impl CliContext {
         Ok((members.len() == 1).then(|| members[0].as_str().to_string()))
     }
 
-    pub(crate) fn resolve_member_handle_override(
+    /// Resolve the member handle from the CLI option, the environment, and the
+    /// global configuration, without the single-member keystore fallback.
+    ///
+    /// The doctor command needs the configured value alone, because its own
+    /// fallback has to read the keystore directory it already opened safely.
+    pub(crate) fn configured_member_handle(
         &self,
         explicit: Option<String>,
     ) -> Result<Option<String>> {
+        if let Some(member_handle) = self.resolve_member_handle_override(explicit)? {
+            return Ok(Some(member_handle));
+        }
+        let Some(local_state) = self.optional_local_state()? else {
+            return Ok(None);
+        };
+        local_state
+            .load_config()?
+            .get("member_handle")
+            .cloned()
+            .map(MemberHandle::try_from)
+            .transpose()
+            .map(|handle| handle.map(MemberHandle::into_string))
+    }
+
+    fn resolve_member_handle_override(&self, explicit: Option<String>) -> Result<Option<String>> {
         explicit
             .or(optional_env(ENV_MEMBER_HANDLE)?)
             .map(MemberHandle::try_from)
@@ -298,7 +329,7 @@ impl CliContext {
             return Ok(Some(path.clone()));
         }
         if let Some(path) = optional_env(ENV_SSH_IDENTITY)? {
-            return expand_tilde(&path, self.process_home()?).map(Some);
+            return expand_tilde(&path, self.resolve_home()?).map(Some);
         }
         if let Some(path) = self
             .optional_local_state()?
@@ -306,14 +337,14 @@ impl CliContext {
             .transpose()?
             .and_then(|config| config.get("ssh_identity"))
         {
-            return expand_tilde(path, self.process_home()?).map(Some);
+            return expand_tilde(path, self.resolve_home()?).map(Some);
         }
         match method {
             SshSigningMethod::SshAgent => Ok(None),
             SshSigningMethod::SshKeygen => self
-                .process_home()?
+                .resolve_home()?
                 .map(|home| Some(home.join(".ssh").join("id_ed25519")))
-                .ok_or_else(|| Error::build_config_error("HOME environment variable not set")),
+                .ok_or_else(home_required_error),
         }
     }
 
@@ -324,7 +355,7 @@ impl CliContext {
             } else if let Some(path) = optional_env_path(ENV_HOME)? {
                 Some(path)
             } else {
-                self.process_home()?
+                self.resolve_home()?
                     .map(|path| path.join(".config").join("kapsaro"))
             };
             let _ = self.base_dir.set(base_dir);
@@ -336,14 +367,16 @@ impl CliContext {
             .as_deref())
     }
 
-    fn process_home(&self) -> Result<Option<&Path>> {
-        if self.process_home.get().is_none() {
-            let _ = self.process_home.set(optional_env_path("HOME")?);
+    /// The operating system home directory of the running process, which is
+    /// distinct from the kapsaro base directory `base_dir` resolves.
+    fn resolve_home(&self) -> Result<Option<&Path>> {
+        if self.home.get().is_none() {
+            let _ = self.home.set(optional_env_path("HOME")?);
         }
         Ok(self
-            .process_home
+            .home
             .get()
-            .expect("process home is fixed after successful resolution")
+            .expect("home is fixed after successful resolution")
             .as_deref())
     }
 
@@ -365,7 +398,7 @@ impl CliContext {
             .map(LocalStateSession::load_config)
             .transpose()?
             .and_then(|config| config.get("workspace"))
-            .map(|path| expand_tilde(path, self.process_home()?).map(Some))
+            .map(|path| expand_tilde(path, self.resolve_home()?).map(Some))
             .unwrap_or(Ok(None))
     }
 
@@ -386,7 +419,7 @@ impl CliContext {
         if self.agent_socket.get().is_none() {
             let ssh_auth_sock = optional_env_path("SSH_AUTH_SOCK")?;
             let mut expansion_values = environment_expansion_values();
-            match self.process_home()? {
+            match self.resolve_home()? {
                 Some(home) => {
                     expansion_values.insert("HOME".to_string(), home.display().to_string());
                 }
@@ -395,7 +428,7 @@ impl CliContext {
                 }
             }
             let socket =
-                resolve_ssh_agent_socket(self.process_home()?, ssh_auth_sock, &expansion_values)?;
+                resolve_ssh_agent_socket(self.resolve_home()?, ssh_auth_sock, &expansion_values)?;
             let _ = self.agent_socket.set(socket);
         }
         Ok(self
@@ -424,16 +457,12 @@ fn optional_env(key: &str) -> Result<Option<String>> {
     }
 }
 
-fn expand_tilde(value: &str, process_home: Option<&Path>) -> Result<PathBuf> {
+fn expand_tilde(value: &str, home: Option<&Path>) -> Result<PathBuf> {
     if value == "~" {
-        return process_home
-            .map(Path::to_path_buf)
-            .ok_or_else(|| Error::build_config_error("HOME environment variable not set"));
+        return home.map(Path::to_path_buf).ok_or_else(home_required_error);
     }
     if let Some(suffix) = value.strip_prefix("~/") {
-        let home = process_home
-            .ok_or_else(|| Error::build_config_error("HOME environment variable not set"))?;
-        return Ok(home.join(suffix));
+        return Ok(home.ok_or_else(home_required_error)?.join(suffix));
     }
     Ok(PathBuf::from(value))
 }

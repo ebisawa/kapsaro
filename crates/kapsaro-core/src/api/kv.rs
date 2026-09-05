@@ -18,7 +18,3 @@ pub mod mutation {
         unset_kv_command_with_recipient_set_confirmation, MutationWriteTrustPlan,
     };
 }
-
-pub mod types {
-    pub use crate::service::kv::types::{KvImportResult, KvWriteOutcome};
-}

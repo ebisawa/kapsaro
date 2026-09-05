@@ -12,7 +12,6 @@ use crate::feature::recipient::resolve_verified_recipients;
 use crate::feature::verify::kv::signature::verify_kv_content;
 use crate::format::content::KvEncContent;
 use crate::format::kv::document::KvDocumentDraft;
-use crate::format::kv::enc::canonical::extract_recipients_from_wrap;
 use crate::format::token::TokenCodec;
 use crate::model::kv_enc::header::KvHeader;
 use crate::model::kv_enc::verified::VerifiedKvEncDocument;
@@ -79,10 +78,6 @@ impl<'a> VerifiedKvRewriteSession<'a> {
     pub(crate) fn token_codec(&self) -> TokenCodec {
         let doc = self.document();
         detect_token_codec(doc.wrap_token(), self.token_codec)
-    }
-
-    pub(crate) fn current_recipients(&self) -> Vec<String> {
-        extract_recipients_from_wrap(self.document().wrap())
     }
 
     pub(crate) fn disclosed(&self) -> bool {

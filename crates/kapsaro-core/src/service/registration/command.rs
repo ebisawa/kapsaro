@@ -8,11 +8,11 @@ use crate::io::keystore::access::KeystoreAccess;
 use crate::model::identity::{Kid, MemberHandle};
 use crate::model::public_key::GithubAccount;
 use crate::service::key::generate::{
-    generate_and_save_key_with_access, AppKeyGenerationOptions, KeyGenerationHome,
+    generate_and_save_key_with_access, KeyGenerationHome, LocalKeyGenerationOptions,
 };
 use crate::service::key::github::{resolve_github_account, verify_preflight_github_binding};
 use crate::service::key::timestamp::resolve_key_timestamps;
-use crate::service::online::OnlineVerificationStatus;
+use crate::service::online::{GitHubAccount, OnlineVerificationStatus};
 use crate::service::ssh::SshSigningContextResolution;
 use crate::Result;
 
@@ -164,7 +164,7 @@ fn resolve_generated_member_setup(
     let (key_result, keystore) = generate_member_key_result(
         home,
         member_handle.as_str(),
-        github_account,
+        github_account.map(|account| account.to_inner()),
         github_verification,
         ssh_ctx,
     )?;
@@ -213,7 +213,7 @@ fn resolve_registration_context(
 
 fn resolve_github_verification(
     ssh_public_key: &str,
-    github_account: Option<&GithubAccount>,
+    github_account: Option<&GitHubAccount>,
 ) -> Result<OnlineVerificationStatus> {
     match github_account {
         Some(account) => verify_preflight_github_binding(ssh_public_key, account),
@@ -229,7 +229,7 @@ fn generate_member_key_result(
     ssh_ctx: SshSigningContextResolution,
 ) -> Result<(MemberKeySetupResult, KeystoreAccess)> {
     let (created_at, expires_at) = resolve_key_timestamps(&None, &None)?;
-    let saved = generate_and_save_key_with_access(AppKeyGenerationOptions {
+    let saved = generate_and_save_key_with_access(LocalKeyGenerationOptions {
         member_handle: member_handle.to_string(),
         home,
         created_at,

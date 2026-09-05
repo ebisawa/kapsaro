@@ -6,6 +6,7 @@
 //! These tests pin the exact JCS bytes used as HPKE info, AEAD AAD, and HKDF context.
 
 use super::*;
+use crate::crypto::types::primitives::AsHkdfSalt;
 use crate::model::file_enc::{FileEncAlgorithm, FilePayloadHeader};
 use crate::model::wire::{algorithm, format};
 
@@ -87,7 +88,11 @@ fn test_build_kv_entry_aad_uses_jcs_golden_bytes() {
 #[test]
 fn test_build_file_key_schedule_context_uses_jcs_golden_bytes() {
     assert_eq!(
-        bytes_to_string(&build_file_key_schedule_salt(&sid()).unwrap()),
+        bytes_to_string(
+            build_file_key_schedule_salt(&sid())
+                .unwrap()
+                .as_hkdf_salt_bytes()
+        ),
         concat!(
             r#"{"p":"kapsaro:hkdf-salt:file@1","#,
             r#""sid":"00000000-0000-0000-0000-000000000000"}"#
@@ -112,7 +117,11 @@ fn test_build_file_key_schedule_context_uses_jcs_golden_bytes() {
 #[test]
 fn test_build_kv_key_schedule_context_uses_jcs_golden_bytes() {
     assert_eq!(
-        bytes_to_string(&build_kv_key_schedule_salt(&sid()).unwrap()),
+        bytes_to_string(
+            build_kv_key_schedule_salt(&sid())
+                .unwrap()
+                .as_hkdf_salt_bytes()
+        ),
         concat!(
             r#"{"p":"kapsaro:hkdf-salt:kv@1","#,
             r#""sid":"00000000-0000-0000-0000-000000000000"}"#

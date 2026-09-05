@@ -1,7 +1,7 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Keystore rotation helpers for application-layer tests.
+//! Keystore rotation helpers for service-layer tests.
 //! Adds further keys to a fixture keystore so a test can exercise key rotation.
 //!
 //! These helpers build key pairs and write them into the keystore directly,

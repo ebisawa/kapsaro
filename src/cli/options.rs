@@ -8,7 +8,6 @@ use clap::Args;
 use std::path::PathBuf;
 
 use kapsaro_core::api::ssh::SshSigningMethod;
-use kapsaro_core::{Error, Result};
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct CommonOptions {
@@ -28,18 +27,6 @@ pub(crate) struct HomeOption {
     /// Base directory for kapsaro
     #[arg(long)]
     pub(crate) home: Option<PathBuf>,
-}
-
-pub(crate) fn resolve_base_dir(home: &HomeOption) -> Result<PathBuf> {
-    if let Some(path) = &home.home {
-        return Ok(path.clone());
-    }
-    if let Ok(path) = std::env::var("KAPSARO_HOME") {
-        return Ok(PathBuf::from(path));
-    }
-    std::env::var("HOME")
-        .map(|path| PathBuf::from(path).join(".config").join("kapsaro"))
-        .map_err(|_| Error::build_config_error("HOME environment variable not set"))
 }
 
 #[derive(Debug, Clone, Args, Default)]
@@ -144,6 +131,19 @@ pub(crate) struct LocalSigningOptions {
 
     #[command(flatten)]
     pub(crate) ssh: SshSigningOptions,
+}
+
+/// Output options for a command that reads only the path it was given.
+///
+/// No home or workspace option: such a command touches neither local state nor
+/// a workspace, so offering those flags would suggest an input it never reads.
+#[derive(Debug, Clone, Args, Default)]
+pub(crate) struct OutputOptions {
+    #[command(flatten)]
+    pub(crate) json: JsonOption,
+
+    #[command(flatten)]
+    pub(crate) debug: DebugOption,
 }
 
 #[derive(Debug, Clone, Args, Default)]

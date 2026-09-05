@@ -11,6 +11,7 @@ use crate::format::content::EncContent;
 use crate::format::kv::KV_ENC_EXTENSION;
 use crate::io::workspace::setup::SECRETS_DIR_NAME;
 pub(crate) mod review;
+pub(crate) mod verified;
 
 use crate::service::rewrap::RewrapTarget;
 use crate::support::fs::relative::{
@@ -153,17 +154,8 @@ fn collect_scanned_artifact(
     child: ScannedChild,
     listing: &mut WorkspaceArtifactListing,
 ) {
-    let (name, child_type) = match child {
-        ScannedChild::Inspected {
-            name, child_type, ..
-        } => (name, child_type),
-        ScannedChild::Unreadable { name, error } => {
-            let reason = error.format_user_message().to_string();
-            listing
-                .warnings
-                .push(build_skipped_entry_warning(dir, &name, &reason));
-            return;
-        }
+    let Some((name, child_type)) = inspect_scanned_child(dir, child, listing) else {
+        return;
     };
     let Some(decoded) = name.decoded() else {
         listing.warnings.push(build_skipped_entry_warning(
@@ -173,30 +165,60 @@ fn collect_scanned_artifact(
         ));
         return;
     };
-    match child_type {
-        ChildType::RegularFile if is_encrypted_artifact_name(decoded) => {
-            match ArtifactRef::in_open_dir(
-                Arc::clone(parent),
-                SECRETS_DIR_NAME,
-                Arc::clone(dir),
-                decoded.to_string(),
-            ) {
-                Ok(artifact) => listing.artifacts.push(artifact),
-                Err(error) => listing.warnings.push(build_skipped_entry_warning(
-                    dir,
-                    &name,
-                    error.format_user_message(),
-                )),
-            }
+    if !is_encrypted_artifact_name(decoded) {
+        return;
+    }
+    if !matches!(child_type, ChildType::RegularFile) {
+        listing.warnings.push(build_skipped_entry_warning(
+            dir,
+            &name,
+            "entry is not a regular file",
+        ));
+        return;
+    }
+    push_opened_artifact(parent, dir, &name, decoded, listing);
+}
+
+/// Open one artifact entry and record it, or record why it could not be opened.
+fn push_opened_artifact(
+    parent: &Arc<OpenDir>,
+    dir: &Arc<OpenDir>,
+    name: &ChildName,
+    decoded: &str,
+    listing: &mut WorkspaceArtifactListing,
+) {
+    match ArtifactRef::in_open_dir(
+        Arc::clone(parent),
+        SECRETS_DIR_NAME,
+        Arc::clone(dir),
+        decoded.to_string(),
+    ) {
+        Ok(artifact) => listing.artifacts.push(artifact),
+        Err(error) => listing.warnings.push(build_skipped_entry_warning(
+            dir,
+            name,
+            error.format_user_message(),
+        )),
+    }
+}
+
+/// Name one scanned entry, or record why the scan could not judge it.
+fn inspect_scanned_child(
+    dir: &Arc<OpenDir>,
+    child: ScannedChild,
+    listing: &mut WorkspaceArtifactListing,
+) -> Option<(ChildName, ChildType)> {
+    match child {
+        ScannedChild::Inspected {
+            name, child_type, ..
+        } => Some((name, child_type)),
+        ScannedChild::Unreadable { name, error } => {
+            let reason = error.format_user_message().to_string();
+            listing
+                .warnings
+                .push(build_skipped_entry_warning(dir, &name, &reason));
+            None
         }
-        _ if is_encrypted_artifact_name(decoded) => {
-            listing.warnings.push(build_skipped_entry_warning(
-                dir,
-                &name,
-                "entry is not a regular file",
-            ));
-        }
-        _ => {}
     }
 }
 
@@ -238,5 +260,5 @@ pub(crate) fn load_artifact_content(artifact: &ArtifactRef) -> Result<EncContent
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/internal/app_artifact_test.rs"]
-mod tests;
+#[path = "../../tests/unit/internal/service_artifact_test.rs"]
+mod service_artifact_test;

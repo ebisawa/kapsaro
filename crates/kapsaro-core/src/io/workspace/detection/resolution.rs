@@ -5,7 +5,10 @@
 //!
 //! Higher-level setting precedence is resolved by config::resolution::workspace.
 
-use super::search::{detect_workspace_root, find_git_root, validate_workspace_path, WorkspaceRoot};
+use super::search::{
+    detect_workspace_root, find_git_root, validate_workspace_path, WorkspaceRoot,
+    WORKSPACE_DIR_NAME,
+};
 use crate::support::fs::policy::is_real_dir;
 use crate::support::path::format_path_relative_to_cwd;
 #[cfg(test)]
@@ -58,11 +61,11 @@ fn validate_explicit_workspace_path(path: PathBuf) -> Result<WorkspaceRoot> {
 pub(crate) fn resolve_workspace_creation_path_from(
     current_dir: &std::path::Path,
 ) -> Result<PathBuf> {
-    if let Some(root) = find_git_root(current_dir) {
-        return Ok(root.join(".kapsaro"));
+    if let Some(root) = find_git_root(current_dir)? {
+        return Ok(root.join(WORKSPACE_DIR_NAME));
     }
 
-    let current_workspace = current_dir.join(".kapsaro");
+    let current_workspace = current_dir.join(WORKSPACE_DIR_NAME);
     if is_real_dir(&current_workspace)? {
         return current_workspace.canonicalize().map_err(|e| {
             Error::build_io_error_with_source(format!("Failed to canonicalize path: {}", e), e)

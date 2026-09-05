@@ -201,5 +201,5 @@ fn format_artifact_warning(path: &Path, error: &Error) -> String {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/internal/app_member_mutation_test.rs"]
-mod tests;
+#[path = "../../../tests/unit/internal/service_member_mutation_test.rs"]
+mod service_member_mutation_test;

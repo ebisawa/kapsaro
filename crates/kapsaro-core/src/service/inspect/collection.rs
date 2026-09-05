@@ -17,6 +17,7 @@ use crate::io::verify_online::{VerificationResult, VerificationStatus};
 use crate::model::public_key::GithubAccount;
 use crate::support::fs::load_text_with_limit;
 use crate::support::limits::resolve_encrypted_artifact_read_limit;
+use crate::support::path::format_path_relative_to_cwd;
 use crate::support::runtime::block_on_result;
 use crate::Result;
 
@@ -32,7 +33,7 @@ pub(super) fn load_inspect_content(input_path: &Path) -> Result<EncContent> {
             resolve_encrypted_artifact_read_limit(input_path),
             "encrypted artifact",
         )?,
-        input_path.display().to_string(),
+        format_path_relative_to_cwd(input_path),
     )
 }
 
@@ -127,3 +128,7 @@ fn build_failed_online_verification_result(
         verified_github: None,
     }
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/service_inspect_collection_test.rs"]
+mod service_inspect_collection_test;

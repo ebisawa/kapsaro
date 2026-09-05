@@ -77,7 +77,7 @@ impl FileEncContent {
 
 #[cfg(test)]
 #[path = "../../tests/unit/internal/format_content_internal_test.rs"]
-mod internal_tests;
+mod format_content_internal_test;
 
 impl KvEncContent {
     /// Construct after verifying the content is kv-enc format.

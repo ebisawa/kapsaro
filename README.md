@@ -5,58 +5,60 @@
 > [!NOTE]
 > This project has been renamed from SecretEnv to Kapsaro.
 
-`kapsaro` is an offline-first CLI for development teams that want to share API tokens, database passwords, certificates, `.env` values, and other development secrets without passing them around in plaintext.
+`kapsaro` is an offline-first CLI tool for development teams looking to share API tokens, database credentials, certificates, `.env` values, and other sensitive development secrets without passing them around in plaintext.
 
-It fits teams that already use Git and pull-request review as their daily workflow. Secrets, member changes, removals, and key rotation are represented as encrypted repository changes, so the team can review secret-sharing decisions through the same process they already use for code.
+It is designed for teams that already rely on Git and pull-request reviews in their daily workflow. Secrets, membership changes (additions and removals), and key rotations are represented as encrypted changes in the repository, allowing teams to review secret-sharing decisions through the exact same workflow they already use for code.
 
-No dedicated cloud service, SaaS secret platform, or always-on server is required. Encryption, decryption, verification, and recipient updates work locally and offline, while Git remains the shared transport and review layer.
+No dedicated cloud service, SaaS secret manager, or always-on server is required. Encryption, decryption, verification, and recipient updates all work locally and offline, with Git serving as the shared transport and review layer.
 
-This project is currently in beta. Feedback from trials, design reviews, and realistic team workflows is welcome before production adoption.
+This project is currently in beta. Feedback from trials, design reviews, and real-world team workflows is welcome ahead of production adoption.
 
 ## What You Can Do First
 
-Kapsaro lets you move these workflows into Git review:
+Kapsaro lets you bring these workflows directly into your Git review process:
 
-- encrypt an existing `.env` file and share it without committing plaintext
-- decrypt encrypted secrets just in time to run normal development commands
-- sync future recipients after a member is removed
+- Encrypt an existing `.env` file and share it without committing plaintext
+- Decrypt encrypted secrets just-in-time to run standard development commands
+- Update future recipients whenever a team member is removed
 
 ```bash
 # Encrypt an existing .env file into Git-managed storage
 kapsaro init --member-handle alice@example.com
 kapsaro import .env
 
-# Run the app without distributing a plaintext .env file
+# Run your app without distributing a plaintext .env file
 kapsaro run -- npm start
 
-# Remove a member from future sharing
+# Remove a member from future secret sharing
 kapsaro member remove old-member@example.com
 kapsaro rewrap
 ```
 
+By default, `rewrap` scans the workspace's `secrets/` directory; use `--target` for encrypted files stored elsewhere. To complete a membership change, review and commit both the member records and the updated encrypted files, then verify decryption from the shared commit. For details, see [membership completion checks](guides/user_guide_en.md#membership-completion).
+
 ## What Encryption Alone Does Not Solve
 
-Even if secret files are encrypted, teams still need to decide:
+Even when secret files are encrypted, teams still face operational questions:
 
-- when a new member should receive each secret
-- whether a removed member has been excluded from future sharing
-- whether values a removed member could previously read need to be updated
+- Which secrets should a new member receive, and when?
+- Has a removed member been excluded from future secret updates?
+- Do any values previously accessible to a removed member need to be rotated?
 
-Kapsaro records removed-member history and shows entry-level signals that help teams decide which `.env` values may need updates. Secret updates and membership changes are stored as files, so teams can review them in normal pull requests. For the broader positioning, see the [Product Brief](guides/product_brief_en.md).
+Kapsaro maintains a history of removed members and surfaces entry-level indicators to help teams decide which `.env` values may need rotation. Because secret updates and membership changes are stored as regular files, teams can review every change in standard pull requests. For a broader overview of this approach, see the [Product Brief](guides/product_brief_en.md).
 
 ## Security Highlights
 
-`kapsaro` encrypts values that should stay private, such as access tokens, API keys, and certificates, so each member uses their own key material to decrypt. Teams do not need to distribute one shared encryption key; only members included as recipients can read the encrypted content.
+`kapsaro` protects sensitive values—such as access tokens, API keys, and certificates—by ensuring each member decrypts using their own individual key material. Teams never need to distribute a shared master key or passphrase; only members explicitly designated as recipients can decrypt and read the content.
 
-The design is built around five ideas:
+The architecture is built around five core principles:
 
-- encrypt secrets before they are stored in the repository, so a repository shared by many members can still carry sensitive values safely
-- use public-key encryption to share the information needed for decryption separately with each recipient
-- use proven, standards-based cryptographic schemes including HPKE, Ed25519 signatures, XChaCha20-Poly1305, and HKDF-SHA256
-- require no dedicated server or SaaS; encryption, decryption, verification, and recipient updates are designed to work offline, even without network access
-- verify signatures and recipient information before decrypting or updating encrypted artifacts
+- **Pre-commit encryption**: Encrypt secrets before storing them in the repository, making it safe to commit sensitive values to shared Git repositories.
+- **Recipient-specific public-key encryption**: Use public-key cryptography to share decryption keys individually with each authorized recipient rather than using a single shared password.
+- **Proven cryptographic standards**: Rely on modern, standards-based cryptographic schemes, including HPKE (RFC 9180), Ed25519 signatures, XChaCha20-Poly1305, and HKDF-SHA256.
+- **Offline-first design**: Require no dedicated server or SaaS platform; encryption, decryption, verification, and recipient updates are all designed to work completely offline.
+- **Strict verification**: Verify cryptographic signatures and recipient information before decrypting or updating any encrypted artifact.
 
-## Install
+## Installation
 
 ### Homebrew (macOS / Linux)
 
@@ -65,7 +67,7 @@ brew tap ebisawa/kapsaro
 brew install kapsaro
 ```
 
-### Shell script
+### Shell Script
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/ebisawa/kapsaro/main/install.sh | sh
@@ -73,7 +75,7 @@ curl -fsSL https://raw.githubusercontent.com/ebisawa/kapsaro/main/install.sh | s
 
 The installer verifies each release archive's build provenance with GitHub Artifact Attestations using the GitHub CLI (`gh`), and verification is required by default. If `gh` is not installed, or to skip verification deliberately, set `KAPSARO_INSECURE=1` to install without it.
 
-### Build from source
+### Build from Source
 
 ```bash
 git clone https://github.com/ebisawa/kapsaro.git
@@ -90,7 +92,7 @@ cd /path/to/your-git-repo
 kapsaro init --member-handle alice@example.com
 ```
 
-This creates a `.kapsaro/` directory, generates your key pair, and registers you as the first member.
+This creates the `.kapsaro/` directory, generates your key pair, and registers you as the initial member.
 If the workspace already exists, `init` does nothing. Use `kapsaro join` to submit a key to an existing workspace.
 
 ### 2. Add secrets
@@ -121,7 +123,7 @@ kapsaro get DATABASE_URL
 kapsaro run -- ./my-app
 ```
 
-Check workspace health before onboarding, CI setup, or release work:
+Check workspace health before onboarding members, configuring CI, or preparing releases:
 
 ```bash
 kapsaro doctor
@@ -129,9 +131,11 @@ kapsaro doctor
 
 For detailed setup and operational guidance, see the [User Guide](guides/user_guide_en.md).
 
-## Read More
+For team operations, see [resolving Git conflicts](guides/user_guide_en.md#git-conflict-resolution) and [CI setup with a pinned, verified release](guides/user_guide_en.md#ci-setup). Named stores organize values within a workspace; use separate workspaces for different recipient groups, including CI.
 
-If you want the high-level overview first:
+## Documentation
+
+If you want a high-level overview first:
 
 - [Product Brief (English)](guides/product_brief_en.md)
 - [Product Brief (Japanese)](guides/product_brief_ja.md)
@@ -150,7 +154,7 @@ If you want the security model and design details:
 
 ## Status
 
-This project is currently in beta. During the beta stage, external specifications such as file formats are kept fixed unless a significant problem requires changing them, and the remaining work toward the stable release focuses on bug fixes and UI refinements.
+This project is currently in beta. During the beta phase, external specifications (such as file formats) remain frozen unless a critical issue requires changes. Ongoing work toward the stable release focuses on bug fixes and UI refinements.
 
 ## License
 

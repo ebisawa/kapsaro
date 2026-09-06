@@ -1,12 +1,24 @@
 # Windows / WSL2 ユーザー向け補足ガイド
 
-kapsaro は、Windows 環境において WSL2 (Windows Subsystem for Linux) を利用することで、通常の Linux と同様にインストールおよび利用が可能です。
+Windows では、WSL2（Windows Subsystem for Linux）内で Kapsaro を利用します。この補足ガイドは[ユーザーガイド](user_guide_ja.md)に加え、保存場所の要件と、Windows 側の 1Password SSH エージェントを使うための設定を説明します。
 
-本ドキュメントは、主に `guides/user_guide_ja.md` / `guides/user_guide_en.md` を補足する目的で、Windows / WSL2 特有の注意点と推奨設定の例をまとめたものです。
+## ワークスペースの配置場所
 
-## WSL2 で 1Password の SSH agent を利用する
+ワークスペースと、ローカルの鍵や設定を保存する `KAPSARO_HOME` は、WSL2 の Linux ファイルシステム上に置いてください。たとえば Linux 側のホームディレクトリ（`~` 配下）を使います。
 
-WSL2 環境において 1Password の SSH agent を利用する場合、kapsaro の設定で以下のように指定します。
+Kapsaro は、ローカルの鍵や状態を OS のファイルアクセス権限で保護します。`/mnt/c` などにマウントした Windows ボリュームは変換層を介しており、[既定のアクセス権限の扱いが Linux と異なります](https://learn.microsoft.com/en-us/windows/wsl/file-permissions)。Windows ファイルシステム上でのワークスペース運用はサポート対象外です。
+
+<a id="ssh_identity-には公開鍵ファイルのパスを指定する"></a>
+## 公開鍵を準備する
+
+Windows 側で 1Password SSH エージェントを有効にし、Ed25519 SSH 鍵を利用できる状態にします。公開鍵を WSL 内のファイルに保存し、そのパスを `ssh_identity` に指定してください。秘密鍵は 1Password 内に保持します。
+
+Windows 側の署名プログラムを WSL から実行でき、そのプログラムが渡された公開鍵のパスを読み取れる必要があります。Kapsaro はパスを Windows 形式に変換せずに渡すため、設定を使う前に、その環境でパスにアクセスできることを確認してください。
+
+<a id="wsl2-で-1password-の-ssh-エージェントを利用する"></a>
+## Kapsaro を設定する
+
+次の設定は、Windows 側の `ssh-keygen.exe` と公開鍵ファイルを指定する例です。`<username>` とファイル名は、自分の環境に合わせて置き換えてください。
 
 ```toml
 ssh_identity = "/home/<username>/.ssh/<your-ssh-public-key>.pub"
@@ -14,11 +26,10 @@ ssh_keygen_command = "ssh-keygen.exe"
 ssh_signing_method = "ssh-keygen"
 ```
 
-*(※ `username` やファイル名は実際の環境に合わせて変更してください。)*
+<a id="kapsaro-config-set-で推奨設定を適用する例"></a>
+### CLI で設定する
 
-### `kapsaro config set` で推奨設定を投入する例
-
-以下は、上記の推奨設定を CLI から投入する例です。
+同じ値を `kapsaro config set` で設定することもできます。実行前にファイル名を置き換えてください。
 
 ```bash
 kapsaro config set ssh_identity ~/.ssh/<your-ssh-public-key>.pub
@@ -26,28 +37,23 @@ kapsaro config set ssh_keygen_command ssh-keygen.exe
 kapsaro config set ssh_signing_method ssh-keygen
 ```
 
-### 設定のポイント
+<a id="設定のポイント"></a>
+## 署名方式の説明
 
-#### `ssh-keygen` コマンドで署名する
+<a id="ssh-keygen-コマンドで署名する"></a>
+### `ssh-keygen` で署名を依頼する
 
-署名の生成自体は `ssh-keygen` コマンドが行うため、署名方式として `ssh-keygen` を指定します。
+`ssh_signing_method = "ssh-keygen"` を指定すると、Kapsaro は `ssh-keygen -Y sign` を呼び出します。`ssh_identity` が公開鍵ファイルを指す場合、コマンドは対応する秘密鍵を持つエージェントに署名を依頼します。公開鍵は鍵を特定するためのもので、公開鍵だけでは署名できません。
 
-#### `ssh_keygen_command` には `.exe` をつける
+<a id="ssh_keygen_command-には必ず-exe-を付与する"></a>
+### Windows 側の実行ファイルを選ぶ
 
-WSL2 から Windows 側の `ssh-keygen.exe` を呼び出すことで、Windows 側で動作している 1Password SSH agent と連携して署名を行います。`.exe` がないと Linux 側のバイナリが実行され、エージェントに到達できません。
+`ssh_keygen_command` には `.exe` を付け、Windows 側の実行ファイルを選びます。WSL の相互運用機能を使って Windows 側のプログラムを実行します。Linux 版の `ssh-keygen` は Linux 側のエージェント設定を使うため、Windows 側のエージェントに接続するには別途中継の設定が必要です。
 
-#### `ssh_identity` には公開鍵ファイルを指定する
-
-署名に使いたい SSH 鍵、すなわち 1Password 内にある鍵の公開鍵を、あらかじめ WSL 内のファイルとして保存し、そのファイルパスを `ssh_identity` に指定します。秘密鍵は 1Password 内に留まります。
-
-## ワークスペースの配置場所
-
-ワークスペースと `KAPSARO_HOME` は、`/mnt/c` 配下ではなく Linux 側のホームディレクトリ、すなわち WSL2 のファイルシステム上に置いてください。
-
-kapsaro は手元のファイルの保護を OS のアクセス制御に委ねています。`/mnt/c` 配下は変換層を介した Windows ボリュームであり、Windows のファイルシステム上での動作は保証していません。
+Windows 側の実行ファイルが `-Y sign` に対応し、指定した公開鍵ファイルを読み取り、1Password に署名を依頼できることを確認してください。設定値を保存するだけでは、これらの環境要件を満たすかは確認できません。
 
 ## 参考資料
 
-WSL2 と 1Password SSH agent の連携に関する詳細なセットアップ手順については、1Password の公式ドキュメントをご参照ください。
+Windows 側のエージェント設定と WSL の相互運用機能は、1Password 公式ガイドを参照してください。同ガイドの Git コミット署名設定は 1Password 専用の署名プログラムを使っており、上記の Kapsaro 設定がすべての環境で動作することを示すものではありません。
 
 - [Use the 1Password SSH agent with WSL | 1Password Developer](https://developer.1password.com/docs/ssh/integrations/wsl/)

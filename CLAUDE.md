@@ -186,7 +186,7 @@ KV 暗号化: KV マップ → MK 生成 → エントリごとの CEK と MAC k
 - Copyright ヘッダー: `// Copyright 2026 Satoshi Ebisawa` + `// SPDX-License-Identifier: Apache-2.0`
 - production ソース（`src/` と `crates/*/src/`）の全ファイル冒頭に、Copyright ヘッダーに続けて役割を述べる `//!` コメントを置く。`tests/` ツリーは対象外
 - レイヤーの置き場所判断、依存方向、関数名・型名・モジュール名の規則は `kapsaro-conventions` skill にある。実装前に読む
-- テストの層選択と登録手順は `kapsaro-testing` skill、レビュー観点は `kapsaro-review` skill にある
+- テストの層選択と登録手順は `kapsaro-testing` skill、レビュー観点は `kapsaro-review` skill、ドキュメント執筆・推敲基準は `kapsaro-writing` skill にある
 
 ### 自動検査
 
@@ -215,6 +215,7 @@ KV 暗号化: KV マップ → MK 生成 → エントリごとの CEK と MAC k
 | `.claude/skills/kapsaro-conventions/references/naming.md` | 動詞・型名・廃止パターンの一覧が要るとき |
 | `.claude/skills/kapsaro-testing/SKILL.md` | テストを追加・移動するとき。層の選択と登録手順 |
 | `.claude/skills/kapsaro-review/SKILL.md` | 変更をレビューするとき |
+| `.claude/skills/kapsaro-writing/SKILL.md` | ドキュメントや README を執筆・推敲するとき |
 
 上の表のパスは、どのエージェントからもリポジトリ内の相対パスとして読める。作業内容が該当したら、行動する前に対応するファイルを開いて読む。
 

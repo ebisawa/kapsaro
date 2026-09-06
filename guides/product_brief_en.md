@@ -1,93 +1,99 @@
 # Kapsaro: Share Encrypted `.env` Files Through Git
 
-How does your team share `.env` files, certificates, and private key files today?
+Kapsaro is an offline-first CLI for sharing encrypted secrets through Git. It handles `.env` key-value stores, certificates, private key files, configuration files, and other binary data. Teams review secret changes, membership, and key updates through the same pull-request workflow they use for code.
 
-Kapsaro is an offline-first CLI for sharing secrets through a Git repository without storing them in plaintext. It works for both `.env`-style key-value files and arbitrary files such as certificates or config files, and it lets you manage membership and key updates through the same Git review flow your team already uses.
+<a id="adoption-snapshot"></a>
+## Suitable Uses and Limits
 
-## Adoption Snapshot
+Kapsaro suits small and mid-sized teams that use Git and pull-request reviews, want to stop exchanging plaintext secrets, and need a common workflow for local development, offline work, and CI/CD. It requires no dedicated SaaS service or always-on server.
 
-Kapsaro is a lightweight encrypted sharing model for small and mid-sized teams that already use Git and PR review and want to reduce plaintext secret handoffs.
+You can review secret additions, updates, and membership changes as Git diffs. Kapsaro uses HPKE, a standard public-key encryption scheme, to encrypt each file's master key separately for each recipient. The master key supplies the keys used to encrypt the data. When membership changes, you can synchronize recipients with the active team roster and use disclosure history to identify values that may need replacement.
 
-Good fit for teams that:
+Kapsaro cannot recall previously disclosed plaintext or prevent recipients from copying it. Organization-wide policies, fine-grained access controls, and centralized control of runtime secret injection require other systems.
 
-- already use Git and PR review as their main workflow
-- want to share `.env` files or certificates safely in a small team
-- do not want to depend on a SaaS or always-on secret platform
-- need the same workflow to work offline, in local development, and in CI/CD
+<a id="common-problems"></a>
+### Problems This Workflow Addresses
 
-What you can expect:
+<a id="sharing-env-files-through-chat-or-manual-handoffs"></a>
+<a id="using-envexample-with-manual-secret-handoffs"></a>
+Plaintext handoffs leave secrets in chat histories and on machines, including those of former team members. Teams can lose track of the latest values and who changed them. An `.env.example` file documents expected keys, but developers still need to collect credentials during onboarding. Missed additions, renames, or updates can cause configuration differences that appear only in staging or CI.
 
-- reduce plaintext `.env` and certificate handoffs through chat
-- review secret additions, updates, and membership changes as Git diffs
-- encrypt separately for each recipient with standards-based schemes such as HPKE
-- sync encrypted-file recipients to the current member roster after a member is removed
-- keep past disclosure visible enough to decide which values need rotation
+<a id="dedicated-secret-management-services-can-be-heavy"></a>
+A dedicated service may require server maintenance, permission design, and continuous connectivity. Its setup and operating costs can be disproportionate for a small team, and its change process may sit outside Git reviews.
 
-Not a good fit if you need to:
+<a id="encryption-alone-leaves-operational-questions-unanswered"></a>
+Encryption also leaves operational work: reviewing key and recipient changes, recording approvals, identifying values that departing members could access, and managing CI credentials. Kapsaro combines these tasks with repository changes; teams still need review practices and credential revocation procedures.
 
-- enforce fine-grained access policies from a central system
-- recover secrets after they were already disclosed
-- prevent legitimate recipients from copying plaintext after decryption
-- centrally control runtime secret injection across an entire cloud platform
+<a id="comparing-alternatives"></a>
+### Comparing Approaches
 
-## Common Problems
+| Requirement | Approach to Consider |
+| --- | --- |
+| `.env` encryption and runtime injection | Kapsaro or a tool dedicated to this workflow |
+| File encryption with existing or external key management | A file encryption tool that integrates with the required key management system |
+| Central policy enforcement, SSO, SCIM, or fine-grained ACLs | A centralized secret management platform |
+| Secret and membership changes reviewed through Git and pull requests | Kapsaro |
+| `.env` files, certificates, CI read access, key updates, and disclosure history for a small or mid-sized team | Kapsaro |
 
-### Sharing `.env` Files Through Chat or Manual Handoffs
+<a id="typical-adoption-flow"></a>
+## Getting Started
 
-- Plaintext secrets remain in message history and on local machines
-- It becomes unclear who has the latest version
-- Former team members may continue holding old values
-- It is hard to track who changed what and when
+### Prerequisites
 
-### `.env.example` with Manual Secret Sharing
+- An Ed25519 SSH key
+- A Git repository
+- A GitHub account, if you want to verify the association between a public key and an account
+- Git review practices, such as pull-request reviews and protected branches, for membership changes
+- Securely managed CI secret variables, if you use CI/CD
 
-- Onboarding always requires someone to gather and hand over secrets
-- Environment drift causes issues that only appear in staging or CI
-- New keys and updates are easy to miss
+### Adding Kapsaro to an Existing Project
 
-### Dedicated Secret Management Services Can Be Heavy
-
-- Server operations and permission design add overhead
-- The workflow often assumes constant network access
-- The setup cost may be too high for small or mid-sized teams
-- Secret changes do not fit naturally into Git-based PR review
-
-### Encryption Still Leaves Team Workflow Decisions
-
-- It is hard to review who changed keys or recipients
-- It is hard to decide which values may have been visible to removed members
-- CI access often needs to be managed differently from normal team access
-
-## What Kapsaro Provides
-
-Kapsaro is meant to keep secrets out of plaintext handoffs while still letting teams use Git review and history. You do not need to understand the cryptographic design to use these day-to-day capabilities.
-
-### 1. Manage `.env` Files in Git Without Leaving Them in Plaintext
+The following Homebrew example installs Kapsaro and creates a workspace. Run the initialization commands from your repository root. Kapsaro detects an existing workspace when you run commands inside the repository. Other installation methods are in the [User Guide](user_guide_en.md).
 
 ```bash
-# Initial setup
+# Install Kapsaro
+brew tap ebisawa/kapsaro
+brew install kapsaro
+
+# Create the workspace
 kapsaro init --member-handle alice@example.com
 
 # Import an existing .env file
 kapsaro import .env
 
-# Update values by key
+# Check decryption without printing secrets
+kapsaro run -- true
+```
+
+Commit `.kapsaro/` to Git and keep plaintext source files out of the repository. Use `set`, `get`, `run`, `encrypt`, `decrypt`, and `rewrap` for subsequent changes and reads.
+
+<a id="what-kapsaro-provides"></a>
+## Daily Operations
+
+<a id="1-manage-env-files-in-git-without-plaintext-exposure"></a>
+### Update Values by Key
+
+```bash
 kapsaro set DATABASE_URL "postgres://..."
 kapsaro set API_KEY "sk-..."
 ```
 
-Each key in the `.env` file is stored as its own encrypted entry. Updating one value keeps the diff focused instead of rewriting everything, which makes Git diffs much easier to review.
+These values are placeholders. For real secrets, use the [secret input procedure](user_guide_en.md#secret-input) to avoid leaving values in shell history or command arguments.
 
-### 2. Share Certificates and Binary Files the Same Way
+Each `.env` key has an independently encrypted entry, so Git diffs show which entries changed. The digital signature covers the entire document: editing different keys still changes shared metadata such as the signature. Resolve merge conflicts by [reapplying changes to a valid document](user_guide_en.md#git-conflict-resolution).
+
+<a id="2-share-certificates-and-binary-files-with-the-same-workflow"></a>
+### Encrypt and Decrypt Files
 
 ```bash
 kapsaro encrypt certs/ca.pem
 kapsaro decrypt ca.pem.encrypted --out certs/ca.pem
 ```
 
-Kapsaro is not limited to `.env` files. Certificates, config files, and arbitrary binaries flow through the same encryption and signature pipeline, and all of them are managed in the same workspace.
+Certificates, configuration files, and other binary files use the same workspace and the same underlying encryption and signature mechanisms as key-value stores.
 
-### 3. Run Commands Without Distributing Plaintext `.env`
+<a id="3-run-commands-without-distributing-plaintext-env-files"></a>
+### Run Applications and Read Values
 
 ```bash
 kapsaro run -- docker compose up
@@ -95,133 +101,95 @@ kapsaro run -- npm start
 kapsaro run -- rails server
 
 kapsaro get DATABASE_URL
+kapsaro get API_KEY
 ```
 
-`run` decrypts the encrypted `.env` content on the fly, injects the values as environment variables, and starts the target process. Teams can move away from distributing plaintext `.env` files without changing how they normally launch their applications.
+`kapsaro run` decrypts the entries, passes them to the child process as environment variables, and starts the requested command. The child inherits the parent environment, including variables such as `PATH` and `RUST_LOG`; Kapsaro removes inherited variables whose names start with `KAPSARO_`. The child process can read and disclose the decrypted values. `kapsaro get` prints a value, so use it only where terminal output is appropriate.
 
-The child process inherits the parent process's environment by default; only environment variables whose names start with `KAPSARO_` are stripped before launch, so values you set in your shell, for example `PATH` or `RUST_LOG`, still reach the application.
-
-Separate environments are managed with the `-n` option:
+Use `-n` to select a named store:
 
 ```bash
 kapsaro set -n staging DATABASE_URL "postgres://staging/..."
 kapsaro run -n prod -- ./deploy.sh
 ```
 
-### 4. Member Onboarding Goes Through Git Review
+Names such as `dev`, `staging`, and `prod` organize values within a workspace. Recipients are managed per workspace. [Use separate workspaces](user_guide_en.md#workspace-sharing) when environments need different recipient groups.
+
+## Members and Public Keys
+
+<a id="4-onboard-members-through-standard-git-reviews"></a>
+### Add a Member
 
 ```bash
-# New member
+# New member: create a pending join request
 kapsaro join --member-handle bob@example.com
-# -> creates a pending join request
 
-# Existing member
-kapsaro rewrap
-# -> approves the request and syncs access across encrypted files
-```
-
-A new member is added in a pending state first, then an existing member runs `rewrap` to approve the request and apply it to the encrypted files. Because membership changes appear as repository diffs, your team can review who joined and when through the normal PR flow.
-
-### 5. Offboarding and Key Updates Are Mechanical
-
-```bash
-kapsaro member remove old-member@example.com
+# Existing member: review the request and update recipients
 kapsaro rewrap
 ```
 
-After a member is removed, `rewrap` synchronizes recipient lists across encrypted files. Three flags refine the behavior depending on what you actually want to update:
+The new member starts in the pending state, called `incoming`. Share the request through Git so an existing member can review it. That member runs `rewrap` to approve the request and update encrypted files under the workspace's `secrets/` directory (`.kapsaro/secrets/` in a standard layout). Membership changes appear as repository diffs for pull-request review.
 
-- `kapsaro rewrap --rotate-key` — rebuild the encryption key itself and re-encrypt the data
-- `kapsaro rewrap --clear-disclosure-history` — clear disclosure history after rotating or updating the values
-- `kapsaro rewrap --target <path>` — restrict the operation to specific encrypted artifacts when only some files need to be re-encrypted
+Complete onboarding by committing and sharing both member records and updated encrypted files, then confirming decryption on the new member's machine. See [membership completion checks](user_guide_en.md#membership-completion), including files stored outside the default directory.
 
-### 6. Disclosure History Surfaces What Still Needs Rotation
-
-Kapsaro records the history of members who were removed from access. For encrypted `.env` files, it also tracks entry-level disclosure state, which makes it easier to see which values still need to be rotated.
-
-Removing a member does not recover secrets that were already disclosed in the past. Kapsaro does not hide that premise; it makes the residual risk visible so teams can make clean decisions about updating values and rotating keys.
-
-### 7. CI/CD Works Without SSH Keys or an Agent
-
-Kapsaro supports CI/CD environments through portable private key export:
+<a id="8-verify-member-key-authenticity"></a>
+### Verify and Approve Public Keys
 
 ```bash
-# On a developer machine: export the CI member's key
-kapsaro key export --private --member-handle ci@example.com --out ci-key.txt
-```
-
-Register `KAPSARO_PRIVATE_KEY` and `KAPSARO_KEY_PASSWORD` as CI secret variables. The CI job can then use `kapsaro run` and `kapsaro get` without any SSH key, SSH agent, or local keystore. The CI member is still just another entry in the active member list, so its access can be revoked with the same `member remove` and `rewrap` flow as any regular member.
-
-### 8. Check That Member Keys Belong to the Right Person
-
-```bash
-# Verify active members against GitHub and approve them
+# Verify active member keys against GitHub and approve the keys locally
 kapsaro member verify --approve
 
-# Manage the local trust store
+# Inspect and manage local trust records
 kapsaro trust keys list
 kapsaro trust keys remove <kid>
 kapsaro trust recipients list
 ```
 
-Kapsaro can confirm that an encrypted file was created by a particular key, but a person still needs to check whether that key belongs to the claimed member. `member verify --approve` cross-checks member public keys against GitHub accounts and saves approved key records in the local trust store. Use it as an extra check that makes key substitution easier to notice.
+A valid artifact signature establishes that the signing key signed the document. Associating that key with the claimed person requires separate verification. `member verify --approve` checks member public keys with GitHub and, after confirmation, records approved keys in the local trust store. This checks the key's association with the claimed GitHub account; the team must establish whom that account represents. The trust store keeps approved keys and recipient sets for later comparisons, helping detect unexpected changes. `<kid>` is a key identifier.
 
-## Typical Adoption Flow
+Public-key approval is separate from admitting an incoming member. `rewrap` handles admission and recipient synchronization; `member verify --approve` records local key approval.
 
-### What You Need
-
-- An Ed25519 SSH key
-- A Git repository
-- A GitHub account (optional; used to verify the link between a public key and an account)
-- Git practices such as PR review and protected branches for member changes
-- For CI/CD use, an environment where CI secret variables are managed safely
-
-### Add It to an Existing Project
-
-Run the following commands inside a Git repository directory. Kapsaro auto-detects the workspace within a Git repository.
+<a id="5-streamlined-offboarding-and-key-updates"></a>
+### Remove Members and Update Keys
 
 ```bash
-# Install
-brew tap ebisawa/kapsaro
-brew install kapsaro
-
-# Create the workspace
-kapsaro init --member-handle alice@example.com
-
-# Import the existing .env file
-kapsaro import .env
-
-# Daily usage
-kapsaro set API_KEY "sk-..."
-kapsaro get API_KEY
-kapsaro run -- npm start
-
-# Membership changes
-kapsaro join --member-handle bob@example.com
-kapsaro rewrap
 kapsaro member remove old-member@example.com
 kapsaro rewrap
 ```
 
-After that, keep `.kapsaro/` in Git and use `set`, `get`, `run`, `encrypt`, `decrypt`, and `rewrap` to manage secrets.
+`rewrap` synchronizes encrypted-file recipients with current membership. By default, it scans the workspace's `secrets/` directory. Use `--target` for encrypted files elsewhere.
 
-## How to Compare Alternatives
+- `kapsaro rewrap --rotate-key` generates a new master key and re-encrypts the data. Member public and private keys remain unchanged.
+- `kapsaro rewrap --clear-disclosure-history` clears recorded disclosures after you replace affected secret values. Clearing the record does not revoke credentials or erase past exposure.
+- `kapsaro rewrap --target <path>` selects the files to process.
 
-Kapsaro is not a centralized access-control system. It is a lightweight and practical model for sharing team secrets safely in a way that fits naturally with Git.
+For member-key replacement, follow the [key update and verification procedure](user_guide_en.md#new-key-verification). Synchronizing recipients and rotating a file's master key serve different purposes from replacing a member's key pair.
 
-When comparing tools, the useful question is not which tool is better in general. It is which workflow the tool fits.
+<a id="6-disclosure-history-highlights-values-requiring-rotation"></a>
+### Use Disclosure History During Offboarding
 
-| What you need | Usually a better fit |
-| --- | --- |
-| Start quickly with `.env` encryption and runtime injection | Kapsaro, or a tool focused on encrypted `.env` runtime injection |
-| File encryption combined with existing key management or external key management | A tool focused on file encryption and external key management |
-| Central policy, SSO, SCIM, or fine-grained ACLs | A centralized secret management platform |
-| Put secret and membership changes through Git and PR review | Kapsaro |
-| Share `.env`, certificates, CI read access, rewrap, and disclosure history through one workflow in a small or mid-sized team | Kapsaro |
+Kapsaro records removed recipients and, for encrypted key-value stores, which entries may have been disclosed to them. This identifies values to review for replacement; it does not establish whether anyone actually read them.
 
-Kapsaro is worth considering when your team wants to reduce plaintext secret handoffs while keeping Git review at the center of the workflow. If you need central policy enforcement or organization-wide runtime secret injection controls, do not try to make Kapsaro satisfy that requirement by itself; evaluate a centralized secret management platform.
+Removing a recipient affects the updated encrypted files. Previously decrypted values and older encrypted copies may remain accessible. Complete offboarding by updating and sharing the encrypted files, checking access from the shared commit, and revoking or replacing affected tokens and passwords at their issuing services. See the [member management procedure](user_guide_en.md#6-member-management).
 
-## Learn More
+<a id="7-cicd-integration-without-ssh-keys-or-agents"></a>
+## CI/CD
 
-- [User Guide](user_guide_en.md) — Installation, daily usage, and CI/CD setup
-- [Security Design](security_design_en.md) — Threat model, cryptographic protocols, and trust architecture
+Kapsaro can export a member's private key in a portable, password-protected form:
+
+```bash
+# On a developer machine: export the CI member's private key
+kapsaro key export --private --member-handle ci@example.com --out ci-key.txt
+```
+
+Register the exported key as `KAPSARO_PRIVATE_KEY` and its password as `KAPSARO_KEY_PASSWORD` in the CI secret store. The pipeline can then use `run` or `get` without an SSH key, SSH agent, or local keystore. Set up the CI member and verify that it can decrypt the shared files before using it in a job.
+
+CI bots follow the same membership rules as people. Removing a CI member and running `rewrap` updates recipients; retiring or compromised CI credentials also require revoking or replacing the secrets that the bot could access.
+
+Access remains scoped to the workspace. Put only required secrets in a dedicated CI workspace, and expose its credentials only to trusted build steps that need them. See [CI setup](user_guide_en.md#ci-setup) for version-pinned installation, build attestation verification, trust prerequisites, and decryption checks.
+
+<a id="documentation"></a>
+## Related Documents
+
+- [User Guide](user_guide_en.md) — Installation, daily operations, and CI/CD setup
+- [Security Design](security_design_en.md) — Threat model, cryptographic protocols, and trust decisions

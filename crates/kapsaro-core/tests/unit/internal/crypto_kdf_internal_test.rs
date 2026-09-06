@@ -8,6 +8,9 @@
 use super::*;
 use crate::crypto::types::data::{Ikm, Info};
 use crate::crypto::types::primitives::{AsHkdfSalt, HkdfSalt};
+use sha2::digest::block_api::EagerHash;
+use sha2::Sha256;
+use zeroize::ZeroizeOnDrop;
 
 /// The salt type `derive_hkdf_sha256_array` accepts, held still at compile time.
 ///
@@ -15,9 +18,23 @@ use crate::crypto::types::primitives::{AsHkdfSalt, HkdfSalt};
 /// states which salt the HKDF-Extract input is spelled with.
 fn assert_hkdf_salt<T: AsHkdfSalt>() {}
 
+/// The SHA-256 core an HMAC keeps for its inner and outer digests, held to
+/// clearing its state when dropped.
+///
+/// Extract and expand each leave an HMAC keyed with the PRK behind once they
+/// return. The HMAC wrapper carries no zeroize marker of its own; what clears
+/// the PRK-derived state is the drop of the cores it holds, so the core type
+/// is what this pins.
+fn assert_zeroize_on_drop<T: ZeroizeOnDrop>() {}
+
 #[test]
 fn hkdf_extract_salt_is_the_hkdf_salt_type() {
     assert_hkdf_salt::<HkdfSalt>();
+}
+
+#[test]
+fn hkdf_sha256_hmac_core_zeroizes_on_drop() {
+    assert_zeroize_on_drop::<<Sha256 as EagerHash>::Core>();
 }
 
 #[test]

@@ -39,8 +39,7 @@ pub fn derive_hkdf_sha256_prk<S: AsHkdfSalt>(ikm: &Ikm, salt: &S) -> HkdfSha256P
     // SHA-256 cores it holds clear their state when dropped, which the sha2
     // `zeroize` feature provides; the padded key blocks the hmac crate builds
     // on its own stack are out of reach here.
-    let (mut raw_prk, _) =
-        Hkdf::<Sha256>::extract(Some(salt.as_hkdf_salt_bytes()), ikm.as_bytes());
+    let (mut raw_prk, _) = Hkdf::<Sha256>::extract(Some(salt.as_hkdf_salt_bytes()), ikm.as_bytes());
     let mut prk = Zeroizing::new([0u8; 32]);
     prk.as_mut().copy_from_slice(&raw_prk);
     // The output array type has no Zeroize impl of its own; clear it through

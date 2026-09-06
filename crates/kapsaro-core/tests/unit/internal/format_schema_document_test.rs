@@ -17,6 +17,113 @@ use crate::test_utils::keygen_helpers::{build_dummy_key_possession_proof, build_
 use uuid::Uuid;
 
 #[test]
+fn test_json_numbers_follow_safe_integer_contract() {
+    use super::parse_json_value;
+    for number in ["-9007199254740991", "9007199254740991", "0"] {
+        let input = format!(r#"{{"nested":[{{"number":{number}}}]}}"#);
+        assert!(parse_json_value(input.as_bytes(), "numbers", "JSON").is_ok());
+    }
+    for number in [
+        "-9007199254740992",
+        "9007199254740992",
+        "9007199254740993",
+        "18446744073709551615",
+        "-9223372036854775808",
+        "1.0",
+        "1e0",
+        "1e-999",
+        "-0.0",
+    ] {
+        let input = format!(r#"{{"nested":[{{"number":{number}}}]}}"#);
+        let error = parse_json_value(input.as_bytes(), "numbers", "JSON").unwrap_err();
+        assert_eq!(error.kind(), crate::ErrorKind::Parse, "{number}");
+    }
+}
+
+#[test]
+fn test_schema_numbers_follow_safe_integer_contract() {
+    use crate::format::schema::validator::Validator;
+    let validator = Validator::from_schema_with_resources(serde_json::json!({}), &[]).unwrap();
+    for number in [
+        serde_json::json!(9007199254740991u64),
+        serde_json::json!(-9007199254740991i64),
+    ] {
+        validator
+            .validate_trust_store(&serde_json::json!({"extra": [number]}))
+            .unwrap();
+    }
+    for number in [
+        serde_json::json!(9007199254740992u64),
+        serde_json::json!(-9007199254740992i64),
+        serde_json::json!(1.0),
+    ] {
+        let error = validator
+            .validate_trust_store(&serde_json::json!({"extra": [number]}))
+            .unwrap_err();
+        assert_eq!(error.kind(), crate::ErrorKind::Schema);
+    }
+}
+
+#[test]
+fn test_embedded_signer_numbers_follow_safe_integer_contract() {
+    use crate::format::schema::validator::{load_embedded_validator, SchemaTarget};
+    let validator = load_embedded_validator(SchemaTarget::FileEnc).unwrap();
+    for id in [9007199254740991u64, 9007199254740992, 9007199254740993] {
+        let mut document = build_file_enc_document();
+        document["signature"]["signer_pub"]["protected"]["binding_claims"] =
+            serde_json::json!({"github_account": {"id": id, "login": "alice"}});
+        let parsed = parse_file_enc_str(&document.to_string(), "embedded signer");
+        let validated = validator.validate_file_enc_document(&document);
+        let token = encode_base64url_nopad(document["signature"].to_string().as_bytes());
+        let signature = parse_kv_signature_token(&token);
+        if id == 9007199254740991 {
+            parsed.unwrap();
+            validated.unwrap();
+            signature.unwrap();
+        } else {
+            assert_eq!(parsed.unwrap_err().kind(), crate::ErrorKind::Parse);
+            assert_eq!(validated.unwrap_err().kind(), crate::ErrorKind::Schema);
+            assert_eq!(signature.unwrap_err().kind(), crate::ErrorKind::Parse);
+        }
+    }
+}
+
+#[test]
+fn test_trust_metadata_numbers_follow_safe_integer_contract() {
+    use crate::format::schema::validator::load_embedded_trust_validator;
+    let validator = load_embedded_trust_validator().unwrap();
+    for number in [
+        "9007199254740991",
+        "-9007199254740991",
+        "9007199254740992",
+        "1.0",
+        "1e0",
+    ] {
+        let document = serde_json::json!({
+            "protected": {
+                "format": "kapsaro:format:local-trust@1", "owner_handle": "alice@example.com",
+                "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z",
+                "known_keys": [{
+                    "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD", "subject_handle": "alice@example.com",
+                    "approved_at": "2026-01-01T00:00:00Z", "approved_via": "manual-review",
+                    "extra": [{"nested": serde_json::from_str::<serde_json::Value>(number).unwrap()}]
+                }], "recipient_sets": []
+            },
+            "signature": {"alg": "eddsa-ed25519", "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD", "sig": encode_base64url_nopad(&[0; 64])}
+        });
+        let parsed = parse_trust_store_str(&document.to_string(), "trust metadata");
+        let validated = validator.validate_trust_store(&document);
+        if number == "9007199254740991" || number == "-9007199254740991" {
+            parsed.unwrap();
+            validated.unwrap();
+        } else {
+            assert_eq!(parsed.unwrap_err().kind(), crate::ErrorKind::Parse);
+            assert_eq!(validated.unwrap_err().kind(), crate::ErrorKind::Schema);
+        }
+    }
+}
+
+#[test]
 fn test_parse_public_key_str_with_schema() {
     let public_key = serde_json::json!({
             "protected": {

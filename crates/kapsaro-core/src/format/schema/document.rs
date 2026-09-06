@@ -3,6 +3,7 @@
 
 //! Schema-aware parsers for Kapsaro JSON documents and JSON tokens.
 
+use crate::format::number::{validate_integer, FLOAT_ERROR};
 use crate::format::schema::validator::{load_embedded_validator, SchemaTarget, Validator};
 use crate::format::token::decode_token_bytes;
 use crate::format::wrap::validate_wrap_items;
@@ -226,21 +227,21 @@ impl<'de> Visitor<'de> for UniqueJsonVisitor {
         Ok(Value::Bool(value))
     }
 
-    fn visit_i64<E>(self, value: i64) -> std::result::Result<Self::Value, E> {
+    fn visit_i64<E: serde::de::Error>(self, value: i64) -> std::result::Result<Self::Value, E> {
+        validate_integer(i128::from(value)).map_err(E::custom)?;
         Ok(Value::Number(Number::from(value)))
     }
 
-    fn visit_u64<E>(self, value: u64) -> std::result::Result<Self::Value, E> {
+    fn visit_u64<E: serde::de::Error>(self, value: u64) -> std::result::Result<Self::Value, E> {
+        validate_integer(i128::from(value)).map_err(E::custom)?;
         Ok(Value::Number(Number::from(value)))
     }
 
-    fn visit_f64<E>(self, value: f64) -> std::result::Result<Self::Value, E>
+    fn visit_f64<E>(self, _value: f64) -> std::result::Result<Self::Value, E>
     where
         E: serde::de::Error,
     {
-        Number::from_f64(value)
-            .map(Value::Number)
-            .ok_or_else(|| E::custom("invalid JSON number"))
+        Err(E::custom(FLOAT_ERROR))
     }
 
     fn visit_str<E>(self, value: &str) -> std::result::Result<Self::Value, E> {

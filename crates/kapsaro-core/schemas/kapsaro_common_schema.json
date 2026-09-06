@@ -136,6 +136,7 @@
         "id": {
           "type": "integer",
           "minimum": 1,
+          "maximum": 9007199254740991,
           "description": "GitHub user ID (numeric, stable across username changes)"
         },
         "login": {
@@ -195,7 +196,7 @@
     "known_key_github_account": {
       "type": "object",
       "properties": {
-        "id": { "type": "integer", "minimum": 1 },
+        "id": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
         "login": { "type": "string", "minLength": 1 }
       },
       "required": ["id"],

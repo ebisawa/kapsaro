@@ -20,6 +20,7 @@ pub(crate) mod file;
 pub(crate) mod jcs;
 pub(crate) mod kid;
 pub(crate) mod kv;
+pub(crate) mod number;
 pub(crate) mod public_key;
 pub(crate) mod schema;
 pub(crate) mod signature;

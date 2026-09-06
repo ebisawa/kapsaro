@@ -3,6 +3,7 @@
 
 //! JSON Schema validator.
 
+use crate::format::number::validate_numbers;
 use crate::model::wire::format::{FILE_ENC_V1, PRIVATE_KEY_V1, PUBLIC_KEY_V1};
 use crate::{Error, Result};
 use jsonschema::error::ValidationErrorKind;
@@ -169,6 +170,7 @@ impl Validator {
     }
 
     fn validate_generic(&self, doc: &Value) -> Result<()> {
+        validate_numbers(doc).map_err(Error::build_schema_error)?;
         if self.schema.is_valid(doc) {
             return Ok(());
         }

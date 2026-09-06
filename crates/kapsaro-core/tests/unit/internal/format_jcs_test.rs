@@ -86,12 +86,6 @@ fn test_jcs_number_and_primitive_cases() {
         ("integer", json!({"num":42}), r#"{"num":42}"#),
         ("zero", json!({"zero":0}), r#"{"zero":0}"#),
         ("negative", json!({"neg":-123}), r#"{"neg":-123}"#),
-        ("fraction", json!({"val":1.5}), r#"{"val":1.5}"#),
-        (
-            "parsed integral float",
-            serde_json::from_str(r#"{"val":1.0}"#).unwrap(),
-            r#"{"val":1}"#,
-        ),
         (
             "largest safe integer",
             json!({"big":9007199254740991_i64}),
@@ -345,19 +339,11 @@ fn test_jcs_rfc8785_example_sorting() {
 
 #[test]
 fn test_jcs_numbers_format() {
-    // RFC 8785 Section 3.2.2.3 - Number formatting
+    // Accepted integer values retain their exact canonical representation.
     let test_cases = vec![
         (json!(0), "0"),
         (json!(1), "1"),
         (json!(-1), "-1"),
-        (json!(0.5), "0.5"),
-        // Integer-valued floats drop the fraction.
-        (json!(1.0), "1"),
-        (json!(-0.0), "0"),
-        // Values that a naive formatter renders in exponent notation.
-        (json!(1e21), "1e+21"),
-        (json!(1e-7), "1e-7"),
-        (json!(0.000001), "0.000001"),
         // The largest integers that survive a round trip through f64.
         (json!(9007199254740991i64), "9007199254740991"),
         (json!(-9007199254740991i64), "-9007199254740991"),
@@ -405,4 +391,197 @@ fn test_jcs_normalize_bytes_matches_string() {
 
     // Bytes should match the UTF-8 encoding of the string
     assert_eq!(bytes_result, string_result.as_bytes());
+}
+
+#[test]
+fn test_jcs_number_contract_at_all_entry_points() {
+    for number in [
+        "9007199254740992",
+        "9007199254740993",
+        "-9007199254740992",
+        "18446744073709551615",
+        "1.5",
+        "1.0",
+        "1e0",
+        "-0.0",
+    ] {
+        let value: serde_json::Value =
+            serde_json::from_str(&format!(r#"{{"nested":[{{"number":{number}}}]}}"#)).unwrap();
+        assert_eq!(
+            normalize(&value).unwrap_err().kind(),
+            crate::ErrorKind::Parse
+        );
+        assert_eq!(
+            normalize_to_bytes(&value).unwrap_err().kind(),
+            crate::ErrorKind::Parse
+        );
+        assert_eq!(
+            normalize_to_string(&value).unwrap_err().kind(),
+            crate::ErrorKind::Parse
+        );
+    }
+}
+
+#[test]
+fn test_jcs_typed_number_contract() {
+    for number in [
+        9007199254740992_i128,
+        -9007199254740992,
+        i128::MAX,
+        i128::MIN,
+    ] {
+        assert_eq!(
+            normalize(&Some(vec![number])).unwrap_err().kind(),
+            crate::ErrorKind::Parse
+        );
+    }
+    assert_eq!(
+        normalize(&u128::MAX).unwrap_err().kind(),
+        crate::ErrorKind::Parse
+    );
+    for number in [0.0, 1.5, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+        assert_eq!(
+            normalize(&Some(vec![number])).unwrap_err().kind(),
+            crate::ErrorKind::Parse
+        );
+        assert_eq!(
+            crate::format::token::TokenCodec::encode(
+                crate::format::token::TokenCodec::JsonJcs,
+                &Some(vec![number])
+            )
+            .unwrap_err()
+            .kind(),
+            crate::ErrorKind::Parse
+        );
+    }
+    assert!(normalize(&f32::NAN).is_err());
+    assert_eq!(
+        normalize(&9007199254740991_u64).unwrap(),
+        b"9007199254740991"
+    );
+    assert_eq!(
+        normalize(&-9007199254740991_i64).unwrap(),
+        b"-9007199254740991"
+    );
+}
+
+#[test]
+fn test_jcs_serializes_input_once() {
+    struct Counted(std::cell::Cell<usize>);
+    impl serde::Serialize for Counted {
+        fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+            self.0.set(self.0.get() + 1);
+            serializer.serialize_u64(42)
+        }
+    }
+    let value = Counted(std::cell::Cell::new(0));
+    assert_eq!(normalize(&value).unwrap(), b"42");
+    assert_eq!(value.0.get(), 1);
+    value.0.set(0);
+    assert_eq!(
+        crate::format::token::TokenCodec::encode(crate::format::token::TokenCodec::JsonJcs, &value)
+            .unwrap(),
+        "NDI"
+    );
+    assert_eq!(value.0.get(), 1);
+}
+
+#[test]
+fn test_jcs_numeric_map_keys_are_strings() {
+    let input = std::collections::BTreeMap::from([(u64::MAX, 42)]);
+    assert_eq!(
+        normalize(&input).unwrap(),
+        br#"{"18446744073709551615":42}"#
+    );
+}
+
+#[test]
+fn test_jcs_numeric_map_key_encoding_matches_json_strings() {
+    struct Entry<T>(T);
+    impl<T: serde::Serialize> serde::Serialize for Entry<T> {
+        fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+            use serde::ser::SerializeMap;
+            let mut map = serializer.serialize_map(Some(1))?;
+            map.serialize_entry(&self.0, &42)?;
+            map.end()
+        }
+    }
+    fn assert_key<T: serde::Serialize>(key: T) {
+        let input = Entry(key);
+        let expected = normalize(&serde_json::to_value(&input).unwrap()).unwrap();
+        assert_eq!(normalize(&input).unwrap(), expected);
+        assert_eq!(
+            crate::format::token::TokenCodec::encode(
+                crate::format::token::TokenCodec::JsonJcs,
+                &input
+            )
+            .unwrap(),
+            crate::format::codec::base64_public::encode_base64url_nopad(&expected)
+        );
+    }
+    #[derive(serde::Serialize)]
+    struct Key<T>(T);
+    assert_key(u128::MAX);
+    assert_key(i128::MIN);
+    assert_key(Key(u64::MAX));
+    assert_key(Key(1.0_f64));
+    for key in [1.0, -0.0, 1e21, 1e-7, 1.5] {
+        assert_key(key);
+        assert_key(key as f32);
+    }
+    for key in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+        assert_eq!(
+            normalize(&Entry(key)).unwrap_err().kind(),
+            crate::ErrorKind::Parse
+        );
+    }
+}
+
+#[test]
+fn test_jcs_wide_integers_preserve_safe_values() {
+    assert_eq!(
+        normalize(&9007199254740991u128).unwrap(),
+        b"9007199254740991"
+    );
+    assert_eq!(
+        normalize(&-9007199254740991i128).unwrap(),
+        b"-9007199254740991"
+    );
+    let input = std::collections::BTreeMap::from([("number", 9007199254740992u128)]);
+    assert_eq!(
+        normalize(&input).unwrap_err().kind(),
+        crate::ErrorKind::Parse
+    );
+}
+
+#[test]
+fn test_jcs_compound_number_contract() {
+    #[derive(serde::Serialize)]
+    enum Nested {
+        Newtype(u64),
+        Tuple(bool, u64),
+        Struct { number: u64 },
+    }
+    #[derive(serde::Serialize)]
+    struct TupleStruct(bool, u64);
+    #[derive(serde::Serialize)]
+    struct Newtype(u64);
+    let invalid = 9007199254740993_u64;
+    for value in [
+        Nested::Newtype(invalid),
+        Nested::Tuple(true, invalid),
+        Nested::Struct { number: invalid },
+    ] {
+        assert_eq!(
+            normalize(&value).unwrap_err().kind(),
+            crate::ErrorKind::Parse
+        );
+    }
+    assert!(normalize(&TupleStruct(true, invalid)).is_err());
+    assert!(normalize(&Newtype(invalid)).is_err());
+    assert!(normalize(&(true, invalid)).is_err());
+    assert_eq!(
+        normalize(&Nested::Tuple(true, 42)).unwrap(),
+        br#"{"Tuple":[true,42]}"#
+    );
 }

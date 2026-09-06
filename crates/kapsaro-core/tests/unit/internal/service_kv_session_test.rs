@@ -5,7 +5,7 @@
 
 use crate::service::kv::session::KvCommandSession;
 use crate::service::workspace::WorkspaceWriteCapabilities;
-use crate::service_test_utils::{build_test_signing_command_options, resolve_test_write_execution};
+use crate::service_test_utils::{build_test_signing_command_options, resolve_test_write_session};
 use crate::support::fs::relative::DirectoryFd;
 use crate::test_support::storage::keystore::active::set_active_kid;
 use crate::test_support::storage::keystore::storage::list_kids;
@@ -38,7 +38,7 @@ fn test_write_target_lives_in_the_secrets_directory_the_execution_fixed() {
     activate_fixture_key(temp_dir.path());
 
     with_temp_cwd(temp_dir.path(), || {
-        let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
+        let execution = resolve_test_write_session(&options, ALICE_MEMBER_HANDLE);
         let capabilities =
             WorkspaceWriteCapabilities::new(&execution.directories, &execution.trust);
         let session = KvCommandSession::bind_write(&capabilities, None).unwrap();
@@ -62,7 +62,7 @@ fn test_write_target_uses_the_named_file_in_the_fixed_workspace() {
     activate_fixture_key(temp_dir.path());
 
     with_temp_cwd(temp_dir.path(), || {
-        let execution = resolve_test_write_execution(&options, ALICE_MEMBER_HANDLE);
+        let execution = resolve_test_write_session(&options, ALICE_MEMBER_HANDLE);
         let capabilities =
             WorkspaceWriteCapabilities::new(&execution.directories, &execution.trust);
         let session = KvCommandSession::bind_write(&capabilities, Some("staging")).unwrap();

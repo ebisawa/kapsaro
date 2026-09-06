@@ -43,7 +43,6 @@ pub fn setup_member_key_context_at(
         explicit_kid,
         Box::new(backend),
         ssh_pub,
-        Some(home.join("workspace")),
     )
     .unwrap()
 }

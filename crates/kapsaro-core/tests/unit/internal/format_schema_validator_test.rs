@@ -171,29 +171,7 @@ fn build_public_key_with_github_login(login: &str) -> serde_json::Value {
 #[test]
 fn test_validate_private_key_basic() {
     let validator = load_embedded_validator(SchemaTarget::PrivateKey).unwrap();
-    let ikm_salt = encode_base64url_nopad(&[0u8; 32]);
-    let hkdf_salt = encode_base64url_nopad(&[1u8; 32]);
-    // PrivateKey external format includes protected and encrypted sections.
-    let valid_private_key = serde_json::json!({
-        "protected": {
-            "format": crate::model::wire::format::PRIVATE_KEY_V1,
-            "subject_handle": "alice@example.com",
-            "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-            "alg": {
-                "kdf": crate::model::wire::private_key::PROTECTION_KDF_SSHSIG_ED25519_HKDF_SHA256,
-                "fpr": "SHA256:abcdef1234567890",
-                "ikm_salt": ikm_salt,
-                "hkdf_salt": hkdf_salt,
-                "aead": crate::model::wire::algorithm::AEAD_XCHACHA20_POLY1305
-            },
-            "created_at": "2026-01-14T00:00:00Z",
-            "expires_at": "2027-01-14T00:00:00Z"
-        },
-        "encrypted": {
-            "nonce": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-            "ct": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
-        }
-    });
+    let valid_private_key = build_valid_private_key();
 
     let result = validator.validate_private_key(&valid_private_key);
     assert!(
@@ -208,27 +186,13 @@ fn test_validate_private_key_basic() {
 #[test]
 fn test_validate_private_key_argon2id_without_params() {
     let validator = load_embedded_validator(SchemaTarget::PrivateKey).unwrap();
-    let ikm_salt = encode_base64url_nopad(&[0u8; 32]);
-    let hkdf_salt = encode_base64url_nopad(&[1u8; 32]);
-    let valid_private_key = serde_json::json!({
-        "protected": {
-            "format": crate::model::wire::format::PRIVATE_KEY_V1,
-            "subject_handle": "alice@example.com",
-            "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-            "alg": {
-                "kdf": crate::model::wire::private_key::PROTECTION_KDF_ARGON2ID_M64T3P4_HKDF_SHA256,
-                "ikm_salt": ikm_salt,
-                "hkdf_salt": hkdf_salt,
-                "aead": crate::model::wire::algorithm::AEAD_XCHACHA20_POLY1305
-            },
-            "created_at": "2026-01-14T00:00:00Z",
-            "expires_at": "2027-01-14T00:00:00Z"
-        },
-        "encrypted": {
-            "nonce": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-            "ct": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
-        }
-    });
+    let mut valid_private_key = build_valid_private_key();
+    let alg = valid_private_key["protected"]["alg"]
+        .as_object_mut()
+        .unwrap();
+    alg["kdf"] =
+        crate::model::wire::private_key::PROTECTION_KDF_ARGON2ID_M64T3P4_HKDF_SHA256.into();
+    alg.remove("fpr");
 
     let result = validator.validate_private_key(&valid_private_key);
     assert!(
@@ -496,46 +460,7 @@ fn build_valid_file_enc_doc(recipient_handle: &str) -> serde_json::Value {
 #[test]
 fn test_validator_allows_member_handle_without_at_in_wrap_rh() {
     let validator = load_embedded_validator(SchemaTarget::FileEnc).unwrap();
-
-    // Regression test:
-    // - CLI validation allows member_handle without '@' (e.g. GitHub login like "ebisawa")
-    // - JSON schema should accept the same to avoid runtime validation failures
-    let sid = "123e4567-e89b-12d3-a456-426614174000";
-    let valid_file_enc_doc = serde_json::json!({
-        "protected": {
-            "format": crate::model::wire::format::FILE_ENC_V1,
-            "sid": sid,
-            "payload": {
-                "protected": {
-                    "format": crate::model::wire::format::FILE_PAYLOAD_V1,
-                    "sid": sid,
-                    "alg": {
-                        "aead": crate::model::wire::algorithm::AEAD_XCHACHA20_POLY1305
-                    }
-                },
-                "encrypted": {
-                    "nonce": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-                    "ct": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-                }
-            },
-            "wrap": [{
-                "rh": "ebisawa",
-                "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-                "alg": algorithm::HPKE_X25519_HKDF_SHA256_CHACHA20_POLY1305,
-                "enc": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-                "ct": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-            }],
-            "created_at": "2026-01-14T00:00:00Z",
-            "updated_at": "2026-01-14T00:00:00Z"
-        },
-        "signature": {
-            "alg": crate::model::wire::algorithm::SIGNATURE_ED25519,
-            "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-            "signer_pub": serde_json::to_value(build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD")).unwrap(),
-            "mac": "hmac-sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-            "sig": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ"
-        }
-    });
+    let valid_file_enc_doc = build_valid_file_enc_doc("ebisawa");
 
     let result = validator.validate_file_enc_document(&valid_file_enc_doc);
     assert!(

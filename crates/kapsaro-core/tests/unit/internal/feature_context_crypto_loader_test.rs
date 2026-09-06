@@ -93,7 +93,6 @@ fn test_load_crypto_context_refuses_a_key_stored_under_another_kid() {
         Some(directory_kid.as_str()),
         Box::new(backend),
         ssh_public_key,
-        None,
     );
 
     let Err(error) = result else {

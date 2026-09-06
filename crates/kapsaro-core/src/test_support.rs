@@ -32,7 +32,6 @@ pub mod operations {
                 explicit_kid: Option<&str>,
                 ssh_backend: Box<dyn SignatureBackend>,
                 ssh_pubkey: String,
-                workspace_path: Option<PathBuf>,
             ) -> Result<CryptoContext> {
                 crate::feature::context::crypto::load_crypto_context_from_keystore(
                     KeystoreAccess::open(keystore_root)?,
@@ -40,7 +39,6 @@ pub mod operations {
                     explicit_kid,
                     ssh_backend,
                     ssh_pubkey,
-                    workspace_path,
                 )
             }
         }

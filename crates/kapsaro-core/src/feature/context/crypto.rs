@@ -4,7 +4,6 @@
 //! Crypto context data.
 
 use ed25519_dalek::SigningKey;
-use std::path::{Path, PathBuf};
 use subtle::ConstantTimeEq;
 
 use crate::feature::context::expiry::LocalKeyPairExpiry;
@@ -41,10 +40,6 @@ pub struct CryptoContext {
     member_handle: MemberHandle,
     kid: Kid,
     pub(crate) pub_key_source: Box<dyn PublicKeySource>,
-    // Never read by crate code: it is surfaced only through `workspace_path()`,
-    // which the `cli-test-support` test harness uses to locate the workspace.
-    #[cfg_attr(not(feature = "cli-test-support"), allow(dead_code))]
-    workspace_path: Option<PathBuf>,
     private_key: VerifiedPrivateKey,
     signing_key: SigningKey,
     local_key_identity: LocalKeyIdentity,
@@ -181,7 +176,6 @@ impl CryptoContext {
         member_handle: MemberHandle,
         kid: Kid,
         pub_key_source: Box<dyn PublicKeySource>,
-        workspace_path: Option<PathBuf>,
         private_key: VerifiedPrivateKey,
         signing_key: SigningKey,
         local_key_expiry: LocalKeyPairExpiry,
@@ -195,7 +189,6 @@ impl CryptoContext {
             member_handle,
             kid,
             pub_key_source,
-            workspace_path,
             private_key,
             signing_key,
             local_key_identity,
@@ -230,11 +223,6 @@ impl CryptoContext {
 
     pub fn signing_key(&self) -> &SigningKey {
         &self.signing_key
-    }
-
-    #[cfg_attr(not(feature = "cli-test-support"), allow(dead_code))]
-    pub fn workspace_path(&self) -> Option<&Path> {
-        self.workspace_path.as_deref()
     }
 
     pub fn expires_at(&self) -> &str {

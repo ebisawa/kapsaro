@@ -38,6 +38,18 @@ fn test_set_with_name_option_creates_named_file() {
         !default_file.exists(),
         "default.kvenc should not be created when -n staging is used"
     );
+
+    cmd()
+        .arg("list")
+        .arg("-n")
+        .arg("staging")
+        .arg("--workspace")
+        .arg(workspace_dir.path())
+        .env("KAPSARO_HOME", home_dir.path())
+        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("STAGING_KEY"));
 }
 
 // ============================================================================
@@ -73,40 +85,6 @@ fn test_set_get_with_name_option_roundtrip() {
         .assert()
         .success()
         .stdout(predicate::str::contains("my_secret_value"));
-}
-
-// ============================================================================
-// list -n tests
-// ============================================================================
-
-/// Test: `list -n myfile` shows keys from custom file
-#[test]
-fn test_list_with_name_option() {
-    let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
-
-    // Set in custom file
-    set_value_with_member_set_review(
-        workspace_dir.path(),
-        home_dir.path(),
-        &ssh_priv,
-        "PROD_KEY",
-        "prod_value",
-        None,
-        Some("prod"),
-    );
-
-    // List from custom file
-    cmd()
-        .arg("list")
-        .arg("-n")
-        .arg("prod")
-        .arg("--workspace")
-        .arg(workspace_dir.path())
-        .env("KAPSARO_HOME", home_dir.path())
-        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("PROD_KEY"));
 }
 
 // ============================================================================

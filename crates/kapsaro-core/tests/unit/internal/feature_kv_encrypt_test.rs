@@ -60,20 +60,6 @@ fn build_test_kv_enc_content(
     .unwrap()
 }
 
-fn list_kv_keys(content: &KvEncContent) -> kapsaro_core::Result<Vec<String>> {
-    let mut keys = content
-        .parse()?
-        .lines()
-        .iter()
-        .filter_map(|line| match line {
-            crate::model::kv_enc::line::KvEncLine::KV { key, .. } => Some(key.clone()),
-            _ => None,
-        })
-        .collect::<Vec<_>>();
-    keys.sort();
-    Ok(keys)
-}
-
 fn decrypt_kv_value(
     content: &KvEncContent,
     member_handle: &str,
@@ -120,46 +106,40 @@ fn set_kv_entry(
 fn unset_kv_entry(
     content: &KvEncContent,
     key: &str,
+    workspace_root: &std::path::Path,
     ctx: &KvWriteContext<'_>,
 ) -> kapsaro_core::Result<String> {
-    let workspace_root = ctx.key_ctx.workspace_path().ok_or_else(|| {
-        kapsaro_core::Error::build_config_error("Workspace is required for kv mutation".to_string())
-    })?;
     let recipients = build_recipient_snapshot(workspace_root)?;
     unset_kv_entry_with_recipients(content, key, &recipients, ctx)
 }
 
 #[test]
-fn test_list_kv_keys() {
-    let mut kv_map = std::collections::HashMap::new();
-    kv_map.insert(
-        "DATABASE_URL".to_string(),
-        "postgres://localhost".to_string(),
-    );
-    kv_map.insert("API_KEY".to_string(), "secret123".to_string());
-
-    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
-    let encrypted = build_test_kv_enc_content(&temp_dir, &kv_map);
-
-    // List keys
-    let keys = list_kv_keys(&KvEncContent::new_unchecked(encrypted)).unwrap();
-
-    assert_eq!(keys.len(), 2);
-    assert!(keys.contains(&"DATABASE_URL".to_string()));
-    assert!(keys.contains(&"API_KEY".to_string()));
-}
-
-#[test]
-fn test_list_kv_keys_empty() {
-    let kv_map: std::collections::HashMap<String, String> = std::collections::HashMap::new();
-
-    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
-    let encrypted = build_test_kv_enc_content(&temp_dir, &kv_map);
-
-    // List keys
-    let keys = list_kv_keys(&KvEncContent::new_unchecked(encrypted)).unwrap();
-
-    assert_eq!(keys.len(), 0);
+fn test_list_kv_keys_uses_production_query() {
+    for entries in [
+        vec![],
+        vec![
+            ("DATABASE_URL", "postgres://localhost"),
+            ("API_KEY", "secret123"),
+        ],
+    ] {
+        let values = entries
+            .iter()
+            .map(|(key, value)| (key.to_string(), value.to_string()))
+            .collect();
+        let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
+        let encrypted = build_test_kv_enc_content(&home, &values);
+        let content = KvEncContent::new_unchecked(encrypted);
+        let keys = crate::feature::kv::query::list_kv_keys_with_disclosed(&content).unwrap();
+        let mut expected = entries.iter().map(|(key, _)| *key).collect::<Vec<_>>();
+        expected.sort();
+        assert_eq!(
+            keys.iter()
+                .map(|entry| entry.key.as_str())
+                .collect::<Vec<_>>(),
+            expected
+        );
+        assert!(keys.iter().all(|entry| !entry.disclosed));
+    }
 }
 
 #[test]
@@ -299,7 +279,13 @@ fn test_unset_kv_entry() {
 
     // Unset key
     let existing_content = KvEncContent::new_unchecked(existing_content);
-    let result = unset_kv_entry(&existing_content, "API_KEY", &ctx).unwrap();
+    let result = unset_kv_entry(
+        &existing_content,
+        "API_KEY",
+        &temp_dir.path().join("workspace"),
+        &ctx,
+    )
+    .unwrap();
 
     // Verify result doesn't contain removed key
     assert!(!result.contains("API_KEY"));
@@ -328,7 +314,12 @@ fn test_unset_kv_entry_not_found() {
 
     // Unset non-existent key
     let existing_content = KvEncContent::new_unchecked(existing_content);
-    let result = unset_kv_entry(&existing_content, "NONEXISTENT", &ctx);
+    let result = unset_kv_entry(
+        &existing_content,
+        "NONEXISTENT",
+        &temp_dir.path().join("workspace"),
+        &ctx,
+    );
 
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("not found"));

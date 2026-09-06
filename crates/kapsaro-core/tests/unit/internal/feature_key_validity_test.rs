@@ -33,7 +33,13 @@ fn test_parse_expiration_accepts_a_duration_in_days() {
 
 #[test]
 fn test_parse_expiration_reads_months_as_thirty_days() {
-    assert_eq!(resolve_expiry("2m").unwrap(), expiry_after_days(60));
+    for (duration, days) in [("2m", 60), ("6m", 180)] {
+        assert_eq!(
+            resolve_expiry(duration).unwrap(),
+            expiry_after_days(days),
+            "{duration}"
+        );
+    }
 }
 
 #[test]

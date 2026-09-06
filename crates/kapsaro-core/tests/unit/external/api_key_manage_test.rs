@@ -148,25 +148,6 @@ fn test_export_key_command_active_key() {
     assert!(out.exists());
 }
 
-/// An export reads the keystore and writes the file the caller named, so a
-/// workspace it never touches is not something it has to resolve first.
-#[test]
-fn test_export_key_command_writes_without_resolving_a_workspace() {
-    let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
-    let out = temp_dir.path().join("exported-public.json");
-
-    let result = export_key_command(
-        temp_dir.path(),
-        Some(ALICE_MEMBER_HANDLE.to_string()),
-        None,
-        &out,
-    )
-    .unwrap();
-
-    assert_eq!(result.member_handle, ALICE_MEMBER_HANDLE);
-    assert!(out.exists());
-}
-
 #[test]
 fn test_export_key_command_explicit_display_kid() {
     let temp_dir = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);

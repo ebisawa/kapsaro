@@ -11,7 +11,7 @@ use super::{
 };
 use crate::service::trust::approval::ApprovedKnownKey;
 use crate::service::trust::{RecipientTrustOutcome, SignerTrustOutcome, TrustApprovalCandidate};
-use crate::service_test_utils::build_test_execution_context;
+use crate::service_test_utils::build_test_trust_command_session;
 use crate::test_utils::setup_test_keystore_from_fixtures;
 
 fn build_candidate(member_handle: &str, kid: &str) -> TrustApprovalCandidate {
@@ -61,7 +61,7 @@ fn assert_manual_review_approval(approval: &ApprovedKnownKey, member_handle: &st
 #[test]
 fn test_execute_read_with_signer_trust_dedupes_signer_and_recipient_key_review() {
     let home = setup_test_keystore_from_fixtures("alice@example.com");
-    let execution_context = build_test_execution_context(&home, "alice@example.com", None);
+    let execution_context = build_test_trust_command_session(&home, "alice@example.com");
     let candidate = build_candidate("bob@example.com", "B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0");
     let signer_outcome = SignerTrustOutcome::NeedsKnownKeyApproval(candidate.clone());
     let recipient_outcome = RecipientTrustOutcome::NeedsManualApproval(vec![candidate.clone()]);
@@ -102,7 +102,7 @@ fn test_execute_read_with_signer_trust_dedupes_signer_and_recipient_key_review()
 #[test]
 fn test_review_write_recipient_trust_reuses_signer_key_approval_for_recipient() {
     let home = setup_test_keystore_from_fixtures("alice@example.com");
-    let execution_context = build_test_execution_context(&home, "alice@example.com", None);
+    let execution_context = build_test_trust_command_session(&home, "alice@example.com");
     let candidate = build_candidate("bob@example.com", "B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0");
     let signer_outcome = SignerTrustOutcome::NeedsKnownKeyApproval(candidate.clone());
     let recipient_outcome = RecipientTrustOutcome::NeedsManualApproval(vec![candidate.clone()]);
@@ -145,7 +145,7 @@ fn test_review_write_recipient_trust_reuses_signer_key_approval_for_recipient() 
 #[test]
 fn test_execute_read_with_signer_trust_reviews_recipients_after_non_member_acceptance() {
     let home = setup_test_keystore_from_fixtures("alice@example.com");
-    let execution_context = build_test_execution_context(&home, "alice@example.com", None);
+    let execution_context = build_test_trust_command_session(&home, "alice@example.com");
     let signer = build_candidate("mallory@example.com", "M0M0M0M0M0M0M0M0M0M0M0M0M0M0M0M0");
     let recipient = build_candidate("bob@example.com", "B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0");
     let signer_outcome = SignerTrustOutcome::NeedsNonMemberAcceptance {
@@ -206,7 +206,7 @@ fn test_execute_read_with_signer_trust_reviews_recipients_after_non_member_accep
 #[test]
 fn test_execute_read_with_signer_trust_stops_on_recipient_rejection_after_non_member_acceptance() {
     let home = setup_test_keystore_from_fixtures("alice@example.com");
-    let execution_context = build_test_execution_context(&home, "alice@example.com", None);
+    let execution_context = build_test_trust_command_session(&home, "alice@example.com");
     let signer = build_candidate("mallory@example.com", "M0M0M0M0M0M0M0M0M0M0M0M0M0M0M0M0");
     let recipient = build_candidate("bob@example.com", "B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0");
     let signer_outcome = SignerTrustOutcome::NeedsNonMemberAcceptance {

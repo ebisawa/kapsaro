@@ -55,17 +55,10 @@ fn test_inspect_file_enc_shows_metadata() {
         .stdout(predicate::str::contains("Format:"))
         .stdout(predicate::str::contains("SID:"))
         .stdout(predicate::str::contains("Recipients"))
-        .stdout(predicate::str::contains("Signature"));
-
-    // Even when signature verification information is unavailable/failed,
-    // embedded attestation metadata should still be inspectable.
-    cmd()
-        .arg("inspect")
-        .arg(encrypted_file.to_str().unwrap())
-        .env("KAPSARO_HOME", home_dir.path())
-        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success()
+        .stdout(predicate::str::contains("Signature"))
+        .stdout(predicate::str::contains("Signature Verification"))
+        .stdout(predicate::str::contains("Status:"))
+        .stdout(predicate::str::contains("OK"))
         .stdout(predicate::str::contains("Attestation:"));
 }
 
@@ -137,15 +130,10 @@ fn test_inspect_kv_enc_shows_metadata() {
         .stdout(predicate::str::contains("Header"))
         .stdout(predicate::str::contains("Wrap Data"))
         .stdout(predicate::str::contains("Entries"))
-        .stdout(predicate::str::contains("Signature"));
-
-    cmd()
-        .arg("inspect")
-        .arg(encrypted_kv.to_str().unwrap())
-        .env("KAPSARO_HOME", home_dir.path())
-        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success()
+        .stdout(predicate::str::contains("Signature"))
+        .stdout(predicate::str::contains("Signature Verification"))
+        .stdout(predicate::str::contains("OK"))
+        .stdout(predicate::str::contains("Total Entries: 1"))
         .stdout(predicate::str::contains("Attestation:"));
 }
 
@@ -215,66 +203,6 @@ fn test_inspect_nonexistent_file_fails() {
         .arg(nonexistent.to_str().unwrap())
         .assert()
         .failure();
-}
-
-#[test]
-fn test_inspect_shows_signature_verification() {
-    let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
-
-    // Create and encrypt a file
-    let input_file = home_dir.path().join("secret_for_sig.txt");
-    fs::write(&input_file, b"signature test data").unwrap();
-
-    let encrypted_file = home_dir.path().join("secret_for_sig.txt.encrypted");
-
-    encrypt_file_with_member_set_review(
-        workspace_dir.path(),
-        home_dir.path(),
-        &ssh_priv,
-        &input_file,
-        &encrypted_file,
-        TEST_MEMBER_HANDLE,
-    );
-
-    // Inspect should show signature verification section
-    cmd()
-        .arg("inspect")
-        .arg(encrypted_file.to_str().unwrap())
-        .env("KAPSARO_HOME", home_dir.path())
-        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("Signature Verification"))
-        .stdout(predicate::str::contains("Status:"));
-}
-
-#[test]
-fn test_inspect_kv_shows_entry_count() {
-    let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
-
-    // Set a KV value
-    set_value_with_member_set_review(
-        workspace_dir.path(),
-        home_dir.path(),
-        &ssh_priv,
-        "API_KEY",
-        "secret123",
-        Some(TEST_MEMBER_HANDLE),
-        None,
-    );
-
-    let encrypted_kv = workspace_dir.path().join("secrets").join("default.kvenc");
-    assert!(encrypted_kv.exists(), "Encrypted KV file should exist");
-
-    // Inspect should show total entry count
-    cmd()
-        .arg("inspect")
-        .arg(encrypted_kv.to_str().unwrap())
-        .env("KAPSARO_HOME", home_dir.path())
-        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("Total Entries: 1"));
 }
 
 #[test]

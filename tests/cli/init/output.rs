@@ -6,6 +6,7 @@ use crate::cli::common::{
     assert_stderr_order, cmd, ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, TEST_MEMBER_HANDLE,
 };
 use predicates::prelude::*;
+use std::fs;
 
 #[test]
 fn test_init_new_workspace_new_key_output() {
@@ -58,6 +59,31 @@ fn test_init_new_workspace_new_key_output() {
         ssh_determinism_message,
         &generated_key_message,
     );
+
+    for directory in ["members", "members/active", "members/incoming", "secrets"] {
+        assert!(workspace_dir.path().join(directory).is_dir(), "{directory}");
+    }
+    for directory in ["members/active", "members/incoming", "secrets"] {
+        assert!(workspace_dir
+            .path()
+            .join(directory)
+            .join(".gitkeep")
+            .is_file());
+    }
+    let member_file = workspace_dir
+        .path()
+        .join(format!("members/active/{TEST_MEMBER_HANDLE}.json"));
+    let public_key: kapsaro_core::test_support::domain::public_key::PublicKey =
+        serde_json::from_str(&fs::read_to_string(member_file).unwrap()).unwrap();
+    assert_eq!(public_key.protected.subject_handle, TEST_MEMBER_HANDLE);
+    assert_eq!(
+        public_key.protected.format,
+        kapsaro_core::test_support::domain::wire::format::PUBLIC_KEY_V1
+    );
+    let member_keys = home_dir.path().join("keys").join(TEST_MEMBER_HANDLE);
+    assert!(fs::read_dir(member_keys)
+        .unwrap()
+        .any(|entry| entry.unwrap().path().is_dir()));
 }
 
 #[test]
@@ -92,6 +118,16 @@ fn test_init_existing_workspace_noop_output() {
         .stderr(predicate::str::contains("Use `kapsaro join`"))
         .stderr(predicate::str::contains("Added").not())
         .stderr(predicate::str::contains("Using SSH key:").not());
+
+    assert!(!workspace_dir
+        .path()
+        .join(format!("members/active/{BOB_MEMBER_HANDLE}.json"))
+        .exists());
+    assert!(!home_dir2
+        .path()
+        .join("keys")
+        .join(BOB_MEMBER_HANDLE)
+        .exists());
 }
 
 #[test]

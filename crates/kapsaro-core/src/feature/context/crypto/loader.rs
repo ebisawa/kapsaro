@@ -4,7 +4,6 @@
 //! Keystore-backed crypto context loading.
 
 use ed25519_dalek::SigningKey;
-use std::path::PathBuf;
 use tracing::debug;
 
 use super::{CryptoContext, LocalKeyAccess, LocalKeyIdentity, PrivateKeyLoadResult};
@@ -79,7 +78,6 @@ pub(crate) fn load_crypto_context_from_keystore(
     explicit_kid: Option<&str>,
     ssh_backend: Box<dyn SignatureBackend>,
     ssh_pubkey: String,
-    workspace_path: Option<PathBuf>,
 ) -> Result<CryptoContext> {
     let (kid, loaded) = resolve_and_load_verified_private_key(
         &keystore_access,
@@ -96,7 +94,6 @@ pub(crate) fn load_crypto_context_from_keystore(
         selected_kid_override: explicit_kid.is_some(),
         ssh_backend,
         ssh_pubkey,
-        workspace_path,
     })
 }
 
@@ -107,7 +104,6 @@ pub(crate) fn load_crypto_context_from_keystore_with_selected_kid(
     selected_kid_override: bool,
     ssh_backend: Box<dyn SignatureBackend>,
     ssh_pubkey: String,
-    workspace_path: Option<PathBuf>,
 ) -> Result<CryptoContext> {
     log_resolved_kid(&selected_kid);
     let loaded = load_verified_private_key_from_keystore(
@@ -125,7 +121,6 @@ pub(crate) fn load_crypto_context_from_keystore_with_selected_kid(
         selected_kid_override,
         ssh_backend,
         ssh_pubkey,
-        workspace_path,
     })
 }
 
@@ -137,7 +132,6 @@ struct KeystoreCryptoContextInput {
     selected_kid_override: bool,
     ssh_backend: Box<dyn SignatureBackend>,
     ssh_pubkey: String,
-    workspace_path: Option<PathBuf>,
 }
 
 fn build_keystore_crypto_context(input: KeystoreCryptoContextInput) -> Result<CryptoContext> {
@@ -147,7 +141,6 @@ fn build_keystore_crypto_context(input: KeystoreCryptoContextInput) -> Result<Cr
         input.member_handle,
         input.kid,
         Box::new(KeystorePublicKeySource::new(input.keystore_access.clone())),
-        input.workspace_path,
         input.loaded.private_key,
         signing_key,
         input.loaded.key_expiry,

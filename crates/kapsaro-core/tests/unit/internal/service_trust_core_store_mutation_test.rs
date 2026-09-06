@@ -91,8 +91,7 @@ fn load_key_context_from_key_store(
         member(member_handle),
         Box::new(PublicApiSshBackend::new(ssh_private_key)),
         ssh_public_key,
-    )
-    .with_workspace_path(home_path.join("workspace"));
+    );
 
     key_store
         .load_key_context(options)

@@ -46,6 +46,12 @@ fn test_format_candidate_review_lines_includes_required_fields() {
     assert!(rendered.contains("key id             KAD1-AAAA-1111-BBBB-2222-CCCC-3333-DDDD"));
     assert!(rendered.contains("SSH fingerprint    SHA256:test"));
     assert!(rendered.contains("GitHub account     not verified"));
+    assert!(rendered.contains("online verification was not completed"));
+    assert!(
+        !rendered.contains("(id: 42, verified)"),
+        "Should not show verified mark without online verification. Rendered: {}",
+        rendered
+    );
 }
 
 #[test]
@@ -75,24 +81,6 @@ fn test_format_candidate_review_lines_shows_github_id_without_login() {
 
     assert!(rendered.contains("GitHub account     not verified"));
     assert!(!rendered.contains("verified)"));
-}
-
-#[test]
-fn test_format_candidate_review_lines_warns_when_github_claim_is_unverified() {
-    let candidate = candidate(
-        "bob@example.com",
-        Some("SHA256:test".to_string()),
-        true,
-        false,
-        false,
-        None,
-    );
-
-    let lines = format_candidate_review_lines(&candidate);
-    let rendered = lines.join("\n");
-
-    assert!(rendered.contains("GitHub account     not verified"));
-    assert!(rendered.contains("online verification was not completed"));
 }
 
 #[test]
@@ -132,28 +120,6 @@ fn test_format_candidate_review_lines_shows_verified_github_mark() {
         "Should not show warning text when verified. Rendered: {}",
         rendered
     );
-}
-
-#[test]
-fn test_format_candidate_review_lines_no_verified_mark_without_online_verification() {
-    let candidate = candidate(
-        "bob@example.com",
-        Some("SHA256:test".to_string()),
-        true,
-        false,
-        false,
-        None,
-    );
-
-    let lines = format_candidate_review_lines(&candidate);
-    let rendered = lines.join("\n");
-
-    assert!(
-        !rendered.contains("(id: 42, verified)"),
-        "Should not show verified mark without online verification. Rendered: {}",
-        rendered
-    );
-    assert!(rendered.contains("GitHub account     not verified"));
 }
 
 #[test]

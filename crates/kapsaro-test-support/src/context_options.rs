@@ -60,29 +60,13 @@ impl TestCommandOptions {
 }
 
 pub fn build_test_command_options(home: &Path, workspace: Option<&Path>) -> TestCommandOptions {
-    build_test_command_options_with(home, workspace, None, false, None)
+    TestCommandOptions::new()
+        .with_home(Some(home.to_path_buf()))
+        .with_workspace(workspace.map(Path::to_path_buf))
 }
 
 pub fn build_test_signing_command_options(home: &Path, workspace: &Path) -> TestCommandOptions {
-    build_test_command_options_with(
-        home,
-        Some(workspace),
-        Some(&home.join(".ssh").join("test_ed25519")),
-        false,
-        Some(SshSigningMethod::SshKeygen),
-    )
-}
-
-pub fn build_test_command_options_with(
-    home: &Path,
-    workspace: Option<&Path>,
-    identity: Option<&Path>,
-    _verbose: bool,
-    ssh_signing_method: Option<SshSigningMethod>,
-) -> TestCommandOptions {
-    TestCommandOptions::new()
-        .with_home(Some(home.to_path_buf()))
-        .with_identity(identity.map(Path::to_path_buf))
-        .with_workspace(workspace.map(Path::to_path_buf))
-        .with_ssh_signing_method(ssh_signing_method)
+    build_test_command_options(home, Some(workspace))
+        .with_identity(Some(home.join(".ssh").join("test_ed25519")))
+        .with_ssh_signing_method(Some(SshSigningMethod::SshKeygen))
 }

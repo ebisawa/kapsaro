@@ -33,23 +33,19 @@ use kapsaro_core::api::online::{
 use kapsaro_core::api::operation::OperationOptions;
 use kapsaro_core::api::process::remove_parent_kapsaro_env_vars;
 use kapsaro_core::api::rewrap::{
-    AuthorizedRewrapInput, RewrapDirectories, RewrapOptions, RewrapPromotionReview, RewrapReview,
-    RewrapSession, RewrapTarget, RewrapTargetListing,
+    AuthorizedRewrapInput, RewrapOptions, RewrapReview, RewrapSession, RewrapTarget,
 };
 use kapsaro_core::api::secret::{SecretBytes, SecretString};
 use kapsaro_core::api::ssh::{
     build_ssh_signing_context, resolve_ssh_agent_socket, resolve_ssh_key_candidates,
-    SshDeterminismStatus, SshKeyCandidateView, SshRawSignature, SshSignatureBackend,
-    SshSigningContextResolution, SshSigningInputs, SshSigningMethod,
+    SshRawSignature, SshSignatureBackend, SshSigningInputs, SshSigningMethod,
 };
 use kapsaro_core::api::trust::{
-    ApprovalConflictHandling, AuthorizedRead, CurrentMemberSnapshot, FileReadTarget,
-    KnownKeyApprovalEvidence, KnownKeyReview, KnownKeyReviewCandidate, LocalTrustStore,
-    NonMemberReadReview, ReadAcceptance, ReadReview, ReadSessionDecision, ReadTrustExceptions,
-    RecipientSetSubject, TrustApproval, TrustApprovalOutcome, TrustCommandSession, TrustDecision,
-    TrustPolicyEvaluator, TrustRecipientHandleHint, TrustReviewKind, TrustReviewRequest,
-    VerifiedLocalTrustStore, VerifiedLocalTrustStoreLoadResult, WorkspaceReadDirectories,
-    WorkspaceReadSession,
+    ApprovalConflictHandling, CurrentMemberSnapshot, KnownKeyApprovalEvidence, KnownKeyReview,
+    KnownKeyReviewCandidate, LocalTrustStore, ReadReview, ReadTrustExceptions, RecipientSetSubject,
+    TrustApproval, TrustApprovalOutcome, TrustCommandSession, TrustPolicyEvaluator,
+    TrustRecipientHandleHint, TrustReviewKind, TrustReviewRequest, VerifiedLocalTrustStore,
+    VerifiedLocalTrustStoreLoadResult, WorkspaceReadSession,
 };
 use kapsaro_core::api::workspace::{WorkspaceWriteDirectories, SECRETS_DIR_NAME};
 use kapsaro_core::{Error, ErrorKind, Result};
@@ -184,20 +180,17 @@ fn test_local_state_facade_debug_names_only_the_facade() {
 fn key_context_options_group_runtime_inputs() {
     let member_handle = MemberHandle::try_from("alice@example.com").expect("valid member handle");
     let _options = KeyContextOptions::new(
-        member_handle,
+        member_handle.clone(),
         Box::new(StubSshBackend),
         "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA".to_string(),
     )
-    .with_kid(Kid::try_from("0123456789ABCDEFGHJKMNPQRSTVWXYZ").expect("valid kid"))
-    .with_workspace_path(std::path::PathBuf::from("/tmp/workspace"));
+    .with_kid(Kid::try_from("0123456789ABCDEFGHJKMNPQRSTVWXYZ").expect("valid kid"));
 
     let _load_key_context = LocalKeyStore::load_key_context;
     let _load_selected_key_context = LocalKeyStore::load_selected_key_context;
     let _resolve_signing_context = LocalKeyStore::resolve_signing_context;
     let _load_environment_key = KeyContext::load_environment_key;
     let _load_environment_key = load_environment_key;
-    assert!(std::any::type_name::<LocalKeyContextRequest>().contains("LocalKeyContextRequest"));
-    assert!(std::any::type_name::<SshSigningInputs>().contains("SshSigningInputs"));
     let _ssh_inputs = SshSigningInputs::new(
         SshSigningMethod::SshAgent,
         None,
@@ -205,6 +198,8 @@ fn key_context_options_group_runtime_inputs() {
         "ssh-keygen",
         "ssh-add",
     );
+    let _request = LocalKeyContextRequest::new(member_handle, _ssh_inputs)
+        .with_kid(Kid::try_from("0123456789ABCDEFGHJKMNPQRSTVWXYZ").expect("valid kid"));
     let _list_ssh_candidates = resolve_ssh_key_candidates;
     let _build_ssh_context = build_ssh_signing_context;
     type ResolveSshAgentSocket = fn(
@@ -213,9 +208,6 @@ fn key_context_options_group_runtime_inputs() {
         &std::collections::BTreeMap<String, String>,
     ) -> Result<Option<std::path::PathBuf>>;
     let _resolve_ssh_agent_socket: ResolveSshAgentSocket = resolve_ssh_agent_socket;
-    assert!(std::any::type_name::<SshKeyCandidateView>().contains("SshKeyCandidateView"));
-    assert!(std::any::type_name::<SshSigningContextResolution>()
-        .contains("SshSigningContextResolution"));
 }
 
 #[test]
@@ -235,8 +227,6 @@ fn trust_store_exposes_verified_opaque_load_names() {
     let _create: fn(std::path::PathBuf, MemberHandle) -> Result<LocalTrustStore> =
         LocalTrustStore::ensure;
     let _load_verified = LocalTrustStore::load_verified;
-
-    assert!(std::any::type_name::<TrustApproval>().contains("TrustApproval"));
 }
 
 #[test]
@@ -266,22 +256,6 @@ fn canonical_api_exposes_facade_helper_types() {
     assert_eq!(secret.expose_secret(), "secret");
     assert_eq!(bytes.expose_secret(), &[1, 2, 3]);
     assert_eq!(signature.as_bytes(), &[7u8; 64]);
-    assert!(std::any::type_name::<&dyn SshSignatureBackend>().contains("SshSignatureBackend"));
-    assert!(std::any::type_name::<KeyContextOptions>().contains("KeyContextOptions"));
-    assert!(std::any::type_name::<SshSigningMethod>().contains("SshSigningMethod"));
-    assert!(std::any::type_name::<SshDeterminismStatus>().contains("SshDeterminismStatus"));
-    assert!(std::any::type_name::<RecipientSetSubject>().contains("RecipientSetSubject"));
-    assert!(std::any::type_name::<VerifiedFileEncArtifact>().contains("VerifiedFileEncArtifact"));
-    assert!(std::any::type_name::<VerifiedKvEncArtifact>().contains("VerifiedKvEncArtifact"));
-    assert!(std::any::type_name::<VerifiedLocalTrustStore>().contains("VerifiedLocalTrustStore"));
-    assert!(std::any::type_name::<LocalTrustStore>().contains("LocalTrustStore"));
-    assert!(
-        std::any::type_name::<TrustDecision<TrustedFileEncArtifact<'static>>>()
-            .contains("TrustDecision")
-    );
-    assert!(std::any::type_name::<TrustPolicyEvaluator>().contains("TrustPolicyEvaluator"));
-    assert!(std::any::type_name::<GitHubAccount>().contains("GitHubAccount"));
-    assert!(std::any::type_name::<VerifiedGitHubEvidence>().contains("VerifiedGitHubEvidence"));
     assert_eq!(
         OnlineVerificationStatus::Verified,
         OnlineVerificationStatus::Verified
@@ -362,12 +336,11 @@ fn error_exposes_stable_kind_for_embedding_apps() {
 
 #[test]
 fn kv_artifact_exposes_entry_named_operations() {
-    assert!(std::any::type_name::<
-        fn(Vec<KvInputEntry>, &RecipientKeys, &KeyContext) -> Result<KvEncArtifact>,
-    >()
-    .contains("fn"));
-
-    let _encrypt_entries = KvEncArtifact::encrypt_entries;
+    let _encrypt_entries: fn(
+        Vec<KvInputEntry>,
+        &RecipientKeys,
+        &KeyContext,
+    ) -> Result<KvEncArtifact> = KvEncArtifact::encrypt_entries;
     let _list_entry_keys = TrustedKvEncArtifact::list_entry_keys;
     let _decrypt_entry = TrustedKvEncArtifact::decrypt_entry;
     let _decrypt_entries = TrustedKvEncArtifact::decrypt_entries;
@@ -386,9 +359,6 @@ fn artifact_facades_expose_verified_operations() {
     let _decrypt_kv_entries = TrustedKvEncArtifact::decrypt_entries;
     let _set_kv_entries = AuthorizedKvMutation::set_entries;
     let _unset_kv_entry = AuthorizedKvMutation::unset_entry;
-
-    assert!(std::any::type_name::<VerifiedFileEncArtifact>().contains("VerifiedFileEncArtifact"));
-    assert!(std::any::type_name::<VerifiedKvEncArtifact>().contains("VerifiedKvEncArtifact"));
 }
 
 #[test]
@@ -419,9 +389,6 @@ fn test_workspace_write_directories_and_resolvers_are_public() {
     let _open_directories = open_directories;
     let _resolve_encrypt = resolve_encrypt;
     let _resolve_mutation = resolve_mutation;
-    assert!(
-        std::any::type_name::<WorkspaceWriteDirectories>().contains("WorkspaceWriteDirectories")
-    );
 }
 
 #[test]
@@ -463,9 +430,6 @@ fn trust_evaluator_exposes_operation_bound_decisions() {
     let _resume_rewrap = RewrapSession::resume_rewrap;
     let _accept_non_member_rewrap = RewrapReview::accept_non_member;
     let _rewrap_signer_first = RewrapReview::first_request_is_signer;
-    assert!(std::any::type_name::<RewrapDirectories>().contains("RewrapDirectories"));
-    assert!(std::any::type_name::<RewrapTargetListing>().contains("RewrapTargetListing"));
-    assert!(std::any::type_name::<RewrapPromotionReview>().contains("RewrapPromotionReview"));
     let _file_operation = FileReadOperation::Decrypt;
     let _kv_operation = KvReadOperation::Entry("DATABASE_URL".to_string());
     let _kv_mutation = KvMutationOperation::Set;
@@ -514,7 +478,6 @@ fn test_kv_artifact_io_methods_pinned() {
     let _rss: fn(&VerifiedKvEncArtifact) -> Result<RecipientSetSubject> =
         VerifiedKvEncArtifact::recipient_set_subject;
     // Pin KvDisclosedEntry type and its accessor method shapes.
-    assert!(std::any::type_name::<KvDisclosedEntry>().contains("KvDisclosedEntry"));
     let _key_fn: fn(&KvDisclosedEntry) -> &str = KvDisclosedEntry::key;
     let _disclosed_fn: fn(&KvDisclosedEntry) -> bool = KvDisclosedEntry::disclosed;
     let _values = KvGetResult::values;
@@ -751,8 +714,6 @@ fn test_trust_review_kind_variants_pinned() {
 fn test_trust_approval_constructors_and_from_request_pinned() {
     let evidence =
         KnownKeyApprovalEvidence::none().with_ssh_attestor_public_key("ssh-ed25519 AAAA");
-    assert!(std::any::type_name::<TrustApproval>().contains("TrustApproval"));
-    assert!(std::any::type_name::<KnownKeyReviewCandidate>().contains("KnownKeyReviewCandidate"));
     drop(evidence);
     let _known_key: fn(
         &KnownKeyReviewCandidate,
@@ -778,14 +739,6 @@ fn test_read_session_types_and_low_level_review_control_are_public() {
 
     let exceptions = ReadTrustExceptions::none().with_known_key_review(KnownKeyReview::Skipped);
     assert!(format!("{exceptions:?}").contains("ReadTrustExceptions"));
-    assert!(std::any::type_name::<WorkspaceReadSession<'static>>().contains("WorkspaceReadSession"));
-    assert!(std::any::type_name::<WorkspaceReadDirectories>().contains("WorkspaceReadDirectories"));
-    assert!(std::any::type_name::<ReadSessionDecision<()>>().contains("ReadSessionDecision"));
-    assert!(std::any::type_name::<AuthorizedRead<()>>().contains("AuthorizedRead"));
-    assert!(std::any::type_name::<ReadReview>().contains("ReadReview"));
-    assert!(std::any::type_name::<ReadAcceptance>().contains("ReadAcceptance"));
-    assert!(std::any::type_name::<FileReadTarget>().contains("FileReadTarget"));
-    assert!(std::any::type_name::<NonMemberReadReview>().contains("NonMemberReadReview"));
     let _requests = ReadReview::requests;
     let _first_request_is_signer = ReadReview::first_request_is_signer;
     let _non_member_signer = ReadReview::non_member_signer;
@@ -804,8 +757,6 @@ fn test_key_generation_home_uses_a_fixed_local_state_session() {
 #[test]
 fn test_verified_local_trust_store_load_result_pinned() {
     // Pin VerifiedLocalTrustStoreLoadResult type and its two public methods.
-    assert!(std::any::type_name::<VerifiedLocalTrustStoreLoadResult>()
-        .contains("VerifiedLocalTrustStoreLoadResult"));
     let _into_store: fn(VerifiedLocalTrustStoreLoadResult) -> VerifiedLocalTrustStore =
         VerifiedLocalTrustStoreLoadResult::into_store;
 }

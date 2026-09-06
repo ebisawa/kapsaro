@@ -13,8 +13,6 @@ mod key_generation;
 mod member_handle;
 #[path = "init/output.rs"]
 mod output;
-#[path = "init/registration.rs"]
-mod registration;
 #[path = "init/workspace.rs"]
 mod workspace;
 

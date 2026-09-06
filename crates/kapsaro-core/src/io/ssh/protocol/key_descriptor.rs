@@ -54,19 +54,6 @@ impl SshKeyDescriptor {
     /// - Files with non-UTF-8 extensions are treated as private keys
     /// - File named exactly `.pub` is treated as a public key (edge case)
     /// - Files like `key.pub.backup` are treated as private keys (extension is "backup", not "pub")
-    ///
-    /// # Examples
-    ///
-    /// ```ignore
-    /// use std::path::PathBuf;
-    /// use kapsaro_core::io::ssh::protocol::key_descriptor::SshKeyDescriptor;
-    ///
-    /// let private_key = SshKeyDescriptor::from_path(PathBuf::from("~/.ssh/id_ed25519"));
-    /// assert!(private_key.is_private_key_file());
-    ///
-    /// let public_key = SshKeyDescriptor::from_path(PathBuf::from("~/.ssh/id_ed25519.pub"));
-    /// assert!(public_key.is_public_key_file());
-    /// ```
     pub fn from_path(path: PathBuf) -> Self {
         if path.extension().and_then(|s| s.to_str()) == Some("pub") {
             Self::PublicKey(SshPublicKeyPath::new(path))

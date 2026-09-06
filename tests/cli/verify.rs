@@ -1,80 +1,14 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Integration tests for signature verification via inspect command
-//!
-//! Verifies that the inspect command correctly displays signature verification
-//! results for file-enc and kv-enc formats, and properly detects tampered files.
+//! Tests inspect's signature failure display for tampered file artifacts.
+//! Normal signature status is covered alongside the inspect metadata fields.
 
 use crate::cli::common::{
-    cmd, encrypt_file_with_member_set_review, set_value_with_member_set_review, setup_workspace,
-    TEST_MEMBER_HANDLE,
+    cmd, encrypt_file_with_member_set_review, setup_workspace, TEST_MEMBER_HANDLE,
 };
 use predicates::prelude::*;
 use std::fs;
-
-#[test]
-fn test_verify_file_enc_valid_signature() {
-    let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
-
-    // Create a test file and encrypt it
-    let input_file = home_dir.path().join("verify_test.bin");
-    fs::write(&input_file, b"binary content for verification").unwrap();
-
-    let encrypted_file = home_dir.path().join("verify_test.bin.encrypted");
-
-    encrypt_file_with_member_set_review(
-        workspace_dir.path(),
-        home_dir.path(),
-        &ssh_priv,
-        &input_file,
-        &encrypted_file,
-        TEST_MEMBER_HANDLE,
-    );
-
-    assert!(encrypted_file.exists(), "Encrypted file should exist");
-
-    // Inspect should show valid signature
-    cmd()
-        .arg("inspect")
-        .arg(encrypted_file.to_str().unwrap())
-        .env("KAPSARO_HOME", home_dir.path())
-        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("Signature Verification"))
-        .stdout(predicate::str::contains("OK"));
-}
-
-#[test]
-fn test_verify_kv_enc_valid_signature() {
-    let (workspace_dir, home_dir, _ssh_temp, ssh_priv) = setup_workspace();
-
-    // Set a KV value to create an encrypted KV file
-    set_value_with_member_set_review(
-        workspace_dir.path(),
-        home_dir.path(),
-        &ssh_priv,
-        "VERIFY_KEY",
-        "verify_value",
-        Some(TEST_MEMBER_HANDLE),
-        None,
-    );
-
-    let encrypted_kv = workspace_dir.path().join("secrets").join("default.kvenc");
-    assert!(encrypted_kv.exists(), "Encrypted KV file should exist");
-
-    // Inspect should show valid signature
-    cmd()
-        .arg("inspect")
-        .arg(encrypted_kv.to_str().unwrap())
-        .env("KAPSARO_HOME", home_dir.path())
-        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("Signature Verification"))
-        .stdout(predicate::str::contains("OK"));
-}
 
 #[test]
 fn test_verify_file_enc_tampered_fails() {

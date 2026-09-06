@@ -19,28 +19,45 @@ fn build_workspace_resolution(
 }
 
 #[test]
-fn test_doctor_reports_missing_workspace_structure_as_fail() {
-    let workspace = TempDir::new().unwrap();
-    let home = TempDir::new().unwrap();
-
-    let report = execute_doctor_command(DoctorRequest {
-        workspace: build_workspace_resolution(workspace.path(), DoctorWorkspaceSource::Cli),
-        base_dir: home.path().to_path_buf(),
-        member_handle: Some("alice@example.com".to_string()),
-        ci: DoctorCiReadiness::Inactive,
-    })
-    .unwrap();
-
-    assert!(report
-        .checks()
-        .iter()
-        .any(|check| check.id == "workspace.structure" && check.status == DoctorStatus::Fail));
-    assert!(report.checks().iter().any(|check| {
-        check.id == "workspace.resolve"
-            && check.status == DoctorStatus::Ok
-            && check.message.contains("CLI option")
-    }));
-    assert_eq!(report.exit_code(), 1);
+fn test_doctor_reports_selected_workspace_structure_failure() {
+    for (source, label, partial) in [
+        (DoctorWorkspaceSource::Cli, "CLI option", false),
+        (
+            DoctorWorkspaceSource::Environment,
+            "environment variable",
+            true,
+        ),
+        (DoctorWorkspaceSource::Config, "global configuration", true),
+    ] {
+        let workspace = TempDir::new().unwrap();
+        let home = TempDir::new().unwrap();
+        if partial {
+            std::fs::create_dir_all(workspace.path().join("members/active")).unwrap();
+        }
+        let report = execute_doctor_command(DoctorRequest {
+            workspace: build_workspace_resolution(workspace.path(), source),
+            base_dir: home.path().to_path_buf(),
+            member_handle: Some("alice@example.com".to_string()),
+            ci: DoctorCiReadiness::Inactive,
+        })
+        .unwrap();
+        assert!(
+            report.checks().iter().any(
+                |check| check.id == "workspace.structure" && check.status == DoctorStatus::Fail
+            ),
+            "{label}"
+        );
+        assert!(
+            report
+                .checks()
+                .iter()
+                .any(|check| check.id == "workspace.resolve"
+                    && check.status == DoctorStatus::Ok
+                    && check.message.contains(label)),
+            "{label}"
+        );
+        assert_eq!(report.exit_code(), 1, "{label}");
+    }
 }
 
 #[test]
@@ -63,58 +80,6 @@ fn test_doctor_reports_empty_incoming_as_ok() {
         .checks()
         .iter()
         .any(|check| check.id == "members.incoming.empty" && check.status == DoctorStatus::Ok));
-}
-
-#[test]
-fn test_doctor_reports_environment_selected_workspace_structure_failure() {
-    let workspace = TempDir::new().unwrap();
-    let home = TempDir::new().unwrap();
-    std::fs::create_dir_all(workspace.path().join("members/active")).unwrap();
-
-    let report = execute_doctor_command(DoctorRequest {
-        workspace: build_workspace_resolution(workspace.path(), DoctorWorkspaceSource::Environment),
-        base_dir: home.path().to_path_buf(),
-        member_handle: Some("alice@example.com".to_string()),
-        ci: DoctorCiReadiness::Inactive,
-    })
-    .unwrap();
-
-    assert!(report
-        .checks()
-        .iter()
-        .any(|check| check.id == "workspace.structure" && check.status == DoctorStatus::Fail));
-    assert!(report.checks().iter().any(|check| {
-        check.id == "workspace.resolve"
-            && check.status == DoctorStatus::Ok
-            && check.message.contains("environment variable")
-    }));
-    assert_eq!(report.exit_code(), 1);
-}
-
-#[test]
-fn test_doctor_reports_config_selected_workspace_structure_failure() {
-    let workspace = TempDir::new().unwrap();
-    let home = TempDir::new().unwrap();
-    std::fs::create_dir_all(workspace.path().join("members/active")).unwrap();
-
-    let report = execute_doctor_command(DoctorRequest {
-        workspace: build_workspace_resolution(workspace.path(), DoctorWorkspaceSource::Config),
-        base_dir: home.path().to_path_buf(),
-        member_handle: Some("alice@example.com".to_string()),
-        ci: DoctorCiReadiness::Inactive,
-    })
-    .unwrap();
-
-    assert!(report
-        .checks()
-        .iter()
-        .any(|check| check.id == "workspace.structure" && check.status == DoctorStatus::Fail));
-    assert!(report.checks().iter().any(|check| {
-        check.id == "workspace.resolve"
-            && check.status == DoctorStatus::Ok
-            && check.message.contains("global configuration")
-    }));
-    assert_eq!(report.exit_code(), 1);
 }
 
 #[test]

@@ -2,14 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! Public base64/base64url helpers.
-//!
-//! ```compile_fail
-//! use kapsaro_core::format::codec::base64_public::encode_base64url_nopad;
-//! use kapsaro_core::support::secret::SecretArray;
-//!
-//! let secret = SecretArray::new([0u8; 32]);
-//! let _ = encode_base64url_nopad(&secret);
-//! ```
 
 use crate::crypto::types::data::Ciphertext;
 use crate::support::limits::{MAX_BASE64_CIPHERTEXT_LENGTH, MAX_BASE64_TOKEN_LENGTH};

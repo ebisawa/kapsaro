@@ -10,7 +10,7 @@ use crate::service::trust::approval::{
 };
 use crate::service::trust::TrustApprovalCandidateBuilder;
 use crate::service_test_utils::{
-    build_test_command_options, build_test_execution_context, load_test_trust_store,
+    build_test_command_options, build_test_trust_command_session, load_test_trust_store,
     save_trust_store_signed_by_active_key,
 };
 #[cfg(unix)]
@@ -89,7 +89,7 @@ fn recipient_set_record(recipient_kids: &[&str]) -> RecipientSetRecord {
 fn test_save_known_key_approvals_rejects_self_candidate() {
     let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let options = build_test_command_options(home.path(), None);
-    let execution = build_test_execution_context(&home, ALICE_MEMBER_HANDLE, None);
+    let execution = build_test_trust_command_session(&home, ALICE_MEMBER_HANDLE);
     let candidate = ApprovedKnownKey::for_test(
         ALICE_MEMBER_HANDLE,
         execution.key_ctx().inner().kid(),
@@ -113,7 +113,7 @@ fn test_save_known_key_approvals_rejects_self_candidate() {
 fn test_save_known_key_approvals_uses_execution_context_for_signing() {
     let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let options = build_test_command_options(home.path(), None);
-    let execution = build_test_execution_context(&home, ALICE_MEMBER_HANDLE, None);
+    let execution = build_test_trust_command_session(&home, ALICE_MEMBER_HANDLE);
     let candidate = ApprovedKnownKey::for_test(BOB_MEMBER_HANDLE, BOB_KID, None, None);
 
     save_known_key_approvals(&execution, &[candidate]).unwrap();
@@ -144,7 +144,7 @@ fn test_save_known_key_approvals_keeps_opened_trust_directory() {
         Vec::new(),
     );
     let options = build_test_command_options(home.path(), None);
-    let execution = build_test_execution_context(&home, ALICE_MEMBER_HANDLE, None);
+    let execution = build_test_trust_command_session(&home, ALICE_MEMBER_HANDLE);
     let candidate = ApprovedKnownKey::for_test(BOB_MEMBER_HANDLE, BOB_KID, None, None);
     execution.ensured_trust_directory().unwrap();
     let replacement_snapshot = replace_trust_directory_with_snapshot(home.path());
@@ -168,7 +168,7 @@ fn test_save_known_key_approvals_keeps_opened_trust_directory() {
 #[test]
 fn test_save_known_key_approvals_returns_operation_warnings_to_command_sink() {
     let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
-    let execution = build_test_execution_context(&home, ALICE_MEMBER_HANDLE, None);
+    let execution = build_test_trust_command_session(&home, ALICE_MEMBER_HANDLE);
     let candidate = ApprovedKnownKey::for_test(BOB_MEMBER_HANDLE, BOB_KID, None, None);
     save_known_key_approvals(&execution, std::slice::from_ref(&candidate)).unwrap();
     let trust_dir = home.path().join("trust");
@@ -189,7 +189,7 @@ fn test_save_known_key_approvals_returns_operation_warnings_to_command_sink() {
 fn test_save_known_key_approvals_persists_verified_github_evidence() {
     let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let options = build_test_command_options(home.path(), None);
-    let execution = build_test_execution_context(&home, ALICE_MEMBER_HANDLE, None);
+    let execution = build_test_trust_command_session(&home, ALICE_MEMBER_HANDLE);
     let verified_github =
         VerifiedGithubIdentity::new(42, "octocat".to_string(), "SHA256:fp".to_string(), 100);
     let candidate =
@@ -210,7 +210,7 @@ fn test_save_known_key_approvals_persists_verified_github_evidence() {
 fn test_save_known_key_approvals_records_manual_review_without_a_github_claim() {
     let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let options = build_test_command_options(home.path(), None);
-    let execution = build_test_execution_context(&home, ALICE_MEMBER_HANDLE, None);
+    let execution = build_test_trust_command_session(&home, ALICE_MEMBER_HANDLE);
     let service_candidate = crate::service::trust::KnownKeyReviewCandidate::for_test(
         BOB_MEMBER_HANDLE,
         BOB_KID,
@@ -238,7 +238,7 @@ fn test_save_known_key_approvals_records_manual_review_without_a_github_claim() 
 fn test_save_known_key_approvals_persists_verified_github_from_trust_review_candidate() {
     let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let options = build_test_command_options(home.path(), None);
-    let execution = build_test_execution_context(&home, ALICE_MEMBER_HANDLE, None);
+    let execution = build_test_trust_command_session(&home, ALICE_MEMBER_HANDLE);
     let service_candidate =
         crate::service::trust::KnownKeyReviewCandidate::for_test_with_github_binding(
             BOB_MEMBER_HANDLE,
@@ -275,7 +275,7 @@ fn test_save_known_key_approvals_persists_verified_github_from_trust_review_cand
 fn test_save_recipient_set_approval_stores_the_reviewed_recipient_set() {
     let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
     let options = build_test_command_options(home.path(), None);
-    let execution = build_test_execution_context(&home, ALICE_MEMBER_HANDLE, None);
+    let execution = build_test_trust_command_session(&home, ALICE_MEMBER_HANDLE);
 
     let observed = observe_recipient_set_approval_store(&execution).unwrap();
     save_reviewed_recipient_set_approval(
@@ -310,7 +310,7 @@ fn test_save_recipient_set_approval_keeps_opened_trust_directory() {
         Vec::new(),
     );
     let options = build_test_command_options(home.path(), None);
-    let execution = build_test_execution_context(&home, ALICE_MEMBER_HANDLE, None);
+    let execution = build_test_trust_command_session(&home, ALICE_MEMBER_HANDLE);
     let observed = observe_recipient_set_approval_store(&execution).unwrap();
     let replacement_snapshot = replace_trust_directory_with_snapshot(home.path());
 
@@ -338,7 +338,7 @@ fn test_save_recipient_set_approval_keeps_opened_trust_directory() {
 #[test]
 fn test_save_recipient_set_approval_returns_operation_warnings_to_command_sink() {
     let home = setup_test_keystore_from_fixtures(ALICE_MEMBER_HANDLE);
-    let execution = build_test_execution_context(&home, ALICE_MEMBER_HANDLE, None);
+    let execution = build_test_trust_command_session(&home, ALICE_MEMBER_HANDLE);
     let observed = observe_recipient_set_approval_store(&execution).unwrap();
     save_reviewed_recipient_set_approval(
         &execution,
@@ -382,7 +382,7 @@ fn test_save_recipient_set_approval_refuses_a_store_that_moved_after_it_was_obse
         Vec::new(),
     );
     let options = build_test_command_options(home.path(), None);
-    let execution = build_test_execution_context(&home, ALICE_MEMBER_HANDLE, None);
+    let execution = build_test_trust_command_session(&home, ALICE_MEMBER_HANDLE);
     let committed = recipient_set_record(&[RECIPIENT_A_KID, RECIPIENT_B_KID]);
 
     let observed = observe_recipient_set_approval_store(&execution).unwrap();

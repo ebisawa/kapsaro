@@ -7,7 +7,6 @@ use crate::cli::common::{
     cmd, encrypt_file_with_member_set_review, encrypt_stdin_with_member_set_review,
     setup_workspace, ALICE_MEMBER_HANDLE, TEST_MEMBER_HANDLE,
 };
-use crate::test_utils::with_temp_cwd;
 use kapsaro_core::test_support::domain::wire::format;
 use kapsaro_test_support::fixture::setup_test_workspace;
 use predicates::prelude::*;
@@ -27,26 +26,30 @@ fn test_encrypt_default_output_is_encrypted_in_cwd() {
     let input_path = workspace_dir.join("data.bin");
     fs::write(&input_path, b"some data").unwrap();
 
-    with_temp_cwd(&workspace_dir, || {
-        let output_path = workspace_dir.join("data.bin.encrypted");
-        let ssh_identity = temp_dir.path().join(".ssh").join("test_ed25519");
-        encrypt_file_with_member_set_review(
-            &workspace_dir,
-            temp_dir.path(),
-            &ssh_identity,
-            &input_path,
-            &output_path,
-            ALICE_MEMBER_HANDLE,
+    let mut command = crate::cli::common::kapsaro_std_cmd();
+    command
+        .arg("encrypt")
+        .arg(&input_path)
+        .arg("--workspace")
+        .arg(&workspace_dir)
+        .arg("--member-handle")
+        .arg(ALICE_MEMBER_HANDLE)
+        .current_dir(temp_dir.path())
+        .env("KAPSARO_HOME", temp_dir.path())
+        .env(
+            "KAPSARO_SSH_IDENTITY",
+            temp_dir.path().join(".ssh/test_ed25519"),
         );
+    crate::cli::common::assert_member_set_review_success(&mut command);
 
-        // Default output: <input_filename>.encrypted in current dir (= workspace_dir)
-        let expected = output_path;
-        assert!(expected.exists(), "Should create data.bin.encrypted in cwd");
-
-        let content = fs::read_to_string(&expected).unwrap();
-        let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
-        assert_eq!(parsed["protected"]["format"], format::FILE_ENC_V1);
-    })
+    let expected = temp_dir.path().join("data.bin.encrypted");
+    assert!(
+        expected.is_file(),
+        "Should create data.bin.encrypted in cwd"
+    );
+    let content = fs::read_to_string(expected).unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
+    assert_eq!(parsed["protected"]["format"], format::FILE_ENC_V1);
 }
 
 #[test]

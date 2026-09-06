@@ -10,35 +10,6 @@ use predicates::prelude::*;
 use std::fs;
 use tempfile::TempDir;
 
-// ============================================================================
-// Set and Get
-// ============================================================================
-
-#[test]
-fn test_config_set_and_get() {
-    let home_dir = TempDir::new().unwrap();
-
-    // Set a value
-    cmd()
-        .arg("config")
-        .arg("set")
-        .arg("member_handle")
-        .arg("test@example.com")
-        .env("KAPSARO_HOME", home_dir.path())
-        .assert()
-        .success();
-
-    // Get the value
-    cmd()
-        .arg("config")
-        .arg("get")
-        .arg("member_handle")
-        .env("KAPSARO_HOME", home_dir.path())
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("test@example.com"));
-}
-
 #[test]
 fn test_config_set_and_get_workspace() {
     let home_dir = TempDir::new().unwrap();
@@ -60,34 +31,6 @@ fn test_config_set_and_get_workspace() {
         .assert()
         .success()
         .stdout(predicate::str::contains("~/projects/demo/.kapsaro"));
-}
-
-// ============================================================================
-// Set and List
-// ============================================================================
-
-#[test]
-fn test_config_set_and_list() {
-    let home_dir = TempDir::new().unwrap();
-
-    // Set a value
-    cmd()
-        .arg("config")
-        .arg("set")
-        .arg("member_handle")
-        .arg("test@example.com")
-        .env("KAPSARO_HOME", home_dir.path())
-        .assert()
-        .success();
-
-    // List all configurations
-    cmd()
-        .arg("config")
-        .arg("list")
-        .env("KAPSARO_HOME", home_dir.path())
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("member_handle"));
 }
 
 #[test]
@@ -287,6 +230,14 @@ fn test_config_unset_removes_value() {
         .assert()
         .success()
         .stdout(predicate::str::contains("test@example.com"));
+
+    cmd()
+        .arg("config")
+        .arg("list")
+        .env("KAPSARO_HOME", home_dir.path())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("member_handle"));
 
     // Unset the value
     cmd()

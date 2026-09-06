@@ -116,8 +116,8 @@ pub enum KnownKeyReview {
 /// use kapsaro_core::api::key::{Kid, MemberHandle};
 /// use kapsaro_core::api::trust::ReadTrustExceptions;
 ///
-/// let handle = MemberHandle::new("alice@example.com").unwrap();
-/// let kid = Kid::new("0123456789ABCDEFGHJKMNPQRSTVWXYZ").unwrap();
+/// let handle = MemberHandle::try_from("alice@example.com").unwrap();
+/// let kid = Kid::try_from("0123456789ABCDEFGHJKMNPQRSTVWXYZ").unwrap();
 /// let _forged = ReadTrustExceptions::none().accepting_non_member(handle, kid);
 /// ```
 #[derive(Debug)]

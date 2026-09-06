@@ -386,42 +386,6 @@ fn test_key_export_private_does_not_warn_for_recommended_password() {
         .success()
         .stderr(predicate::str::contains("recommended 20 bytes").not());
 
-    drop(ssh_temp);
-}
-
-#[test]
-fn test_key_export_private_writes_password_protected_key_file() {
-    let temp_dir = setup_secret_home();
-    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
-    let member_handle = TEST_MEMBER_HANDLE;
-
-    cmd()
-        .arg("key")
-        .arg("new")
-        .arg("--member-handle")
-        .arg(member_handle)
-        .arg("-i")
-        .arg(ssh_priv.to_str().unwrap())
-        .env("KAPSARO_HOME", temp_dir.path())
-        .assert()
-        .success();
-
-    let export_file = temp_dir.path().join("portable-private-key.txt");
-
-    cmd()
-        .arg("key")
-        .arg("export")
-        .arg("--private")
-        .arg("--member-handle")
-        .arg(member_handle)
-        .arg("--out")
-        .arg(export_file.to_str().unwrap())
-        .env("KAPSARO_HOME", temp_dir.path())
-        .env("KAPSARO_SSH_IDENTITY", ssh_priv.to_str().unwrap())
-        .write_stdin("strong-password-42-xx\nstrong-password-42-xx\n")
-        .assert()
-        .success();
-
     assert!(export_file.exists(), "export file should be written");
 
     drop(ssh_temp);

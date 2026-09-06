@@ -9,27 +9,9 @@ use crate::cli::common::output::member::view::{
     MemberApprovalItemView, MemberApprovalResultsView, MemberGithubClaimView, MemberListEntryView,
     MemberListView, MemberShowView, MemberVerificationItemView, MemberVerificationResultsView,
 };
-use console::{colors_enabled, set_colors_enabled};
+use crate::test_utils::StdoutColorGuard;
 use serde_json::json;
 use serial_test::serial;
-
-struct StdoutColorGuard {
-    enabled: bool,
-}
-
-impl StdoutColorGuard {
-    fn new(enabled: bool) -> Self {
-        let previous = colors_enabled();
-        set_colors_enabled(enabled);
-        Self { enabled: previous }
-    }
-}
-
-impl Drop for StdoutColorGuard {
-    fn drop(&mut self) {
-        set_colors_enabled(self.enabled);
-    }
-}
 
 #[test]
 fn test_format_member_list_lines_renders_dashed_kids() {
@@ -113,16 +95,6 @@ fn test_format_member_show_lines_renders_header_and_status_section() {
     assert!(rendered.contains("Status\n"));
     assert!(rendered.contains("  Membership  : active"));
     assert!(rendered.contains("  Verification: valid"));
-}
-
-#[test]
-#[serial]
-fn test_format_member_show_lines_renders_key_section_with_kid_in_title() {
-    let _guard = StdoutColorGuard::new(false);
-    let view = build_member_show_view(None);
-
-    let rendered = format_member_show_lines(&view).join("\n");
-
     assert!(
         rendered.contains("Key  KAD1-AAAA-1111-BBBB-2222-CCCC-3333-DDDD"),
         "expected Key title with dashed kid, got:\n{rendered}"
@@ -130,31 +102,11 @@ fn test_format_member_show_lines_renders_key_section_with_kid_in_title() {
     assert!(rendered.contains("  Algorithm   : X25519 + Ed25519"));
     assert!(rendered.contains("  Expires At  : 2027-01-14T00:00:00Z"));
     assert!(rendered.contains("  Created At  : 2026-01-14T00:00:00Z"));
-}
-
-#[test]
-#[serial]
-fn test_format_member_show_lines_renders_ssh_attestation_fingerprint_only() {
-    let _guard = StdoutColorGuard::new(false);
-    let view = build_member_show_view(None);
-
-    let rendered = format_member_show_lines(&view).join("\n");
-
     assert!(rendered.contains("SSH Attestation\n"));
     assert!(rendered.contains("  Fingerprint : SHA256:TESTFINGERPRINT"));
     assert!(!rendered.contains("ssh-ed25519"));
     assert!(!rendered.contains("Public Key"));
     assert!(!rendered.contains("Method"));
-}
-
-#[test]
-#[serial]
-fn test_format_member_show_lines_omits_github_binding_when_absent() {
-    let _guard = StdoutColorGuard::new(false);
-    let view = build_member_show_view(None);
-
-    let rendered = format_member_show_lines(&view).join("\n");
-
     assert!(!rendered.contains("GitHub Binding"));
 }
 

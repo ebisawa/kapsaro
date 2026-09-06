@@ -18,35 +18,10 @@ use predicates::prelude::*;
 use std::fs;
 use tempfile::TempDir;
 
-/// Create a minimal test file-enc v7 file.
+/// Saves a valid file artifact for argument-conflict tests.
 fn save_test_encrypted_file(path: &std::path::Path) {
-    let content = r#"{
-  "protected": {
-    "format": "kapsaro:format:file-enc@1",
-    "sid": "550e8400-e29b-41d4-a716-446655440000",
-    "wrap": [],
-    "payload": {
-      "protected": {
-        "format": "kapsaro:format:file-enc:payload@1",
-        "sid": "550e8400-e29b-41d4-a716-446655440000",
-        "alg": {
-          "aead": "xchacha20-poly1305"
-        }
-      },
-      "encrypted": {
-        "nonce": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-        "ct": "dGVzdA"
-      }
-    },
-    "created_at": "2026-01-19T10:00:00Z",
-    "updated_at": "2026-01-19T10:00:00Z"
-  },
-  "signature": {
-    "alg": "eddsa-ed25519",
-    "kid": "10HW16VD7ADNCXM1WN44J04QKANJ8XHG",
-    "sig": "dGVzdA"
-  }
-}"#;
+    let content =
+        include_str!("../../crates/kapsaro-core/tests/fixtures/golden/v0.99/file_enc.json");
     fs::write(path, content).unwrap();
 }
 

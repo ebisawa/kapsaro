@@ -33,14 +33,6 @@ pub(crate) fn build_test_trust_command_session(
     .unwrap()
 }
 
-pub(crate) fn build_test_execution_context(
-    home: &TempDir,
-    member_handle: &str,
-    _workspace: Option<&Path>,
-) -> TrustCommandSession {
-    build_test_trust_command_session(home, member_handle)
-}
-
 pub(crate) fn build_test_member_approval_session(
     home: &TempDir,
     member_handle: &str,
@@ -80,13 +72,6 @@ pub(crate) fn resolve_test_write_session(
             StrictKeyCheckingResolution::strict(),
         ),
     }
-}
-
-pub(crate) fn resolve_test_write_execution(
-    options: &TestCommandOptions,
-    member_handle: &str,
-) -> TestWriteSession {
-    resolve_test_write_session(options, member_handle)
 }
 
 pub(crate) fn build_test_trust_command_session_from_options(

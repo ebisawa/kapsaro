@@ -34,15 +34,7 @@ fn run_rewrap_with_member_set_review_args(
     member_handle: &str,
     extra_args: &[&str],
 ) {
-    let mut command = crate::cli::common::kapsaro_std_cmd();
-    command
-        .arg("rewrap")
-        .arg("--member-handle")
-        .arg(member_handle);
-    append_common_command_args(&mut command, common_opts);
-    for arg in extra_args {
-        command.arg(arg);
-    }
+    let mut command = build_rewrap_command(common_opts, member_handle, extra_args);
     crate::cli::common::assert_member_set_review_success(&mut command);
 }
 
@@ -73,9 +65,7 @@ fn build_rewrap_command(
     command
 }
 
-/// Create a kv-enc file in the workspace using the set command.
-///
-/// `entries` は `&[("KEY", "VALUE")]` 形式。
+/// Saves a named KV file by setting each supplied entry through the CLI.
 fn save_kv_file(
     workspace_dir: &Path,
     common_opts: CommonOptions,
@@ -83,28 +73,7 @@ fn save_kv_file(
     name: &str,
     entries: &[(&str, &str)],
 ) -> PathBuf {
-    for (index, (key, value)) in entries.iter().enumerate() {
-        if index == 0 {
-            set_value_with_member_set_review(
-                common_opts
-                    .workspace
-                    .as_deref()
-                    .expect("test common options must include workspace"),
-                common_opts
-                    .home
-                    .as_deref()
-                    .expect("test common options must include home"),
-                common_opts
-                    .identity
-                    .as_deref()
-                    .expect("test common options must include identity"),
-                key,
-                value,
-                Some(member_handle),
-                Some(name),
-            );
-            continue;
-        }
+    for (key, value) in entries {
         set_value_with_member_set_review(
             common_opts
                 .workspace

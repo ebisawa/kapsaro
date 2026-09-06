@@ -185,17 +185,6 @@ fn validate_publickey(publickey: &[u8], expected_ssh_pubkey: &str) -> Result<()>
 /// # Errors
 ///
 /// - `Error::Ssh` - Invalid magic, wrong version, namespace mismatch, etc.
-///
-/// # Examples
-///
-/// ```ignore
-/// use kapsaro_core::io::ssh::protocol::sshsig::parse_sshsig_blob;
-/// let blob = /* SSHSIG binary data */;
-/// let expected_ssh_pubkey = "ssh-ed25519 AAAA...";
-/// let sig_blob = parse_sshsig_blob(&blob, "kapsaro-key-protection", expected_ssh_pubkey)?;
-/// let ikm = sig_blob.extract_ed25519_raw()?;
-/// // Use ikm for HKDF key derivation
-/// ```
 pub fn parse_sshsig_blob(
     blob: &[u8],
     expected_namespace: &str,
@@ -259,19 +248,6 @@ pub fn parse_sshsig_blob(
 /// # Errors
 ///
 /// - `Error::Ssh` - No base64 content, invalid base64, or blob parsing failure
-///
-/// # Examples
-///
-/// ```ignore
-/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-/// use kapsaro_core::io::ssh::protocol::sshsig::parse_sshsig_armored;
-/// let armored = std::fs::read_to_string("message.sig")?;
-/// let expected_ssh_pubkey = "ssh-ed25519 AAAA...";
-/// let sig_blob = parse_sshsig_armored(&armored, "kapsaro-key-protection", expected_ssh_pubkey)?;
-/// let ikm = sig_blob.extract_ed25519_raw()?;
-/// # Ok(())
-/// # }
-/// ```
 pub fn parse_sshsig_armored(
     armored: &str,
     expected_namespace: &str,

@@ -22,18 +22,6 @@ pub struct WorkspaceRoot {
     pub root_path: PathBuf,
 }
 
-impl WorkspaceRoot {
-    #[cfg(test)]
-    pub fn members_dir(&self) -> PathBuf {
-        self.root_path.join(MEMBERS_DIR_NAME)
-    }
-
-    #[cfg(test)]
-    pub fn secrets_dir(&self) -> PathBuf {
-        self.root_path.join(SECRETS_DIR_NAME)
-    }
-}
-
 pub(super) fn validate_workspace_path(path: &Path) -> Result<WorkspaceRoot> {
     validate_workspace_structure(path)?.ok_or_else(|| {
         Error::build_not_found_error(format!(

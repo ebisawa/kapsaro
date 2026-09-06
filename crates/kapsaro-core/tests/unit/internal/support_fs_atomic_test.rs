@@ -21,21 +21,29 @@ struct TestData {
 }
 
 #[test]
-fn test_save_json() {
-    let temp_dir = TempDir::new().unwrap();
-    let file_path = temp_dir.path().join("test.json");
+fn test_save_json_roundtrip_with_existing_and_missing_parent() {
+    for relative in ["test.json", "subdir/test.json"] {
+        let home = TempDir::new().unwrap();
+        let path = home.path().join(relative);
+        let data = TestData {
+            name: "test".to_string(),
+            value: 42,
+        };
+        save_json(&path, &data).unwrap();
+        let loaded: TestData = serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(loaded, data, "{relative}");
+        assert!(path.parent().unwrap().is_dir(), "{relative}");
+    }
+}
 
-    let data = TestData {
-        name: "test".to_string(),
-        value: 42,
-    };
-
-    save_json(&file_path, &data).unwrap();
-
-    assert!(file_path.exists());
-    let content = fs::read_to_string(&file_path).unwrap();
-    let loaded: TestData = serde_json::from_str(&content).unwrap();
-    assert_eq!(loaded, data);
+#[test]
+fn test_save_bytes_roundtrip_with_existing_and_missing_parent() {
+    for relative in ["test.bin", "subdir/test.bin"] {
+        let home = TempDir::new().unwrap();
+        let path = home.path().join(relative);
+        save_bytes(&path, b"Binary data").unwrap();
+        assert_eq!(fs::read(&path).unwrap(), b"Binary data", "{relative}");
+    }
 }
 
 #[test]
@@ -48,45 +56,6 @@ fn test_save_text() {
     assert!(file_path.exists());
     let content = fs::read_to_string(&file_path).unwrap();
     assert_eq!(content, "Hello, World!");
-}
-
-#[test]
-fn test_save_bytes() {
-    let temp_dir = TempDir::new().unwrap();
-    let file_path = temp_dir.path().join("test.bin");
-
-    let data = b"Binary data";
-    save_bytes(&file_path, data).unwrap();
-
-    assert!(file_path.exists());
-    let content = fs::read(&file_path).unwrap();
-    assert_eq!(content, data);
-}
-
-#[test]
-fn test_save_bytes_creates_parent_dir() {
-    let temp_dir = TempDir::new().unwrap();
-    let file_path = temp_dir.path().join("subdir").join("test.bin");
-
-    save_bytes(&file_path, b"Binary data").unwrap();
-
-    assert_eq!(fs::read(&file_path).unwrap(), b"Binary data");
-}
-
-#[test]
-fn test_save_json_creates_parent_dir() {
-    let temp_dir = TempDir::new().unwrap();
-    let file_path = temp_dir.path().join("subdir").join("test.json");
-
-    let data = TestData {
-        name: "test".to_string(),
-        value: 42,
-    };
-
-    save_json(&file_path, &data).unwrap();
-
-    assert!(file_path.exists());
-    assert!(file_path.parent().unwrap().exists());
 }
 
 #[cfg(unix)]

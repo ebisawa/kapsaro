@@ -28,7 +28,7 @@ pub(crate) fn load_read_key_context(
         return load_environment_key(workspace_path, member_handle, kid);
     }
     debug!("[CTX] execution mode=local-key");
-    load_local_key(context, workspace_path, member_handle, kid)
+    load_signing_key_context(context, member_handle, kid)
 }
 
 /// Load a filesystem-backed signing key from explicit CLI-resolved inputs.
@@ -71,20 +71,6 @@ fn load_environment_key(
     let password = load_secret_environment(ENV_KEY_PASSWORD, true)?;
     debug!("[ENV_KEY] load private key: password env present");
     KeyContext::load_environment_key(encoded, password, workspace_path.to_path_buf())
-}
-
-fn load_local_key(
-    context: &CliContext,
-    workspace_path: &Path,
-    member_handle: Option<String>,
-    kid: Option<&str>,
-) -> Result<KeyContext> {
-    let member = require_member_handle(context.member_handle(member_handle)?, false)?;
-    let member = MemberHandle::try_from(member)?;
-    let store = context.local_state()?.require_key_store(&member)?;
-    let request =
-        local_key_request(context, member, kid)?.with_workspace_path(workspace_path.to_path_buf());
-    store.load_selected_key_context(request)
 }
 
 fn local_key_request(

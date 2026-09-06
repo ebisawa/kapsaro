@@ -67,3 +67,7 @@ pub(crate) mod tty {
         INTERACTIVE_OVERRIDE.with(|cell| cell.set(value));
     }
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/internal/cli_common_presentation_test.rs"]
+mod cli_common_presentation_test;

@@ -1,31 +1,13 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-use console::{colors_enabled, set_colors_enabled};
+use crate::test_utils::StdoutColorGuard;
 use serial_test::serial;
 
 use super::{
     colorize_inspect_line, format_inspect_banner_lines, format_inspect_output, InspectOutput,
     InspectSection,
 };
-
-struct StdoutColorGuard {
-    enabled: bool,
-}
-
-impl StdoutColorGuard {
-    fn new(enabled: bool) -> Self {
-        let previous = colors_enabled();
-        set_colors_enabled(enabled);
-        Self { enabled: previous }
-    }
-}
-
-impl Drop for StdoutColorGuard {
-    fn drop(&mut self) {
-        set_colors_enabled(self.enabled);
-    }
-}
 
 #[test]
 #[serial]

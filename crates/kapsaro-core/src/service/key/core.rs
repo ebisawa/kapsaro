@@ -67,14 +67,12 @@ pub struct KeyContextOptions {
     kid: Option<Kid>,
     ssh_backend: Box<dyn SshSignatureBackend>,
     ssh_pubkey: String,
-    workspace_path: Option<PathBuf>,
 }
 
 /// Explicit SSH inputs for loading one key from a fixed local keystore.
 pub struct LocalKeyContextRequest {
     member_handle: MemberHandle,
     kid: Option<Kid>,
-    workspace_path: Option<PathBuf>,
     ssh: SshSigningInputs,
 }
 
@@ -145,7 +143,6 @@ impl LocalKeyStore {
             options.kid.as_ref().map(Kid::as_str),
             into_internal_backend(options.ssh_backend),
             options.ssh_pubkey,
-            options.workspace_path,
         )
         .map(KeyContext::from_inner)
     }
@@ -165,7 +162,6 @@ impl LocalKeyStore {
             request.kid.is_some(),
             ssh.backend,
             ssh.public_key,
-            request.workspace_path,
         )?;
         Ok(KeyContext::from_inner(key_ctx))
     }
@@ -225,19 +221,12 @@ impl KeyContextOptions {
             kid: None,
             ssh_backend,
             ssh_pubkey: ssh_pubkey.into(),
-            workspace_path: None,
         }
     }
 
     /// Set an explicit key ID.
     pub fn with_kid(mut self, kid: Kid) -> Self {
         self.kid = Some(kid);
-        self
-    }
-
-    /// Set an optional workspace path used by key protection checks.
-    pub fn with_workspace_path(mut self, workspace_path: impl Into<PathBuf>) -> Self {
-        self.workspace_path = Some(workspace_path.into());
         self
     }
 }
@@ -248,15 +237,8 @@ impl LocalKeyContextRequest {
         Self {
             member_handle,
             kid: None,
-            workspace_path: None,
             ssh,
         }
-    }
-
-    /// Bind workspace-backed public-key resolution to one explicit path.
-    pub fn with_workspace_path(mut self, workspace_path: impl Into<PathBuf>) -> Self {
-        self.workspace_path = Some(workspace_path.into());
-        self
     }
 
     /// Select a specific local key ID.
@@ -337,8 +319,7 @@ fn build_environment_crypto_context(
     let context = CryptoContext::new(
         result.member_handle,
         kid,
-        Box::new(WorkspacePublicKeySource::new(workspace_path.clone())),
-        Some(workspace_path),
+        Box::new(WorkspacePublicKeySource::new(workspace_path)),
         result.verified_key,
         signing_key,
         LocalKeyPairExpiry::from_private_key(result.expires_at),

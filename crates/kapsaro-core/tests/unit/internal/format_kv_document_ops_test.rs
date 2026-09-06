@@ -21,7 +21,7 @@ use crate::model::kv_enc::verified::VerifiedKvEncDocument;
 use crate::model::public_key::PublicKey;
 use crate::model::verification::{SignatureVerificationProof, VerifyingKeySource};
 use crate::test_utils::keygen_helpers::{build_test_private_key, build_verified_recipient_keys};
-use crate::test_utils::{generate_temp_ssh_keypair_in_dir, keygen_test};
+use crate::test_utils::{generate_temp_ssh_keypair_in_dir, keygen_test, load_fixture_public_key};
 use crate::test_utils::{ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE, TEST_MEMBER_HANDLE};
 use ed25519_dalek::SigningKey;
 
@@ -85,9 +85,7 @@ fn decrypt_kv_document_for_test(
 
 fn encrypt_kv_document_for_parse_test(input: &str) -> String {
     let signing_key = generate_ed25519_keypair([2u8; 32]);
-    let ssh_temp = tempfile::TempDir::new().unwrap();
-    let (ssh_priv, _ssh_pub_path, ssh_pub_content) = generate_temp_ssh_keypair_in_dir(&ssh_temp);
-    let (_private, public) = keygen_test(ALICE_MEMBER_HANDLE, &ssh_priv, &ssh_pub_content).unwrap();
+    let public = load_fixture_public_key(ALICE_MEMBER_HANDLE);
     let members = vec![public.clone()];
     let verified_members = build_verified_recipient_keys(&members);
     let kv_map = parse_dotenv(input).unwrap();
@@ -475,9 +473,7 @@ fn test_wrap_line_with_many_recipients() {
     assert_eq!(decrypted_map.get("KEY").map(String::as_str), Some("value"));
 }
 
-// ============================================================
-// set_kv_entry: reuse tests (sid, created_at and WRAP tokens stay unchanged)
-// ============================================================
+// Mutation tests preserve identity, creation time, and retained entry tokens.
 
 fn signing_key_from_private(
     private_key: &crate::model::private_key::PrivateKeyPlaintext,
@@ -497,7 +493,6 @@ fn setup_crypto_ctx_for_test(
     ssh_pub_content: &str,
 ) -> crate::feature::context::crypto::CryptoContext {
     crate::test_utils::ensure_local_state_dir(keystore_root);
-    let workspace_path = Some(keystore_root.parent().unwrap().join("workspace"));
     let encrypted_private =
         build_test_private_key(private_key, member_handle, kid, ssh_priv, ssh_pub_content).unwrap();
     let member_dir = keystore_root.join(member_handle);
@@ -516,7 +511,6 @@ fn setup_crypto_ctx_for_test(
         Some(kid),
         Box::new(backend),
         ssh_pub_content.to_string(),
-        workspace_path,
     )
     .unwrap()
 }
@@ -609,11 +603,9 @@ fn set_kv_entry(
 fn unset_kv_entry(
     content: &KvEncContent,
     key: &str,
+    workspace_root: &std::path::Path,
     ctx: &KvWriteContext<'_>,
 ) -> kapsaro_core::Result<String> {
-    let workspace_root = ctx.key_ctx.workspace_path().ok_or_else(|| {
-        kapsaro_core::Error::build_config_error("Workspace is required for kv mutation".to_string())
-    })?;
     let recipients = build_recipient_snapshot(workspace_root)?;
     unset_kv_entry_with_recipients(content, key, &recipients, ctx)
 }
@@ -631,153 +623,67 @@ fn build_recipient_snapshot(
     })
 }
 
-#[test]
-fn test_set_existing_file_preserves_sid() {
-    let member_handle = "alice@example.com";
-    let ssh_temp = tempfile::TempDir::new().unwrap();
-    let (ssh_priv, _ssh_pub_path, ssh_pub_content) = generate_temp_ssh_keypair_in_dir(&ssh_temp);
-    let (private, public) = keygen_test(member_handle, &ssh_priv, &ssh_pub_content).unwrap();
-    let kid = public.protected.kid.clone();
-
-    let temp = ensure_secret_home();
-    let keystore_root = temp.path().join("keys");
-
-    let initial = encrypt_initial_kv_doc(
-        member_handle,
-        &kid,
-        &keystore_root,
-        &private,
-        &public,
-        &[("KEY1", "value1")],
-    );
-    let sid_before = kv_head_field(&initial, "sid");
-    let created_at_before = kv_head_field(&initial, "created_at");
-
-    let key_ctx = setup_crypto_ctx_for_test(
-        member_handle,
-        &kid,
-        &keystore_root,
-        &private,
-        &public,
-        &ssh_priv,
-        &ssh_pub_content,
-    );
-    let ctx = KvWriteContext::new(member_handle, &key_ctx);
-    let entries = vec![("KEY2".to_string(), "value2".to_string())];
-    let initial_content = KvEncContent::new_unchecked(initial);
-    let workspace_dir = temp.path().join("workspace");
-    let result = set_kv_entry(Some(&initial_content), &entries, &workspace_dir, &ctx).unwrap();
-
-    assert_eq!(
-        sid_before,
-        kv_head_field(result.as_str(), "sid"),
-        "sid must be preserved"
-    );
-    assert_eq!(
-        created_at_before,
-        kv_head_field(result.as_str(), "created_at"),
-        "created_at must be preserved"
-    );
-}
-
-#[test]
-fn test_set_existing_file_uses_current_recipients_in_wrap() {
-    let member_handle = "alice@example.com";
-    let ssh_temp = tempfile::TempDir::new().unwrap();
-    let (ssh_priv, _ssh_pub_path, ssh_pub_content) = generate_temp_ssh_keypair_in_dir(&ssh_temp);
-    let (private, public) = keygen_test(member_handle, &ssh_priv, &ssh_pub_content).unwrap();
-    let kid = public.protected.kid.clone();
-
-    let temp = ensure_secret_home();
-    let keystore_root = temp.path().join("keys");
-
-    let initial = encrypt_initial_kv_doc(
-        member_handle,
-        &kid,
-        &keystore_root,
-        &private,
-        &public,
-        &[("KEY1", "value1")],
-    );
-    let key_ctx = setup_crypto_ctx_for_test(
-        member_handle,
-        &kid,
-        &keystore_root,
-        &private,
-        &public,
-        &ssh_priv,
-        &ssh_pub_content,
-    );
-    let ctx = KvWriteContext::new(member_handle, &key_ctx);
-    let entries = vec![("KEY2".to_string(), "value2".to_string())];
-    let initial_content = KvEncContent::new_unchecked(initial);
-    let workspace_dir = temp.path().join("workspace");
-    let result = set_kv_entry(Some(&initial_content), &entries, &workspace_dir, &ctx).unwrap();
-
-    let wrap = parse_kv_document(result.as_str()).unwrap().wrap;
-    let recipients = wrap
+fn assert_preserved_document_state(before: &str, after: &str, retained: &[&str]) {
+    for field in ["sid", "created_at"] {
+        assert_eq!(
+            kv_head_field(before, field),
+            kv_head_field(after, field),
+            "{field}"
+        );
+    }
+    let document = parse_kv_document(after).unwrap();
+    let recipients = document
+        .wrap
         .wrap
         .iter()
         .map(|item| item.recipient_handle.as_str())
         .collect::<Vec<_>>();
-    assert_eq!(recipients, vec![member_handle]);
+    assert_eq!(recipients, vec![ALICE_MEMBER_HANDLE]);
+    for key in retained {
+        assert_eq!(
+            kv_entry_token(before, key).unwrap(),
+            kv_entry_token(after, key).unwrap(),
+            "{key}"
+        );
+    }
 }
 
 #[test]
-fn test_set_existing_file_preserves_other_entry_tokens() {
-    let member_handle = "alice@example.com";
-    let ssh_temp = tempfile::TempDir::new().unwrap();
-    let (ssh_priv, _ssh_pub_path, ssh_pub_content) = generate_temp_ssh_keypair_in_dir(&ssh_temp);
-    let (private, public) = keygen_test(member_handle, &ssh_priv, &ssh_pub_content).unwrap();
-    let kid = public.protected.kid.clone();
-
-    let temp = ensure_secret_home();
-    let keystore_root = temp.path().join("keys");
-
-    let initial = encrypt_initial_kv_doc(
-        member_handle,
-        &kid,
-        &keystore_root,
-        &private,
-        &public,
-        &[("KEY1", "value1"), ("KEY2", "value2")],
-    );
-    let key1_token_before = kv_entry_token(&initial, "KEY1").unwrap();
-    let key2_token_before = kv_entry_token(&initial, "KEY2").unwrap();
-
-    let key_ctx = setup_crypto_ctx_for_test(
-        member_handle,
-        &kid,
-        &keystore_root,
-        &private,
-        &public,
-        &ssh_priv,
-        &ssh_pub_content,
-    );
-    let ctx = KvWriteContext::new(member_handle, &key_ctx);
-    let entries = vec![("KEY3".to_string(), "value3".to_string())];
-    let initial_content = KvEncContent::new_unchecked(initial);
-    let workspace_dir = temp.path().join("workspace");
-    let result = set_kv_entry(Some(&initial_content), &entries, &workspace_dir, &ctx).unwrap();
-
-    assert_eq!(
-        key1_token_before,
-        kv_entry_token(result.as_str(), "KEY1").unwrap(),
-        "KEY1 token must be unchanged"
-    );
-    assert_eq!(
-        key2_token_before,
-        kv_entry_token(result.as_str(), "KEY2").unwrap(),
-        "KEY2 token must be unchanged"
-    );
+fn test_set_preserves_document_state() {
+    for entries in [
+        &[("KEY1", "value1")][..],
+        &[("KEY1", "value1"), ("KEY2", "value2")][..],
+    ] {
+        let (initial, key_ctx, temp, _ssh_temp) = setup_mutation_test_ctx(entries);
+        let retained = entries.iter().map(|(key, _)| *key).collect::<Vec<_>>();
+        let new_key = format!("KEY{}", entries.len() + 1);
+        let ctx = KvWriteContext::new(ALICE_MEMBER_HANDLE, &key_ctx);
+        let content = KvEncContent::new_unchecked(initial.clone());
+        let result = set_kv_entry(
+            Some(&content),
+            &[(new_key.clone(), format!("value{}", entries.len() + 1))],
+            &temp.path().join("workspace"),
+            &ctx,
+        )
+        .unwrap();
+        assert_preserved_document_state(&initial, result.as_str(), &retained);
+        assert!(kv_entry_token(result.as_str(), &new_key).is_some());
+    }
 }
 
-// ============================================================
-// unset_kv_entry: reuse tests
-// ============================================================
+#[test]
+fn test_unset_preserves_document_state() {
+    let (initial, key_ctx, temp, _ssh_temp) =
+        setup_mutation_test_ctx(&[("KEY1", "value1"), ("KEY2", "value2")]);
+    let ctx = KvWriteContext::new(ALICE_MEMBER_HANDLE, &key_ctx);
+    let content = KvEncContent::new_unchecked(initial.clone());
+    let result = unset_kv_entry(&content, "KEY1", &temp.path().join("workspace"), &ctx).unwrap();
+    assert_preserved_document_state(&initial, &result, &["KEY2"]);
+    assert!(kv_entry_token(&result, "KEY1").is_none());
+}
 
-/// Shared setup for the unset tests.
-fn setup_unset_test_ctx(
+/// Independent document and key material for each mutation case.
+fn setup_mutation_test_ctx(
     entries: &[(&str, &str)],
 ) -> (
     String,                                         // initial content
@@ -812,66 +718,4 @@ fn setup_unset_test_ctx(
         &ssh_pub_content,
     );
     (initial, key_ctx, temp, ssh_temp)
-}
-
-#[test]
-fn test_unset_preserves_sid_and_created_at() {
-    let (initial, key_ctx, _temp, _ssh_temp) =
-        setup_unset_test_ctx(&[("KEY1", "value1"), ("KEY2", "value2")]);
-    let sid_before = kv_head_field(&initial, "sid");
-    let created_at_before = kv_head_field(&initial, "created_at");
-    let ctx = KvWriteContext::new("alice@example.com", &key_ctx);
-
-    let initial = KvEncContent::new_unchecked(initial);
-    let result = unset_kv_entry(&initial, "KEY1", &ctx).unwrap();
-
-    assert_eq!(
-        sid_before,
-        kv_head_field(&result, "sid"),
-        "sid must be preserved"
-    );
-    assert_eq!(
-        created_at_before,
-        kv_head_field(&result, "created_at"),
-        "created_at must be preserved"
-    );
-}
-
-#[test]
-fn test_unset_uses_current_recipients_in_wrap() {
-    let (initial, key_ctx, _temp, _ssh_temp) =
-        setup_unset_test_ctx(&[("KEY1", "value1"), ("KEY2", "value2")]);
-    let ctx = KvWriteContext::new("alice@example.com", &key_ctx);
-
-    let initial = KvEncContent::new_unchecked(initial);
-    let result = unset_kv_entry(&initial, "KEY1", &ctx).unwrap();
-
-    let wrap = parse_kv_document(&result).unwrap().wrap;
-    let recipients = wrap
-        .wrap
-        .iter()
-        .map(|item| item.recipient_handle.as_str())
-        .collect::<Vec<_>>();
-    assert_eq!(recipients, vec!["alice@example.com"]);
-}
-
-#[test]
-fn test_unset_preserves_other_entry_tokens() {
-    let (initial, key_ctx, _temp, _ssh_temp) =
-        setup_unset_test_ctx(&[("KEY1", "value1"), ("KEY2", "value2")]);
-    let key2_token_before = kv_entry_token(&initial, "KEY2").unwrap();
-    let ctx = KvWriteContext::new("alice@example.com", &key_ctx);
-
-    let initial = KvEncContent::new_unchecked(initial);
-    let result = unset_kv_entry(&initial, "KEY1", &ctx).unwrap();
-
-    assert!(
-        kv_entry_token(&result, "KEY1").is_none(),
-        "KEY1 should be removed"
-    );
-    assert_eq!(
-        key2_token_before,
-        kv_entry_token(&result, "KEY2").unwrap(),
-        "KEY2 token must be unchanged"
-    );
 }

@@ -5,8 +5,6 @@
 mod context_execution;
 #[path = "../../../kapsaro-test-support/src/context_options.rs"]
 mod context_options;
-#[path = "context_paths.rs"]
-mod context_paths;
 #[path = "context_trust.rs"]
 mod context_trust;
 #[path = "keystore_documents.rs"]
@@ -15,13 +13,11 @@ mod keystore_documents;
 mod keystore_rotation;
 
 pub(crate) use context_execution::{
-    build_test_execution_context, build_test_member_approval_session,
-    build_test_trust_command_session, build_test_trust_command_session_from_options,
-    resolve_test_write_execution, resolve_test_write_session, TestWriteSession,
+    build_test_member_approval_session, build_test_trust_command_session,
+    build_test_trust_command_session_from_options, resolve_test_write_session, TestWriteSession,
 };
 pub(crate) use context_options::{
-    build_test_command_options, build_test_command_options_with,
-    build_test_signing_command_options, TestCommandOptions,
+    build_test_command_options, build_test_signing_command_options, TestCommandOptions,
 };
 pub(crate) use context_trust::load_test_trust_store;
 // The trust store fixtures are shared with the root crate's CLI tests, so they

@@ -23,6 +23,24 @@ use std::collections::BTreeMap;
 const BOB_KID: &str = "KBD2AAAA1111BBBB2222CCCC3333DDDD";
 const CAROL_KID: &str = "KCD3AAAA1111BBBB2222CCCC3333DDDD";
 
+fn trust_schema_document() -> serde_json::Value {
+    serde_json::json!({
+        "protected": {
+            "format": "kapsaro:format:local-trust@1",
+            "owner_handle": "alice@example.com",
+            "created_at": "2026-03-29T12:34:56Z",
+            "updated_at": "2026-03-29T12:34:56Z",
+            "known_keys": [],
+            "recipient_sets": []
+        },
+        "signature": {
+            "alg": "eddsa-ed25519",
+            "kid": "9K4W2H7R1M5VX8DPT3QNC6JY0F1BRG4D",
+            "sig": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+    })
+}
+
 fn known_key(kid: &str, subject_handle: &str) -> KnownKey {
     KnownKey {
         kid: kid.to_string(),
@@ -32,6 +50,15 @@ fn known_key(kid: &str, subject_handle: &str) -> KnownKey {
         evidence: None,
         extra: BTreeMap::new(),
     }
+}
+
+fn trust_schema_document_with_known_key() -> serde_json::Value {
+    let mut doc = trust_schema_document();
+    doc["protected"]["known_keys"] = serde_json::json!([known_key(
+        "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
+        "bob@example.com"
+    )]);
+    doc
 }
 
 fn recipient_set_record(sid: &str, kids: &[&str]) -> RecipientSetRecord {
@@ -51,65 +78,19 @@ fn recipient_set_record(sid: &str, kids: &[&str]) -> RecipientSetRecord {
 
 #[test]
 fn test_trust_store_schema_valid_document() {
-    let doc: serde_json::Value = serde_json::from_str(
-        r#"{
-            "protected": {
-                "format": "kapsaro:format:local-trust@1",
-                "owner_handle": "alice@example.com",
-                "created_at": "2026-03-29T12:34:56Z",
-                "updated_at": "2026-03-29T12:34:56Z",
-                "known_keys": [
-                    {
-                        "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-                        "subject_handle": "bob@example.com",
-                        "approved_at": "2026-03-29T12:40:00Z",
-                        "approved_via": "manual-review",
-                        "evidence": {
-                            "github_account": {
-                                "id": 12345678,
-                                "login": "bob-gh"
-                            },
-                            "ssh_attestor_pub": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI..."
-                        }
-                    }
-                ],
-                "recipient_sets": []
-            },
-            "signature": {
-                "alg": "eddsa-ed25519",
-                "kid": "9K4W2H7R1M5VX8DPT3QNC6JY0F1BRG4D",
-                "sig": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-            }
-        }"#,
-    )
-    .unwrap();
-
+    let mut doc = trust_schema_document_with_known_key();
+    doc["protected"]["known_keys"][0]["evidence"] = serde_json::json!({
+        "github_account": {"id": 12345678, "login": "bob-gh"},
+        "ssh_attestor_pub": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI..."
+    });
     let validator = load_embedded_trust_validator().unwrap();
     validator.validate_trust_store(&doc).unwrap();
 }
 
 #[test]
 fn test_trust_store_schema_rejects_signer_pub() {
-    let doc: serde_json::Value = serde_json::from_str(
-        r#"{
-            "protected": {
-                "format": "kapsaro:format:local-trust@1",
-                "owner_handle": "alice@example.com",
-                "created_at": "2026-03-29T12:34:56Z",
-                "updated_at": "2026-03-29T12:34:56Z",
-                "known_keys": [],
-                "recipient_sets": []
-            },
-            "signature": {
-                "alg": "eddsa-ed25519",
-                "kid": "9K4W2H7R1M5VX8DPT3QNC6JY0F1BRG4D",
-                "signer_pub": { "test": true },
-                "sig": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-            }
-        }"#,
-    )
-    .unwrap();
-
+    let mut doc = trust_schema_document();
+    doc["signature"]["signer_pub"] = serde_json::json!({"test": true});
     let validator = load_embedded_trust_validator().unwrap();
     let error = validator.validate_trust_store(&doc).unwrap_err();
     let message = error.format_user_message();
@@ -122,86 +103,28 @@ fn test_trust_store_schema_rejects_signer_pub() {
 
 #[test]
 fn test_trust_store_schema_accepts_github_account_without_login() {
-    let doc: serde_json::Value = serde_json::from_str(
-        r#"{
-            "protected": {
-                "format": "kapsaro:format:local-trust@1",
-                "owner_handle": "alice@example.com",
-                "created_at": "2026-03-29T12:34:56Z",
-                "updated_at": "2026-03-29T12:34:56Z",
-                "known_keys": [
-                    {
-                        "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-                        "subject_handle": "bob@example.com",
-                        "approved_at": "2026-03-29T12:40:00Z",
-                        "approved_via": "manual-review",
-                        "evidence": {
-                            "github_account": {
-                                "id": 12345678
-                            }
-                        }
-                    }
-                ],
-                "recipient_sets": []
-            },
-            "signature": {
-                "alg": "eddsa-ed25519",
-                "kid": "9K4W2H7R1M5VX8DPT3QNC6JY0F1BRG4D",
-                "sig": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-            }
-        }"#,
-    )
-    .unwrap();
-
+    let mut doc = trust_schema_document_with_known_key();
+    doc["protected"]["known_keys"][0]["evidence"] = serde_json::json!({
+        "github_account": {"id": 12345678}
+    });
     let validator = load_embedded_trust_validator().unwrap();
     validator.validate_trust_store(&doc).unwrap();
 }
 
 #[test]
 fn test_trust_store_schema_empty_known_keys() {
-    let doc: serde_json::Value = serde_json::from_str(
-        r#"{
-            "protected": {
-                "format": "kapsaro:format:local-trust@1",
-                "owner_handle": "alice@example.com",
-                "created_at": "2026-03-29T12:34:56Z",
-                "updated_at": "2026-03-29T12:34:56Z",
-                "known_keys": [],
-                "recipient_sets": []
-            },
-            "signature": {
-                "alg": "eddsa-ed25519",
-                "kid": "9K4W2H7R1M5VX8DPT3QNC6JY0F1BRG4D",
-                "sig": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-            }
-        }"#,
-    )
-    .unwrap();
-
+    let doc = trust_schema_document();
     let validator = load_embedded_trust_validator().unwrap();
     validator.validate_trust_store(&doc).unwrap();
 }
 
 #[test]
 fn test_trust_store_schema_missing_required_field_fails() {
-    let doc: serde_json::Value = serde_json::from_str(
-        r#"{
-            "protected": {
-                "format": "kapsaro:format:local-trust@1",
-                "owner_handle": "alice@example.com",
-                "created_at": "2026-03-29T12:34:56Z",
-                "known_keys": [],
-                "recipient_sets": []
-            },
-            "signature": {
-                "alg": "eddsa-ed25519",
-                "kid": "9K4W2H7R1M5VX8DPT3QNC6JY0F1BRG4D",
-                "sig": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-            }
-        }"#,
-    )
-    .unwrap();
-
+    let mut doc = trust_schema_document();
+    doc["protected"]
+        .as_object_mut()
+        .unwrap()
+        .remove("updated_at");
     let validator = load_embedded_trust_validator().unwrap();
     let error = validator.validate_trust_store(&doc).unwrap_err();
     let message = error.format_user_message();
@@ -214,25 +137,8 @@ fn test_trust_store_schema_missing_required_field_fails() {
 
 #[test]
 fn test_trust_store_schema_invalid_timestamp_fails() {
-    let doc: serde_json::Value = serde_json::from_str(
-        r#"{
-            "protected": {
-                "format": "kapsaro:format:local-trust@1",
-                "owner_handle": "alice@example.com",
-                "created_at": "2026-03-29 12:34:56",
-                "updated_at": "2026-03-29T12:34:56Z",
-                "known_keys": [],
-                "recipient_sets": []
-            },
-            "signature": {
-                "alg": "eddsa-ed25519",
-                "kid": "9K4W2H7R1M5VX8DPT3QNC6JY0F1BRG4D",
-                "sig": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-            }
-        }"#,
-    )
-    .unwrap();
-
+    let mut doc = trust_schema_document();
+    doc["protected"]["created_at"] = "2026-03-29 12:34:56".into();
     let validator = load_embedded_trust_validator().unwrap();
     let error = validator.validate_trust_store(&doc).unwrap_err();
     let message = error.format_user_message();
@@ -246,25 +152,8 @@ fn test_trust_store_schema_invalid_timestamp_fails() {
 
 #[test]
 fn test_trust_store_schema_non_utc_timestamp_fails() {
-    let doc: serde_json::Value = serde_json::from_str(
-        r#"{
-            "protected": {
-                "format": "kapsaro:format:local-trust@1",
-                "owner_handle": "alice@example.com",
-                "created_at": "2026-03-29T12:34:56+09:00",
-                "updated_at": "2026-03-29T12:34:56Z",
-                "known_keys": [],
-                "recipient_sets": []
-            },
-            "signature": {
-                "alg": "eddsa-ed25519",
-                "kid": "9K4W2H7R1M5VX8DPT3QNC6JY0F1BRG4D",
-                "sig": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-            }
-        }"#,
-    )
-    .unwrap();
-
+    let mut doc = trust_schema_document();
+    doc["protected"]["created_at"] = "2026-03-29T12:34:56+09:00".into();
     let validator = load_embedded_trust_validator().unwrap();
     let error = validator.validate_trust_store(&doc).unwrap_err();
     let message = error.format_user_message();
@@ -278,33 +167,8 @@ fn test_trust_store_schema_non_utc_timestamp_fails() {
 
 #[test]
 fn test_trust_store_schema_known_key_allows_extra_fields() {
-    let doc: serde_json::Value = serde_json::from_str(
-        r#"{
-            "protected": {
-                "format": "kapsaro:format:local-trust@1",
-                "owner_handle": "alice@example.com",
-                "created_at": "2026-03-29T12:34:56Z",
-                "updated_at": "2026-03-29T12:34:56Z",
-                "known_keys": [
-                    {
-                        "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-                        "subject_handle": "bob@example.com",
-                        "approved_at": "2026-03-29T12:40:00Z",
-                        "approved_via": "manual-review",
-                        "future_metadata": { "key": "value" }
-                    }
-                ],
-                "recipient_sets": []
-            },
-            "signature": {
-                "alg": "eddsa-ed25519",
-                "kid": "9K4W2H7R1M5VX8DPT3QNC6JY0F1BRG4D",
-                "sig": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-            }
-        }"#,
-    )
-    .unwrap();
-
+    let mut doc = trust_schema_document_with_known_key();
+    doc["protected"]["known_keys"][0]["future_metadata"] = serde_json::json!({"key": "value"});
     let validator = load_embedded_trust_validator().unwrap();
     validator.validate_trust_store(&doc).unwrap();
 }
@@ -314,33 +178,14 @@ fn test_trust_store_schema_known_key_allows_extra_fields() {
 /// bits are set never came from a 32-byte digest.
 #[test]
 fn test_trust_store_schema_rejects_recipient_set_hash_with_non_zero_trailing_bits() {
-    let doc: serde_json::Value = serde_json::from_str(
-        r#"{
-            "protected": {
-                "format": "kapsaro:format:local-trust@1",
-                "owner_handle": "alice@example.com",
-                "created_at": "2026-03-29T12:34:56Z",
-                "updated_at": "2026-03-29T12:34:56Z",
-                "known_keys": [],
-                "recipient_sets": [
-                    {
-                        "sid": "00000000-0000-0000-0000-000000000001",
-                        "recipient_kids": ["7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"],
-                        "recipient_set_hash": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB",
-                        "approved_at": "2026-03-29T12:40:00Z",
-                        "approved_via": "manual-review"
-                    }
-                ]
-            },
-            "signature": {
-                "alg": "eddsa-ed25519",
-                "kid": "9K4W2H7R1M5VX8DPT3QNC6JY0F1BRG4D",
-                "sig": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-            }
-        }"#,
-    )
-    .unwrap();
-
+    let mut doc = trust_schema_document();
+    doc["protected"]["recipient_sets"] = serde_json::json!([{
+        "sid": "00000000-0000-0000-0000-000000000001",
+        "recipient_kids": ["7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"],
+        "recipient_set_hash": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB",
+        "approved_at": "2026-03-29T12:40:00Z",
+        "approved_via": "manual-review"
+    }]);
     let validator = load_embedded_trust_validator().unwrap();
     let error = validator.validate_trust_store(&doc).unwrap_err();
     let message = error.format_user_message();
@@ -350,57 +195,20 @@ fn test_trust_store_schema_rejects_recipient_set_hash_with_non_zero_trailing_bit
 
 #[test]
 fn test_trust_store_schema_accepts_canonical_recipient_set() {
-    let recipient_kids = vec!["7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD".to_string()];
-    let recipient_set_hash = compute_recipient_set_hash(&recipient_kids).unwrap();
-    let doc = serde_json::json!({
-        "protected": {
-            "format": "kapsaro:format:local-trust@1",
-            "owner_handle": "alice@example.com",
-            "created_at": "2026-03-29T12:34:56Z",
-            "updated_at": "2026-03-29T12:34:56Z",
-            "known_keys": [],
-            "recipient_sets": [
-                {
-                    "sid": "00000000-0000-0000-0000-000000000001",
-                    "recipient_kids": recipient_kids,
-                    "recipient_set_hash": recipient_set_hash,
-                    "approved_at": "2026-03-29T12:40:00Z",
-                    "approved_via": "manual-review"
-                }
-            ]
-        },
-        "signature": {
-            "alg": "eddsa-ed25519",
-            "kid": "9K4W2H7R1M5VX8DPT3QNC6JY0F1BRG4D",
-            "sig": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-        }
-    });
-
+    let mut doc = trust_schema_document();
+    let recipient = recipient_set_record(
+        "00000000-0000-0000-0000-000000000001",
+        &["7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"],
+    );
+    doc["protected"]["recipient_sets"] = serde_json::json!([recipient]);
     let validator = load_embedded_trust_validator().unwrap();
     validator.validate_trust_store(&doc).unwrap();
 }
 
 #[test]
 fn test_trust_store_schema_rejects_unsupported_signature_algorithm() {
-    let doc: serde_json::Value = serde_json::from_str(
-        r#"{
-            "protected": {
-                "format": "kapsaro:format:local-trust@1",
-                "owner_handle": "alice@example.com",
-                "created_at": "2026-03-29T12:34:56Z",
-                "updated_at": "2026-03-29T12:34:56Z",
-                "known_keys": [],
-                "recipient_sets": []
-            },
-            "signature": {
-                "alg": "rsa-2048",
-                "kid": "9K4W2H7R1M5VX8DPT3QNC6JY0F1BRG4D",
-                "sig": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-            }
-        }"#,
-    )
-    .unwrap();
-
+    let mut doc = trust_schema_document();
+    doc["signature"]["alg"] = "rsa-2048".into();
     let validator = load_embedded_trust_validator().unwrap();
     let error = validator.validate_trust_store(&doc).unwrap_err();
     let message = error.format_user_message();
@@ -409,25 +217,8 @@ fn test_trust_store_schema_rejects_unsupported_signature_algorithm() {
 
 #[test]
 fn test_trust_store_schema_rejects_signature_that_is_not_an_ed25519_signature() {
-    let doc: serde_json::Value = serde_json::from_str(
-        r#"{
-            "protected": {
-                "format": "kapsaro:format:local-trust@1",
-                "owner_handle": "alice@example.com",
-                "created_at": "2026-03-29T12:34:56Z",
-                "updated_at": "2026-03-29T12:34:56Z",
-                "known_keys": [],
-                "recipient_sets": []
-            },
-            "signature": {
-                "alg": "eddsa-ed25519",
-                "kid": "9K4W2H7R1M5VX8DPT3QNC6JY0F1BRG4D",
-                "sig": "not_a_signature"
-            }
-        }"#,
-    )
-    .unwrap();
-
+    let mut doc = trust_schema_document();
+    doc["signature"]["sig"] = "not_a_signature".into();
     let validator = load_embedded_trust_validator().unwrap();
     let error = validator.validate_trust_store(&doc).unwrap_err();
     let message = error.format_user_message();
@@ -436,26 +227,8 @@ fn test_trust_store_schema_rejects_signature_that_is_not_an_ed25519_signature() 
 
 #[test]
 fn test_trust_store_schema_rejects_extra_top_level_fields() {
-    let doc: serde_json::Value = serde_json::from_str(
-        r#"{
-            "protected": {
-                "format": "kapsaro:format:local-trust@1",
-                "owner_handle": "alice@example.com",
-                "created_at": "2026-03-29T12:34:56Z",
-                "updated_at": "2026-03-29T12:34:56Z",
-                "known_keys": [],
-                "recipient_sets": []
-            },
-            "signature": {
-                "alg": "eddsa-ed25519",
-                "kid": "9K4W2H7R1M5VX8DPT3QNC6JY0F1BRG4D",
-                "sig": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-            },
-            "unexpected": true
-        }"#,
-    )
-    .unwrap();
-
+    let mut doc = trust_schema_document();
+    doc["unexpected"] = true.into();
     let validator = load_embedded_trust_validator().unwrap();
     assert!(validator.validate_trust_store(&doc).is_err());
 }

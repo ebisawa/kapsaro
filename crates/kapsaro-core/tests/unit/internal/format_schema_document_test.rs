@@ -51,40 +51,7 @@ fn test_parse_public_key_str_with_schema() {
 
 #[test]
 fn test_parse_file_enc_str_with_schema() {
-    let sid = "123e4567-e89b-12d3-a456-426614174000";
-    let file_enc = serde_json::json!({
-        "protected": {
-            "format": format::FILE_ENC_V1,
-            "sid": sid,
-            "payload": {
-                "protected": {
-                    "format": format::FILE_PAYLOAD_V1,
-                    "sid": sid,
-                    "alg": { "aead": algorithm::AEAD_XCHACHA20_POLY1305 }
-                },
-                "encrypted": {
-                    "nonce": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-                    "ct": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-                }
-            },
-            "wrap": [{
-                "rh": "alice@example.com",
-                "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-                "alg": algorithm::HPKE_X25519_HKDF_SHA256_CHACHA20_POLY1305,
-                "enc": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-                "ct": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-            }],
-            "created_at": "2026-01-14T00:00:00Z",
-            "updated_at": "2026-01-14T00:00:00Z"
-        },
-        "signature": {
-            "alg": algorithm::SIGNATURE_ED25519,
-            "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-            "signer_pub": build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
-            "mac": "hmac-sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-            "sig": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ"
-        }
-    });
+    let file_enc = build_file_enc_document();
 
     let parsed = parse_file_enc_str(&file_enc.to_string(), "inline file-enc").unwrap();
     assert_eq!(parsed.protected.format, format::FILE_ENC_V1);
@@ -92,60 +59,10 @@ fn test_parse_file_enc_str_with_schema() {
 
 #[test]
 fn test_parse_file_enc_str_rejects_duplicate_top_level_member() {
-    let sid = "123e4567-e89b-12d3-a456-426614174000";
-    let signer_pub =
-        serde_json::to_string(&build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD")).unwrap();
+    let document = build_file_enc_document();
     let file_enc = format!(
-        r#"{{
-            "protected": {{
-                "format": "{}",
-                "sid": "{}",
-                "payload": {{
-                    "protected": {{
-                        "format": "{}",
-                        "sid": "{}",
-                        "alg": {{ "aead": "{}" }}
-                    }},
-                    "encrypted": {{
-                        "nonce": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-                        "ct": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-                    }}
-                }},
-                "wrap": [{{
-                    "rh": "alice@example.com",
-                    "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-                    "alg": "{}",
-                    "enc": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-                    "ct": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-                }}],
-                "created_at": "2026-01-14T00:00:00Z",
-                "updated_at": "2026-01-14T00:00:00Z"
-            }},
-            "signature": {{
-                "alg": "{}",
-                "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-                "signer_pub": {},
-                "mac": "hmac-sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-                "sig": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ"
-            }},
-            "signature": {{
-                "alg": "{}",
-                "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-                "signer_pub": {},
-                "mac": "hmac-sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-                "sig": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ"
-            }}
-        }}"#,
-        format::FILE_ENC_V1,
-        sid,
-        format::FILE_PAYLOAD_V1,
-        sid,
-        algorithm::AEAD_XCHACHA20_POLY1305,
-        algorithm::HPKE_X25519_HKDF_SHA256_CHACHA20_POLY1305,
-        algorithm::SIGNATURE_ED25519,
-        signer_pub,
-        algorithm::SIGNATURE_ED25519,
-        signer_pub,
+        r#"{{"protected":{},"signature":{},"signature":{}}}"#,
+        document["protected"], document["signature"], document["signature"],
     );
 
     let result = parse_file_enc_str(&file_enc, "inline file-enc");
@@ -206,42 +123,10 @@ fn test_parse_trust_store_str_rejects_duplicate_nested_member() {
 
 #[test]
 fn test_parse_file_enc_str_rejects_non_canonical_signature_base64url() {
-    let sid = "123e4567-e89b-12d3-a456-426614174000";
+    let mut file_enc = build_file_enc_document();
     let mut non_canonical_sig = encode_base64url_nopad(&[0u8; 64]);
     non_canonical_sig.replace_range(85..86, "B");
-    let file_enc = serde_json::json!({
-        "protected": {
-            "format": format::FILE_ENC_V1,
-            "sid": sid,
-            "payload": {
-                "protected": {
-                    "format": format::FILE_PAYLOAD_V1,
-                    "sid": sid,
-                    "alg": { "aead": algorithm::AEAD_XCHACHA20_POLY1305 }
-                },
-                "encrypted": {
-                    "nonce": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-                    "ct": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-                }
-            },
-            "wrap": [{
-                "rh": "alice@example.com",
-                "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-                "alg": algorithm::HPKE_X25519_HKDF_SHA256_CHACHA20_POLY1305,
-                "enc": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-                "ct": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-            }],
-            "created_at": "2026-01-14T00:00:00Z",
-            "updated_at": "2026-01-14T00:00:00Z"
-        },
-        "signature": {
-            "alg": algorithm::SIGNATURE_ED25519,
-            "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-            "signer_pub": build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
-            "mac": "hmac-sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-            "sig": non_canonical_sig
-        }
-    });
+    file_enc["signature"]["sig"] = non_canonical_sig.into();
 
     let result = parse_file_enc_str(&file_enc.to_string(), "inline file-enc");
 
@@ -254,40 +139,8 @@ fn test_parse_file_enc_str_rejects_non_canonical_signature_base64url() {
 
 #[test]
 fn test_parse_file_enc_str_rejects_non_canonical_payload_ct_base64url() {
-    let sid = "123e4567-e89b-12d3-a456-426614174000";
-    let file_enc = serde_json::json!({
-        "protected": {
-            "format": format::FILE_ENC_V1,
-            "sid": sid,
-            "payload": {
-                "protected": {
-                    "format": format::FILE_PAYLOAD_V1,
-                    "sid": sid,
-                    "alg": { "aead": algorithm::AEAD_XCHACHA20_POLY1305 }
-                },
-                "encrypted": {
-                    "nonce": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-                    "ct": "AB"
-                }
-            },
-            "wrap": [{
-                "rh": "alice@example.com",
-                "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-                "alg": algorithm::HPKE_X25519_HKDF_SHA256_CHACHA20_POLY1305,
-                "enc": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-                "ct": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-            }],
-            "created_at": "2026-01-14T00:00:00Z",
-            "updated_at": "2026-01-14T00:00:00Z"
-        },
-        "signature": {
-            "alg": algorithm::SIGNATURE_ED25519,
-            "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-            "signer_pub": build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
-            "mac": "hmac-sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-            "sig": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ"
-        }
-    });
+    let mut file_enc = build_file_enc_document();
+    file_enc["protected"]["payload"]["encrypted"]["ct"] = "AB".into();
 
     let result = parse_file_enc_str(&file_enc.to_string(), "inline file-enc");
 
@@ -484,6 +337,12 @@ fn test_parse_kv_signature_token_requires_signer_pub_error() {
     assert!(!message.contains("schema"));
 }
 
+fn build_file_enc_document() -> serde_json::Value {
+    let mut document = build_file_enc_with_wrap_count(1);
+    document["protected"]["wrap"][0]["rh"] = "alice@example.com".into();
+    document
+}
+
 /// Build a file-enc document carrying `wrap_count` distinct recipients.
 fn build_file_enc_with_wrap_count(wrap_count: usize) -> serde_json::Value {
     let sid = "123e4567-e89b-12d3-a456-426614174000";
@@ -576,49 +435,13 @@ fn test_parse_kv_wrap_token_rejects_wrap_count_over_limit() {
 
 #[test]
 fn test_parse_file_enc_str_rejects_duplicate_wrap_rh() {
-    let sid = "123e4567-e89b-12d3-a456-426614174000";
-    let file_enc = serde_json::json!({
-        "protected": {
-            "format": format::FILE_ENC_V1,
-            "sid": sid,
-            "payload": {
-                "protected": {
-                    "format": format::FILE_PAYLOAD_V1,
-                    "sid": sid,
-                    "alg": { "aead": algorithm::AEAD_XCHACHA20_POLY1305 }
-                },
-                "encrypted": {
-                    "nonce": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-                    "ct": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-                }
-            },
-            "wrap": [
-                {
-                    "rh": "alice@example.com",
-                    "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-                    "alg": algorithm::HPKE_X25519_HKDF_SHA256_CHACHA20_POLY1305,
-                    "enc": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-                    "ct": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-                },
-                {
-                    "rh": "alice@example.com",
-                    "kid": "9K4W2H7R1M5VX8DPT3QNC6JY0F1BRG4D",
-                    "alg": algorithm::HPKE_X25519_HKDF_SHA256_CHACHA20_POLY1305,
-                    "enc": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-                    "ct": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-                }
-            ],
-            "created_at": "2026-01-14T00:00:00Z",
-            "updated_at": "2026-01-14T00:00:00Z"
-        },
-        "signature": {
-            "alg": algorithm::SIGNATURE_ED25519,
-            "kid": "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
-            "signer_pub": build_dummy_public_key("7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD"),
-            "mac": "hmac-sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-            "sig": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ"
-        }
-    });
+    let mut file_enc = build_file_enc_document();
+    let mut duplicate = file_enc["protected"]["wrap"][0].clone();
+    duplicate["kid"] = "9K4W2H7R1M5VX8DPT3QNC6JY0F1BRG4D".into();
+    file_enc["protected"]["wrap"]
+        .as_array_mut()
+        .unwrap()
+        .push(duplicate);
 
     let result = parse_file_enc_str(&file_enc.to_string(), "inline file-enc");
     assert!(result.is_err());

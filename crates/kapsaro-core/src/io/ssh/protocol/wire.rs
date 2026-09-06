@@ -24,14 +24,6 @@ const LENGTH_PREFIX_SIZE: usize = 4;
 /// # Errors
 ///
 /// - `Error::Ssh` - The payload is longer than the length field can state
-///
-/// # Examples
-///
-/// ```ignore
-/// use kapsaro_core::io::ssh::protocol::wire::encode_ssh_string;
-/// let encoded = encode_ssh_string(b"test").unwrap();
-/// assert_eq!(encoded, vec![0, 0, 0, 4, b't', b'e', b's', b't']);
-/// ```
 pub fn encode_ssh_string(data: &[u8]) -> Result<Vec<u8>> {
     let len = u32::try_from(data.len()).map_err(|_| {
         SshError::build_operation_failed_error(format!(
@@ -55,16 +47,6 @@ pub fn encode_ssh_string(data: &[u8]) -> Result<Vec<u8>> {
 /// # Errors
 ///
 /// - `Error::Ssh` - Insufficient data for length field or payload
-///
-/// # Examples
-///
-/// ```ignore
-/// use kapsaro_core::io::ssh::protocol::wire::{decode_ssh_string, encode_ssh_string};
-/// let encoded = encode_ssh_string(b"hello").unwrap();
-/// let (decoded, rest): (&[u8], &[u8]) = decode_ssh_string(&encoded).unwrap();
-/// assert_eq!(decoded, b"hello");
-/// assert_eq!(rest.len(), 0);
-/// ```
 pub fn decode_ssh_string(data: &[u8]) -> Result<(&[u8], &[u8])> {
     if data.len() < LENGTH_PREFIX_SIZE {
         return Err(SshError::build_operation_failed_error(

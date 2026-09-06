@@ -104,8 +104,7 @@ fn test_detect_workspace_fails_without_members_directory() {
     let root_path = temp.path();
     fs::create_dir_all(root_path.join(".git")).unwrap();
 
-    // Only create secrets directory
-    fs::create_dir_all(root_path.join("secrets")).unwrap();
+    fs::create_dir_all(root_path.join(".kapsaro/secrets")).unwrap();
 
     let result = detect_workspace_root(root_path);
     assert!(result.is_err());
@@ -117,8 +116,7 @@ fn test_detect_workspace_fails_without_secrets_directory() {
     let root_path = temp.path();
     fs::create_dir_all(root_path.join(".git")).unwrap();
 
-    // Only create members directory (without active/ subdir and without secrets/)
-    fs::create_dir_all(root_path.join("members")).unwrap();
+    fs::create_dir_all(root_path.join(".kapsaro/members/active")).unwrap();
 
     let result = detect_workspace_root(root_path);
     assert!(result.is_err());
@@ -139,8 +137,6 @@ fn test_workspace_root_fields() {
     let workspace = result.unwrap();
 
     assert_eq!(workspace.root_path, workspace_root);
-    assert_eq!(workspace.members_dir(), workspace_root.join("members"));
-    assert_eq!(workspace.secrets_dir(), workspace_root.join("secrets"));
 }
 
 // Explicit path validation and auto-detection

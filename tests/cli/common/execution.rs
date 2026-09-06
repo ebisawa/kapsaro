@@ -30,6 +30,92 @@ pub struct PtyCommandResult {
     pub output: String,
 }
 
+#[cfg(unix)]
+struct PtySession {
+    master: File,
+    child: std::process::Child,
+    transcript: Vec<u8>,
+}
+
+#[cfg(unix)]
+impl PtySession {
+    fn spawn(command: &mut StdCommand) -> Self {
+        let (master, slave) = open_pty_pair().expect("PTY must open for interactive CLI test");
+        set_nonblocking(&master).expect("PTY master must support non-blocking reads");
+        command.stdin(Stdio::from(slave.try_clone().expect("PTY stdin clone")));
+        command.stdout(Stdio::from(slave.try_clone().expect("PTY stdout clone")));
+        command.stderr(Stdio::from(slave));
+        let child = command.spawn().expect("interactive CLI child must spawn");
+        Self {
+            master,
+            child,
+            transcript: Vec::new(),
+        }
+    }
+
+    fn send(&mut self, input: &[u8]) {
+        self.master
+            .write_all(input)
+            .expect("PTY input write must succeed");
+    }
+
+    fn respond(&mut self, prompt: &str, input: &[u8], at_prompt: impl FnOnce()) {
+        wait_for_prompt(
+            &mut self.child,
+            &mut self.master,
+            &mut self.transcript,
+            prompt,
+            Duration::from_secs(10),
+        );
+        at_prompt();
+        thread::sleep(Duration::from_millis(25));
+        self.send(input);
+    }
+
+    fn optional_response(mut self, prompt: &str, input: &[u8]) -> PtyCommandResult {
+        if let Some(status) = wait_for_prompt_or_exit(
+            &mut self.child,
+            &mut self.master,
+            &mut self.transcript,
+            prompt,
+            Duration::from_secs(10),
+        ) {
+            return self.result(status);
+        }
+        self.send(input);
+        self.finish()
+    }
+
+    fn finish(mut self) -> PtyCommandResult {
+        let status = wait_for_exit(
+            &mut self.child,
+            &mut self.master,
+            &mut self.transcript,
+            Duration::from_secs(10),
+        );
+        self.result(status)
+    }
+
+    fn result(&mut self, status: ExitStatus) -> PtyCommandResult {
+        load_available(&mut self.master, &mut self.transcript);
+        PtyCommandResult {
+            status,
+            output: String::from_utf8_lossy(&self.transcript).into_owned(),
+        }
+    }
+}
+
+#[cfg(unix)]
+impl Drop for PtySession {
+    fn drop(&mut self) {
+        // Reap a still-running child even when a prompt assertion panics.
+        if !matches!(self.child.try_wait(), Ok(Some(_))) {
+            let _ = self.child.kill();
+            let _ = self.child.wait();
+        }
+    }
+}
+
 /// Helper to get the kapsaro test binary command.
 ///
 /// Sets `KAPSARO_SSH_SIGNING_METHOD=ssh-keygen` for CLI integration tests.
@@ -75,59 +161,12 @@ pub fn run_command_with_pty_script_at_prompt(
     first_input: &[u8],
     remaining_prompts: &[(&str, &[u8])],
 ) -> PtyCommandResult {
-    let (mut master, slave) = open_pty_pair().expect("PTY must open for interactive CLI test");
-    set_nonblocking(&master).expect("PTY master must support non-blocking reads");
-
-    let stdin = slave
-        .try_clone()
-        .expect("PTY slave stdin clone must succeed");
-    let stdout = slave
-        .try_clone()
-        .expect("PTY slave stdout clone must succeed");
-    command.stdin(Stdio::from(stdin));
-    command.stdout(Stdio::from(stdout));
-    command.stderr(Stdio::from(slave));
-
-    let mut child = command.spawn().expect("interactive CLI child must spawn");
-    let mut transcript = Vec::new();
-
-    wait_for_prompt(
-        &mut child,
-        &mut master,
-        &mut transcript,
-        first_prompt,
-        Duration::from_secs(10),
-    );
-    at_first_prompt();
-    thread::sleep(Duration::from_millis(25));
-    master
-        .write_all(first_input)
-        .expect("PTY input write must succeed");
-
+    let mut session = PtySession::spawn(command);
+    session.respond(first_prompt, first_input, at_first_prompt);
     for (prompt, input) in remaining_prompts {
-        wait_for_prompt(
-            &mut child,
-            &mut master,
-            &mut transcript,
-            prompt,
-            Duration::from_secs(10),
-        );
-        thread::sleep(Duration::from_millis(25));
-        master
-            .write_all(input)
-            .expect("PTY input write must succeed");
+        session.respond(prompt, input, || {});
     }
-
-    let status = wait_for_exit(
-        &mut child,
-        &mut master,
-        &mut transcript,
-        Duration::from_secs(10),
-    );
-    PtyCommandResult {
-        status,
-        output: String::from_utf8_lossy(&transcript).into_owned(),
-    }
+    session.finish()
 }
 
 /// Runs a command through a PTY, stepping through multiple (prompt, input) pairs, then waits for exit.
@@ -136,46 +175,11 @@ pub fn run_command_with_pty_script(
     command: &mut StdCommand,
     prompts: &[(&str, &[u8])],
 ) -> PtyCommandResult {
-    let (mut master, slave) = open_pty_pair().expect("PTY must open for interactive CLI test");
-    set_nonblocking(&master).expect("PTY master must support non-blocking reads");
-
-    let stdin = slave
-        .try_clone()
-        .expect("PTY slave stdin clone must succeed");
-    let stdout = slave
-        .try_clone()
-        .expect("PTY slave stdout clone must succeed");
-    command.stdin(Stdio::from(stdin));
-    command.stdout(Stdio::from(stdout));
-    command.stderr(Stdio::from(slave));
-
-    let mut child = command.spawn().expect("interactive CLI child must spawn");
-    let mut transcript = Vec::new();
-
+    let mut session = PtySession::spawn(command);
     for (prompt, input) in prompts {
-        wait_for_prompt(
-            &mut child,
-            &mut master,
-            &mut transcript,
-            prompt,
-            Duration::from_secs(10),
-        );
-        thread::sleep(Duration::from_millis(25));
-        master
-            .write_all(input)
-            .expect("PTY input write must succeed");
+        session.respond(prompt, input, || {});
     }
-
-    let status = wait_for_exit(
-        &mut child,
-        &mut master,
-        &mut transcript,
-        Duration::from_secs(10),
-    );
-    PtyCommandResult {
-        status,
-        output: String::from_utf8_lossy(&transcript).into_owned(),
-    }
+    session.finish()
 }
 
 /// Runs a command through a PTY; if the optional prompt appears sends input, otherwise returns early.
@@ -185,49 +189,7 @@ pub fn run_command_with_optional_prompt_pty(
     prompt: &str,
     input: &[u8],
 ) -> PtyCommandResult {
-    let (mut master, slave) = open_pty_pair().expect("PTY must open for interactive CLI test");
-    set_nonblocking(&master).expect("PTY master must support non-blocking reads");
-
-    let stdin = slave
-        .try_clone()
-        .expect("PTY slave stdin clone must succeed");
-    let stdout = slave
-        .try_clone()
-        .expect("PTY slave stdout clone must succeed");
-    command.stdin(Stdio::from(stdin));
-    command.stdout(Stdio::from(stdout));
-    command.stderr(Stdio::from(slave));
-
-    let mut child = command.spawn().expect("interactive CLI child must spawn");
-    let mut transcript = Vec::new();
-
-    if let Some(status) = wait_for_prompt_or_exit(
-        &mut child,
-        &mut master,
-        &mut transcript,
-        prompt,
-        Duration::from_secs(10),
-    ) {
-        load_available(&mut master, &mut transcript);
-        return PtyCommandResult {
-            status,
-            output: String::from_utf8_lossy(&transcript).into_owned(),
-        };
-    }
-    master
-        .write_all(input)
-        .expect("PTY input write must succeed");
-
-    let status = wait_for_exit(
-        &mut child,
-        &mut master,
-        &mut transcript,
-        Duration::from_secs(10),
-    );
-    PtyCommandResult {
-        status,
-        output: String::from_utf8_lossy(&transcript).into_owned(),
-    }
+    PtySession::spawn(command).optional_response(prompt, input)
 }
 
 /// Writes initial input, then handles an optional prompt before waiting for exit.
@@ -238,52 +200,9 @@ pub(super) fn run_command_with_optional_prompt_pty_after_input(
     prompt: &str,
     prompt_input: &[u8],
 ) -> PtyCommandResult {
-    let (mut master, slave) = open_pty_pair().expect("PTY must open for interactive CLI test");
-    set_nonblocking(&master).expect("PTY master must support non-blocking reads");
-
-    let stdin = slave
-        .try_clone()
-        .expect("PTY slave stdin clone must succeed");
-    let stdout = slave
-        .try_clone()
-        .expect("PTY slave stdout clone must succeed");
-    command.stdin(Stdio::from(stdin));
-    command.stdout(Stdio::from(stdout));
-    command.stderr(Stdio::from(slave));
-
-    let mut child = command.spawn().expect("interactive CLI child must spawn");
-    let mut transcript = Vec::new();
-
-    master
-        .write_all(initial_input)
-        .expect("PTY initial input write must succeed");
-    if let Some(status) = wait_for_prompt_or_exit(
-        &mut child,
-        &mut master,
-        &mut transcript,
-        prompt,
-        Duration::from_secs(10),
-    ) {
-        load_available(&mut master, &mut transcript);
-        return PtyCommandResult {
-            status,
-            output: String::from_utf8_lossy(&transcript).into_owned(),
-        };
-    }
-    master
-        .write_all(prompt_input)
-        .expect("PTY prompt input write must succeed");
-
-    let status = wait_for_exit(
-        &mut child,
-        &mut master,
-        &mut transcript,
-        Duration::from_secs(10),
-    );
-    PtyCommandResult {
-        status,
-        output: String::from_utf8_lossy(&transcript).into_owned(),
-    }
+    let mut session = PtySession::spawn(command);
+    session.send(initial_input);
+    session.optional_response(prompt, prompt_input)
 }
 
 #[cfg(unix)]

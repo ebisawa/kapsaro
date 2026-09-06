@@ -296,6 +296,12 @@ fn test_key_new_generates_private_key() {
     let kid = find_kid_in_member_dir(&member_dir);
 
     // Verify private.json exists
+    use kapsaro_core::test_support::storage::keystore::active::load_active_kid;
+    assert_eq!(
+        load_active_kid(member_handle, &keystore_root).unwrap(),
+        Some(kid.clone()),
+        "Active kid should match the generated kid"
+    );
     let private_key_path = member_dir.join(&kid).join("private.json");
     assert!(
         private_key_path.exists(),
@@ -378,108 +384,6 @@ fn test_key_new_expires_at_option() {
         &time::format_description::well_known::Rfc3339,
     )
     .expect("expires_at should be valid RFC3339");
-
-    // Keep temp directories alive
-    drop(ssh_temp);
-}
-
-#[test]
-fn test_key_new_valid_for_1y() {
-    let temp_dir = setup_secret_home();
-    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
-
-    let member_handle = TEST_MEMBER_HANDLE;
-
-    // Run key new command with --valid-for 1y
-    cmd()
-        .arg("key")
-        .arg("new")
-        .arg("--member-handle")
-        .arg(member_handle)
-        .arg("-i")
-        .arg(ssh_priv.to_str().unwrap())
-        .arg("--valid-for")
-        .arg("1y")
-        .env("KAPSARO_HOME", temp_dir.path())
-        .assert()
-        .success();
-
-    // Read private.json
-    let keystore_root = temp_dir.path().join("keys");
-    let member_dir = keystore_root.join(member_handle);
-    let kid = find_kid_in_member_dir(&member_dir);
-
-    let private_key_path = member_dir.join(&kid).join("private.json");
-    let private_json = fs::read_to_string(&private_key_path).unwrap();
-    let private_key: PrivateKey = serde_json::from_str(&private_json).unwrap();
-
-    // Parse expires_at
-    let expires_at = time::OffsetDateTime::parse(
-        &private_key.protected.expires_at,
-        &time::format_description::well_known::Rfc3339,
-    )
-    .expect("expires_at should be valid RFC3339");
-
-    let now = time::OffsetDateTime::now_utc();
-    let one_year_later = now + time::Duration::days(365);
-
-    // Verify expires_at is approximately 1 year from now (within 1 minute tolerance)
-    let diff = (expires_at - one_year_later).abs();
-    assert!(
-        diff < time::Duration::minutes(1),
-        "expires_at should be approximately 1 year from now"
-    );
-
-    // Keep temp directories alive
-    drop(ssh_temp);
-}
-
-#[test]
-fn test_key_new_valid_for_6m() {
-    let temp_dir = setup_secret_home();
-    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
-
-    let member_handle = TEST_MEMBER_HANDLE;
-
-    // Run key new command with --valid-for 6m
-    cmd()
-        .arg("key")
-        .arg("new")
-        .arg("--member-handle")
-        .arg(member_handle)
-        .arg("-i")
-        .arg(ssh_priv.to_str().unwrap())
-        .arg("--valid-for")
-        .arg("6m")
-        .env("KAPSARO_HOME", temp_dir.path())
-        .assert()
-        .success();
-
-    // Read private.json
-    let keystore_root = temp_dir.path().join("keys");
-    let member_dir = keystore_root.join(member_handle);
-    let kid = find_kid_in_member_dir(&member_dir);
-
-    let private_key_path = member_dir.join(&kid).join("private.json");
-    let private_json = fs::read_to_string(&private_key_path).unwrap();
-    let private_key: PrivateKey = serde_json::from_str(&private_json).unwrap();
-
-    // Parse expires_at
-    let expires_at = time::OffsetDateTime::parse(
-        &private_key.protected.expires_at,
-        &time::format_description::well_known::Rfc3339,
-    )
-    .expect("expires_at should be valid RFC3339");
-
-    let now = time::OffsetDateTime::now_utc();
-    let six_months_later = now + time::Duration::days(6 * 30);
-
-    // Verify expires_at is approximately 6 months from now (within 1 minute tolerance)
-    let diff = (expires_at - six_months_later).abs();
-    assert!(
-        diff < time::Duration::minutes(1),
-        "expires_at should be approximately 6 months from now"
-    );
 
     // Keep temp directories alive
     drop(ssh_temp);
@@ -569,43 +473,6 @@ fn test_key_new_no_activate_option() {
     assert!(
         !active_path.exists(),
         "active file should NOT be created with --no-activate"
-    );
-
-    // Keep temp directories alive
-    drop(ssh_temp);
-}
-
-#[test]
-fn test_key_new_default_activate() {
-    let temp_dir = setup_secret_home();
-    let (ssh_temp, ssh_priv, _ssh_pub, _ssh_pub_content) = generate_temp_ssh_keypair();
-
-    let member_handle = TEST_MEMBER_HANDLE;
-
-    // Run key new command without --no-activate
-    cmd()
-        .arg("key")
-        .arg("new")
-        .arg("--member-handle")
-        .arg(member_handle)
-        .arg("-i")
-        .arg(ssh_priv.to_str().unwrap())
-        .env("KAPSARO_HOME", temp_dir.path())
-        .assert()
-        .success();
-
-    // Get the generated kid
-    let keystore_root = temp_dir.path().join("keys");
-    let member_dir = keystore_root.join(member_handle);
-    let kid = find_kid_in_member_dir(&member_dir);
-
-    // Verify active file is created
-    use kapsaro_core::test_support::storage::keystore::active::load_active_kid;
-    let active_kid = load_active_kid(member_handle, &keystore_root).expect("Should get active kid");
-    assert_eq!(
-        active_kid,
-        Some(kid),
-        "Active kid should match the generated kid"
     );
 
     // Keep temp directories alive

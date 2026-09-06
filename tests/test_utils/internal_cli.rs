@@ -5,44 +5,28 @@
 //! These helpers avoid pulling the full integration-test fixture module into the library test target.
 
 use kapsaro_core::test_support::domain::identity::MemberHandle;
-use std::sync::{Mutex, MutexGuard};
+// The integration binary imports the shared guard through its own facade.
+#[allow(unused_imports)]
+pub(crate) use kapsaro_test_support::guards::EnvGuard;
+
+pub(crate) struct StdoutColorGuard {
+    previous: bool,
+}
+
+impl StdoutColorGuard {
+    pub(crate) fn new(enabled: bool) -> Self {
+        let previous = console::colors_enabled();
+        console::set_colors_enabled(enabled);
+        Self { previous }
+    }
+}
+
+impl Drop for StdoutColorGuard {
+    fn drop(&mut self) {
+        console::set_colors_enabled(self.previous);
+    }
+}
 
 pub(crate) fn member_handle(value: impl Into<String>) -> MemberHandle {
     MemberHandle::try_from(value.into()).expect("test member_handle must be valid")
-}
-
-static ENV_MUTEX: Mutex<()> = Mutex::new(());
-
-pub(crate) struct EnvGuard {
-    vars: Vec<(String, Option<String>)>,
-    _lock: MutexGuard<'static, ()>,
-}
-
-impl EnvGuard {
-    pub(crate) fn new(keys: &[&str]) -> Self {
-        let lock = lock_unpoisoned(&ENV_MUTEX);
-        let vars = keys
-            .iter()
-            .map(|&key| (key.to_string(), std::env::var(key).ok()))
-            .collect();
-        Self { vars, _lock: lock }
-    }
-}
-
-impl Drop for EnvGuard {
-    fn drop(&mut self) {
-        for (key, value) in &self.vars {
-            match value {
-                Some(value) => std::env::set_var(key, value),
-                None => std::env::remove_var(key),
-            }
-        }
-    }
-}
-
-fn lock_unpoisoned<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
-    match mutex.lock() {
-        Ok(guard) => guard,
-        Err(poisoned) => poisoned.into_inner(),
-    }
 }

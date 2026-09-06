@@ -117,32 +117,6 @@ impl FileEncDocument {
 /// - The signer's public key is trusted (either embedded and verified,
 ///   or found in keystore)
 /// - For embedded signer_pub, the PublicKey document itself is verified
-///
-/// # Example
-///
-/// ```ignore
-/// use kapsaro_core::model::file_enc::{FileEncDocument, VerifiedFileEncDocument};
-/// use kapsaro_core::feature::verify::file::verify_file_document;
-///
-/// # fn example() -> Result<(), Box<dyn std::error::Error>> {
-/// // Parse unverified document
-/// # let json = "{}";
-/// # let debug = false;
-/// let doc: FileEncDocument = serde_json::from_str(json)?;
-///
-/// // Verify signature (returns VerifiedFileEncDocument)
-/// let verified = verify_file_document(&doc, debug)?;
-///
-/// // Access verified document and proof information
-/// let document = verified.document();
-/// let proof = verified.proof();
-/// assert_eq!(proof.member_handle, "alice");
-///
-/// // The VerifiedFileEncDocument wrapper ensures type-level guarantees that verification
-/// // has occurred before the document can be used in trusted operations.
-/// # Ok(())
-/// # }
-/// ```
 pub type VerifiedFileEncDocument = VerifiedDocument<FileEncDocument>;
 
 #[cfg(test)]

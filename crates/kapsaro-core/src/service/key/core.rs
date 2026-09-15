@@ -41,6 +41,7 @@ use crate::service::ssh::{
     into_internal_backend, resolve_ssh_signing_context_for_fingerprint, SshSignatureBackend,
     SshSigningContextResolution, SshSigningInputs,
 };
+use crate::service::workspace::WorkspaceAccess;
 
 /// Filesystem-backed local keystore.
 #[derive(Clone)]
@@ -253,13 +254,13 @@ impl KeyContext {
     pub fn load_environment_key(
         encoded: SecretString,
         password: SecretString,
-        workspace_path: PathBuf,
+        workspace: &WorkspaceAccess,
     ) -> Result<Self> {
         let result = crate::feature::context::env_key::parse_env_key(
             encoded.into_inner(),
             password.into_inner(),
         )?;
-        build_environment_crypto_context(result, workspace_path).map(Self::from_inner)
+        build_environment_crypto_context(result, workspace).map(Self::from_inner)
     }
 
     pub(crate) fn from_inner(inner: CryptoContext) -> Self {
@@ -312,14 +313,14 @@ fn resolve_ssh_fingerprint(private_key: &PrivateKey) -> Result<&str> {
 
 fn build_environment_crypto_context(
     result: crate::feature::context::env_key::EnvKeyParseResult,
-    workspace_path: PathBuf,
+    workspace: &WorkspaceAccess,
 ) -> Result<CryptoContext> {
     let kid = Kid::try_from(result.verified_key.proof().kid().to_string())?;
     let signing_key = build_signing_key(result.verified_key.document())?;
     let context = CryptoContext::new(
         result.member_handle,
         kid,
-        Box::new(WorkspacePublicKeySource::new(workspace_path)),
+        Box::new(WorkspacePublicKeySource::new(workspace.directory().clone())),
         result.verified_key,
         signing_key,
         LocalKeyPairExpiry::from_private_key(result.expires_at),

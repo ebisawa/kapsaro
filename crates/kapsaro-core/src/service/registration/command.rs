@@ -5,6 +5,7 @@
 //! Decides whether a workspace and member key have to be created, then does it.
 
 use crate::io::keystore::access::KeystoreAccess;
+use crate::io::workspace::members::MemberWriteStore;
 use crate::model::identity::{Kid, MemberHandle};
 use crate::model::public_key::GithubAccount;
 use crate::service::key::generate::{
@@ -14,6 +15,7 @@ use crate::service::key::github::{resolve_github_account, verify_preflight_githu
 use crate::service::key::timestamp::resolve_key_timestamps;
 use crate::service::online::{GitHubAccount, OnlineVerificationStatus};
 use crate::service::ssh::SshSigningContextResolution;
+use crate::service::workspace::WorkspaceCreationTarget;
 use crate::Result;
 
 use super::types::{
@@ -22,8 +24,8 @@ use super::types::{
     RegistrationResult,
 };
 use super::workspace::{
-    resolve_active_membership_state, resolve_registration_paths,
-    save_registration_member_with_access,
+    evaluate_init_workspace_status, require_join_workspace, resolve_active_membership_state,
+    resolve_registration_paths, save_registration_member_with_access,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -34,16 +36,24 @@ pub enum RegistrationDecision {
 }
 
 pub fn resolve_registration_command(
-    workspace_path: &std::path::Path,
+    workspace: &WorkspaceCreationTarget,
     member_handle: String,
     github_user: Option<String>,
     key_plan: RegistrationKeyPlan,
     mode: RegistrationMode,
     ssh_ctx: Option<SshSigningContextResolution>,
 ) -> Result<RegistrationCommand> {
+    match mode {
+        RegistrationMode::Init => {
+            evaluate_init_workspace_status(workspace)?;
+        }
+        RegistrationMode::Join => {
+            require_join_workspace(workspace)?;
+        }
+    }
     let (setup, keystore) =
         ensure_registration_member_setup(member_handle, github_user, key_plan, ssh_ctx)?;
-    resolve_registration_context(workspace_path, mode, setup, keystore)
+    resolve_registration_context(workspace, mode, setup, keystore)
 }
 
 pub fn execute_registration_command(
@@ -51,7 +61,7 @@ pub fn execute_registration_command(
     overwrite: bool,
 ) -> Result<RegistrationOutcome> {
     let result = save_registration_member_with_access(
-        &command.workspace_path,
+        &command.members,
         &command.setup.member_handle,
         command.setup.kid(),
         overwrite,
@@ -187,21 +197,18 @@ fn build_existing_member_setup(
 }
 
 fn resolve_registration_context(
-    workspace_path: &std::path::Path,
+    workspace: &WorkspaceCreationTarget,
     mode: RegistrationMode,
     setup: MemberSetupResult,
     keystore: KeystoreAccess,
 ) -> Result<RegistrationCommand> {
-    let paths = resolve_registration_paths(workspace_path, mode, &setup.member_handle)?;
-    let active_membership = resolve_active_membership_state(
-        mode,
-        &paths.workspace_path,
-        &setup.member_handle,
-        setup.kid(),
-    )?;
+    let paths = resolve_registration_paths(workspace, mode, &setup.member_handle)?;
+    let active_membership =
+        resolve_active_membership_state(mode, &paths.workspace, &setup.member_handle, setup.kid())?;
     Ok(RegistrationCommand {
         mode,
-        workspace_path: paths.workspace_path,
+        workspace_path: paths.workspace.path().to_path_buf(),
+        members: MemberWriteStore::open(paths.workspace.directory())?,
         setup,
         target: paths.target,
         is_new_workspace: paths.is_new_workspace,

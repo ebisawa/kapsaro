@@ -16,6 +16,7 @@ pub(crate) struct CommonOptions {
     pub(crate) ssh_agent: bool,
     pub(crate) ssh_keygen: bool,
     pub(crate) workspace: Option<PathBuf>,
+    pub(crate) global: bool,
 }
 
 pub(crate) trait ToCommonOptions {
@@ -32,8 +33,33 @@ pub(crate) struct HomeOption {
 #[derive(Debug, Clone, Args, Default)]
 pub(crate) struct WorkspaceOption {
     /// Workspace root directory
+    #[arg(long, short = 'w', conflicts_with = "global")]
+    pub(crate) workspace: Option<PathBuf>,
+
+    /// Use the global workspace at HOME/.kapsaro
+    #[arg(long, short = 'g', conflicts_with = "workspace")]
+    pub(crate) global: bool,
+}
+
+#[derive(Debug, Clone, Args, Default)]
+pub(crate) struct DoctorWorkspaceOption {
+    /// Select the regular workspace to diagnose alongside the global workspace
     #[arg(long, short = 'w')]
     pub(crate) workspace: Option<PathBuf>,
+}
+
+#[derive(Debug, Clone, Args, Default)]
+pub(crate) struct DoctorOutputOptions {
+    #[command(flatten)]
+    pub(crate) home: HomeOption,
+    #[command(flatten)]
+    pub(crate) workspace: DoctorWorkspaceOption,
+    #[command(flatten)]
+    pub(crate) json: JsonOption,
+    #[command(flatten)]
+    pub(crate) verbose: VerboseOption,
+    #[command(flatten)]
+    pub(crate) debug: DebugOption,
 }
 
 #[derive(Debug, Clone, Args, Default)]
@@ -299,6 +325,7 @@ fn build_common_options(home: &HomeOption, workspace: Option<&WorkspaceOption>) 
     CommonOptions {
         home: home.home.clone(),
         workspace: workspace.and_then(|option| option.workspace.clone()),
+        global: workspace.is_some_and(|option| option.global),
         ..CommonOptions::default()
     }
 }
@@ -348,6 +375,16 @@ impl ToCommonOptions for WorkspaceOptions {
 impl ToCommonOptions for WorkspaceOutputOptions {
     fn to_common_options(&self) -> CommonOptions {
         build_common_options(&self.home, Some(&self.workspace))
+    }
+}
+
+impl ToCommonOptions for DoctorOutputOptions {
+    fn to_common_options(&self) -> CommonOptions {
+        CommonOptions {
+            home: self.home.home.clone(),
+            workspace: self.workspace.workspace.clone(),
+            ..CommonOptions::default()
+        }
     }
 }
 

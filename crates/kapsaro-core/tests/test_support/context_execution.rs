@@ -7,7 +7,7 @@ use tempfile::TempDir;
 
 use crate::test_utils::setup_member_key_context;
 use kapsaro_core::api::key::KeyContext;
-use kapsaro_core::api::workspace::WorkspaceWriteDirectories;
+use kapsaro_core::api::workspace::{WorkspaceAccess, WorkspaceKind, WorkspaceWriteDirectories};
 use kapsaro_core::service::member::approval::MemberApprovalSession;
 use kapsaro_core::service::trust::{
     StrictKeyCheckingResolution, TrustCommandSession, WriteTrustOptions,
@@ -39,7 +39,7 @@ pub(crate) fn build_test_member_approval_session(
     workspace: &Path,
 ) -> MemberApprovalSession {
     MemberApprovalSession::open(
-        workspace,
+        &WorkspaceAccess::open(workspace, WorkspaceKind::Regular).unwrap(),
         build_test_trust_command_session(home, member_handle),
     )
     .unwrap()
@@ -60,9 +60,14 @@ pub(crate) fn resolve_test_write_session(
         )),
     )
     .unwrap();
-    let directories =
-        WorkspaceWriteDirectories::open(options.workspace.clone().expect("test write workspace"))
-            .unwrap();
+    let directories = WorkspaceWriteDirectories::open(
+        &WorkspaceAccess::open(
+            options.workspace.clone().expect("test write workspace"),
+            WorkspaceKind::Regular,
+        )
+        .unwrap(),
+    )
+    .unwrap();
     TestWriteSession {
         directories,
         trust,

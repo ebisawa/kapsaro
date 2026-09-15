@@ -22,7 +22,7 @@ use super::RemoveArgs;
 pub(crate) fn run(args: RemoveArgs) -> Result<(), Error> {
     let context = CliContext::resolve(&args.common)?;
     let preview = evaluate_member_removal(
-        &context.workspace_path()?,
+        context.workspace_access()?,
         &args.member_handle,
         context.allow_expired_key(args.allow_expired_key.allow_expired_key)?,
     )?;

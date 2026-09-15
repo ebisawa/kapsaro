@@ -30,14 +30,15 @@ pub(crate) fn run(args: VerifyArgs) -> Result<(), Error> {
 
 fn run_verify_only(args: VerifyArgs) -> Result<(), Error> {
     let context = CliContext::resolve(&args.common)?;
-    let results = evaluate_members_online(&context.workspace_path()?, &args.member_handles)?;
+    let results = evaluate_members_online(context.workspace_access()?, &args.member_handles)?;
     print_member_verification_results(args.common.json.json, &results)
 }
 
 fn run_approve(args: VerifyArgs) -> Result<(), Error> {
     let context = CliContext::resolve(&args.common)?;
+    let workspace = context.workspace_access()?;
     let trust = load_trust_command_session(&context, args.member.member_handle.clone())?;
-    let session = MemberApprovalSession::open(context.workspace_path()?, trust)?;
+    let session = MemberApprovalSession::open(workspace, trust)?;
     run_with_trust_command_session_reset_recovery(session.trust_command(), || {
         let mut evaluation = evaluate_members_for_approval(&session, &args.member_handles)?;
         if evaluation.results.is_empty() {

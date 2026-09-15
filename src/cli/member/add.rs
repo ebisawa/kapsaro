@@ -6,6 +6,7 @@
 
 use crate::cli::common::context::CliContext;
 use crate::cli::common::output::text::member::print_member_add_summary;
+use kapsaro_core::api::file::FileInputTarget;
 use kapsaro_core::api::member::mutation::add_member;
 use kapsaro_core::Error;
 
@@ -13,7 +14,8 @@ use super::AddArgs;
 
 pub(crate) fn run(args: AddArgs) -> Result<(), Error> {
     let context = CliContext::resolve(&args.common)?;
-    let member_handle = add_member(&context.workspace_path()?, &args.filename, args.force.force)?;
+    let input = FileInputTarget::open(&args.filename, context.optional_global_target()?)?;
+    let member_handle = add_member(context.workspace_access()?, &input, args.force.force)?;
     print_member_add_summary(&member_handle);
     Ok(())
 }

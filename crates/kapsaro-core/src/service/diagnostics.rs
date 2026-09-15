@@ -6,7 +6,7 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::error::LOCAL_STATE_PERMISSIONS_RULE;
+use crate::error::{GLOBAL_WORKSPACE_PERMISSIONS_RULE, LOCAL_STATE_PERMISSIONS_RULE};
 use crate::support::warning::{
     self, LocalStateWarning, LocalStateWarningCode, MAX_LOCAL_STATE_WARNINGS,
 };
@@ -21,6 +21,8 @@ pub enum DiagnosticCode {
     /// A local state entry, or a directory leading to it, that another user can
     /// reach.
     LocalStatePermissions,
+    /// A global workspace entry has ownership or access permissions to repair.
+    GlobalWorkspacePermissions,
 }
 
 impl DiagnosticCode {
@@ -28,6 +30,7 @@ impl DiagnosticCode {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::LocalStatePermissions => LOCAL_STATE_PERMISSIONS_RULE,
+            Self::GlobalWorkspacePermissions => GLOBAL_WORKSPACE_PERMISSIONS_RULE,
         }
     }
 }
@@ -62,6 +65,9 @@ impl From<LocalStateWarning> for LocalStateDiagnostic {
         Self {
             code: match warning.code() {
                 LocalStateWarningCode::Permissions => DiagnosticCode::LocalStatePermissions,
+                LocalStateWarningCode::GlobalWorkspacePermissions => {
+                    DiagnosticCode::GlobalWorkspacePermissions
+                }
             },
             path: warning.path().to_path_buf(),
             reason: warning.reason().to_string(),
@@ -74,6 +80,9 @@ impl From<LocalStateDiagnostic> for LocalStateWarning {
         Self::new(
             match diagnostic.code {
                 DiagnosticCode::LocalStatePermissions => LocalStateWarningCode::Permissions,
+                DiagnosticCode::GlobalWorkspacePermissions => {
+                    LocalStateWarningCode::GlobalWorkspacePermissions
+                }
             },
             &diagnostic.path,
             diagnostic.reason,

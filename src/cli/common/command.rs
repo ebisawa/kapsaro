@@ -83,7 +83,7 @@ pub(crate) fn open_cli_write_session(
     member_handle: Option<String>,
     allow_expired_key: bool,
 ) -> Result<CliWriteSession> {
-    let directories = WorkspaceWriteDirectories::open(context.workspace_path()?)?;
+    let directories = WorkspaceWriteDirectories::open(context.workspace_access()?)?;
     resolve_cli_write_session(context, directories, member_handle, allow_expired_key)
 }
 

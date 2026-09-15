@@ -56,8 +56,8 @@ pub(crate) struct UnsetArgs {
 pub(crate) fn run(args: UnsetArgs) -> Result<()> {
     let context = CliContext::resolve(&args.common)?;
     let allow_expired_key = context.allow_expired_key(args.allow_expired_key.allow_expired_key)?;
-    let workspace_path = context.workspace_path()?;
-    let directories = WorkspaceWriteDirectories::open(workspace_path)?;
+    let workspace = context.workspace_access()?;
+    let directories = WorkspaceWriteDirectories::open(workspace)?;
     let member_handle =
         resolve_required_cli_member_handle(&context, args.member.member_handle.clone(), false)?;
     confirm_unset_operation(args.force.force, &args.key)?;

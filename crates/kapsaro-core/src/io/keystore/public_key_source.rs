@@ -4,11 +4,11 @@
 //! PublicKeySource trait and implementations for abstracting public key resolution.
 
 use crate::io::keystore::access::KeystoreAccess;
-use crate::io::workspace::members::load_member_file;
+use crate::io::workspace::members::{open_member_documents_at, MemberStatus};
 use crate::model::identity::{Kid, MemberHandle};
 use crate::model::public_key::PublicKey;
+use crate::support::fs::anchor::AnchoredDir;
 use crate::{Error, Result};
-use std::path::PathBuf;
 
 /// Abstraction for loading public keys from different sources.
 pub trait PublicKeySource: Send + Sync {
@@ -77,25 +77,33 @@ impl PublicKeySource for KeystorePublicKeySource {
 
 /// Loads public keys from workspace member files (members/active/).
 pub struct WorkspacePublicKeySource {
-    workspace_path: PathBuf,
+    workspace: AnchoredDir,
 }
 
 impl WorkspacePublicKeySource {
-    pub fn new(workspace_path: PathBuf) -> Self {
-        Self { workspace_path }
+    pub(crate) fn new(workspace: AnchoredDir) -> Self {
+        Self { workspace }
     }
 }
 
 impl PublicKeySource for WorkspacePublicKeySource {
     fn load_public_key(&self, member_handle: &MemberHandle) -> Result<PublicKey> {
-        let (public_key, status) = load_member_file(&self.workspace_path, member_handle.as_str())?;
-        if status != crate::io::workspace::members::MemberStatus::Active {
-            return Err(crate::Error::build_verification_error(
-                "member-status".to_string(),
-                format!("Member '{}' is not active in workspace", member_handle),
-            ));
+        let name = format!("{member_handle}.json");
+        for status in [MemberStatus::Active, MemberStatus::Incoming] {
+            let documents = open_member_documents_at(&self.workspace, status)?;
+            if documents.names().contains(&name) {
+                if status != MemberStatus::Active {
+                    return Err(Error::build_verification_error(
+                        "member-status",
+                        format!("Member '{member_handle}' is not active in workspace"),
+                    ));
+                }
+                return Ok(documents.load_verified_document(&name)?.public_key);
+            }
         }
-        Ok(public_key)
+        Err(Error::build_not_found_error(format!(
+            "Member '{member_handle}' not found in workspace"
+        )))
     }
 
     fn load_public_keys_for_member_handles(

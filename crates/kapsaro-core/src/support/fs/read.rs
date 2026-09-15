@@ -6,13 +6,35 @@
 
 use std::fs;
 use std::fs::File;
-use std::io::Read;
+use std::io::{self, Read};
+use std::os::unix::fs::FileExt;
 use std::path::Path;
 
+#[cfg(test)]
 use crate::support::limits::MAX_PLAINTEXT_INPUT_SIZE;
 use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
 use zeroize::Zeroize;
+
+/// Reads a retained file with a position private to this reader.
+pub(crate) struct FileReader<'a> {
+    file: &'a File,
+    position: u64,
+}
+
+impl<'a> FileReader<'a> {
+    pub(crate) fn new(file: &'a File) -> Self {
+        Self { file, position: 0 }
+    }
+}
+
+impl Read for FileReader<'_> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let count = self.file.read_at(buf, self.position)?;
+        self.position += count as u64;
+        Ok(count)
+    }
+}
 
 /// Read a plaintext input file the operator named on the command line.
 ///
@@ -20,6 +42,7 @@ use zeroize::Zeroize;
 /// that never ends or a file far larger than anything kapsaro can encrypt. The
 /// read is bound to a regular file and to the input size limit, which is what
 /// keeps an unbounded path from deciding how much memory the process takes.
+#[cfg(test)]
 pub fn load_bytes(path: &Path) -> Result<Vec<u8>> {
     load_bytes_with_limit(path, MAX_PLAINTEXT_INPUT_SIZE, "Input file")
 }
@@ -123,8 +146,8 @@ fn open_without_blocking(path: &Path) -> Result<File> {
 /// is wiped before the failure leaves. Private keys are read through here, and a
 /// read that stopped partway or a file one byte over the limit has just as much
 /// of one in memory as a read that succeeded.
-pub(crate) fn load_capped_bytes(
-    file: &mut File,
+pub(crate) fn load_capped_bytes<R: Read>(
+    file: &mut R,
     max_bytes: usize,
     subject: &str,
     display_path: &str,

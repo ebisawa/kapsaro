@@ -20,6 +20,7 @@ use kapsaro_core::api::rewrap::{
     RewrapAcceptance, RewrapOptions, RewrapSession, RewrapSessionDecision, RewrapTarget,
 };
 use kapsaro_core::api::trust::recovery::evaluate_trust_store_reset;
+use kapsaro_core::api::workspace::WorkspaceAccess;
 use kapsaro_core::{Error, Result};
 
 pub(crate) fn run_batch_rewrap(
@@ -28,8 +29,8 @@ pub(crate) fn run_batch_rewrap(
     operation: OperationOptions,
     allow_non_member: bool,
     review_available: bool,
+    targets: Vec<RewrapTarget>,
 ) -> Result<()> {
-    let targets = resolve_targets(args, session)?;
     print_warnings(&session.signing_key_warnings()?);
     let promoted = review_and_apply_promotions(session, review_available)?;
     print_warnings(&session.post_promotion_warnings()?);
@@ -57,7 +58,11 @@ fn review_and_apply_promotions(
     Ok(outcome.promoted_member_handles().to_vec())
 }
 
-fn resolve_targets(args: &RewrapArgs, session: &RewrapSession<'_>) -> Result<Vec<RewrapTarget>> {
+pub(super) fn resolve_targets(
+    args: &RewrapArgs,
+    session: &RewrapSession<'_>,
+    global: Option<&WorkspaceAccess>,
+) -> Result<Vec<RewrapTarget>> {
     let targets = if args.targets.is_empty() {
         let listing = session.list_workspace_targets()?;
         print_warnings(listing.warnings());
@@ -65,7 +70,7 @@ fn resolve_targets(args: &RewrapArgs, session: &RewrapSession<'_>) -> Result<Vec
     } else {
         args.targets
             .iter()
-            .map(RewrapTarget::open)
+            .map(|path| RewrapTarget::open(path, global))
             .collect::<Result<Vec<_>>>()?
     };
     let targets = collect_unique_targets(targets);

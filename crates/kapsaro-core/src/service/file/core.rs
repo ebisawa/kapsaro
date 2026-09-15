@@ -7,6 +7,8 @@ use sha2::{Digest, Sha256};
 use std::borrow::Cow;
 use std::io::Read;
 
+use super::input::FileInputTarget;
+use super::output::FileOutputTarget;
 use crate::feature::context::crypto::{build_signing_context, DecryptionKeyInfo};
 use crate::feature::decrypt::file::decrypt_file_document_with_context;
 use crate::feature::encrypt::encrypt_file_content;
@@ -21,8 +23,6 @@ use crate::service::artifact::verified::{
     EncArtifactKind, ReadableEncArtifact, VerifiedEncArtifact,
 };
 use crate::service::artifact_text::{ArtifactLoadPolicy, ArtifactText};
-use crate::support::fs::atomic::{save_bytes_restricted, save_text};
-use crate::support::fs::load_bytes;
 use crate::support::fs::relative::{load_text_with_limit_at, DirectoryFd};
 use crate::support::limits::MAX_JSON_DOCUMENT_READ_SIZE;
 use crate::support::path::format_path_relative_to_cwd;
@@ -66,18 +66,18 @@ const FILE_ENC_LOAD_POLICY: ArtifactLoadPolicy =
     ArtifactLoadPolicy::new(MAX_JSON_DOCUMENT_READ_SIZE, "file-enc artifact");
 
 /// Load plaintext bytes for file encryption.
-pub fn load_plaintext_bytes(path: impl AsRef<std::path::Path>) -> Result<Vec<u8>> {
-    load_bytes(path.as_ref())
+pub fn load_plaintext_bytes(target: &FileInputTarget) -> Result<Vec<u8>> {
+    target.load_plaintext()
 }
 
 /// Save serialized encrypted output with ordinary artifact permissions.
-pub fn save_encrypted_text(path: impl AsRef<std::path::Path>, content: &str) -> Result<()> {
-    save_text(path.as_ref(), content)
+pub fn save_encrypted_text(target: &FileOutputTarget, content: &str) -> Result<()> {
+    target.save(content.as_bytes(), false)
 }
 
 /// Save decrypted output with owner-only permissions.
-pub fn save_decrypted_bytes(path: impl AsRef<std::path::Path>, content: &[u8]) -> Result<()> {
-    save_bytes_restricted(path.as_ref(), content)
+pub fn save_decrypted_bytes(target: &FileOutputTarget, content: &[u8]) -> Result<()> {
+    target.save(content, true)
 }
 
 impl FileEncArtifact {

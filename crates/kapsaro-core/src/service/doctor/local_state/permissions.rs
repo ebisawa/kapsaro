@@ -127,7 +127,6 @@ fn unscanned_tree_reason(home: &LocalStateHome) -> Option<String> {
         LocalStateHome::Missing => {
             Some("the local state root does not exist, so no entry was inspected".to_string())
         }
-        LocalStateHome::Unavailable { reason } => Some(reason.clone()),
     }
 }
 

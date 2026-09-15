@@ -11,6 +11,8 @@ mod decrypt;
 mod doctor;
 mod encrypt;
 mod env_key_mode;
+mod global_run_failure;
+mod global_selection;
 mod help;
 mod init;
 mod inspect;

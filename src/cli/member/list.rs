@@ -13,6 +13,6 @@ use super::ListArgs;
 
 pub(crate) fn run(args: ListArgs) -> Result<(), Error> {
     let context = CliContext::resolve(&args.common)?;
-    let result = list_members(&context.workspace_path()?)?;
+    let result = list_members(context.workspace_access()?)?;
     print_member_list(args.common.json.json, &result)
 }

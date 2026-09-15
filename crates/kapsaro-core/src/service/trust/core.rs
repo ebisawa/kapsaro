@@ -30,7 +30,7 @@ use crate::io::trust::paths::{get_trust_store_file_path, TRUST_DIR_NAME};
 use crate::io::trust::store::{
     attach_trust_store_recovery, load_trust_store_snapshot, TrustStoreSnapshot,
 };
-use crate::io::workspace::members::{load_active_member_files, load_active_member_files_at};
+use crate::io::workspace::members::load_active_member_files_at;
 use crate::model::identity::Kid;
 use crate::model::public_key::PublicKey;
 use crate::model::public_key::VerifiedSigningPublicKey;
@@ -41,6 +41,7 @@ use crate::model::trust_store::{
 use crate::model::trust_store_verified::VerifiedTrustStore;
 use crate::model::verification::SignatureVerificationProof;
 use crate::model::{file_enc::VerifiedFileEncDocument, kv_enc::verified::VerifiedKvEncDocument};
+use crate::service::workspace::WorkspaceAccess;
 use crate::support::fs::anchor::AnchoredDir;
 use crate::support::fs::lock::LockTargetDirectory;
 use crate::support::fs::relative::{
@@ -729,14 +730,9 @@ fn apply_recipient_set_approval(
 }
 
 impl CurrentMemberSnapshot {
-    /// Load and verify the current active members from a workspace path.
-    ///
-    /// An embedding application names its workspace by path, which is the only
-    /// handle it has. A command that already bound its workspace to a
-    /// descriptor loads through that instead, so the tree it authorizes against
-    /// cannot change under it.
-    pub fn load(workspace_path: &Path) -> Result<Self> {
-        Self::from_active_members(load_active_member_files(workspace_path)?)
+    /// Load and verify active members from the caller's retained workspace.
+    pub fn load(workspace: &WorkspaceAccess) -> Result<Self> {
+        Self::load_at(workspace.directory())
     }
 
     /// Load and verify the active members held under one workspace descriptor.

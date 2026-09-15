@@ -16,12 +16,14 @@ use crate::io::trust::paths::get_trust_store_file_path;
 use crate::model::identity::{Kid, MemberHandle};
 use crate::model::trust_store::TrustStoreProtected;
 use crate::model::wire::format::LOCAL_TRUST_V1;
+use crate::service::config::LocalStateSession;
 use crate::service::doctor::ci::{check_ci_readiness, DoctorCiReadiness};
 use crate::service::doctor::local_state::set_post_keystore_open_hook;
 use crate::service::doctor::types::{DoctorCheck, DoctorReason, DoctorStatus, DoctorSubject};
 use crate::service::doctor::{
     execute_doctor_command, DoctorRequest, DoctorWorkspaceResolution, DoctorWorkspaceSource,
 };
+use crate::service::workspace::{WorkspaceAccess, WorkspaceKind};
 use crate::test_support::storage::keystore::active::set_active_kid;
 use crate::test_support::storage::keystore::storage::{list_kids, load_public_key};
 use crate::test_support::storage::trust::store::save_trust_store;
@@ -35,12 +37,12 @@ use tempfile::TempDir;
 
 fn doctor_request(home: &TempDir, workspace: &Path) -> DoctorRequest {
     DoctorRequest {
-        workspace: DoctorWorkspaceResolution::Selection {
-            path: workspace.to_path_buf(),
+        workspaces: vec![DoctorWorkspaceResolution::Selection {
+            access: WorkspaceAccess::open(workspace.to_path_buf(), WorkspaceKind::Regular).unwrap(),
             source: DoctorWorkspaceSource::Cli,
-        },
-        base_dir: home.path().to_path_buf(),
-        member_handle: Some(ALICE_MEMBER_HANDLE.to_string()),
+        }],
+        local_state: LocalStateSession::open(home.path().to_path_buf()),
+        member_handle: Ok(Some(ALICE_MEMBER_HANDLE.to_string())),
         ci: DoctorCiReadiness::Inactive,
     }
 }
@@ -252,12 +254,12 @@ fn test_doctor_uses_the_caller_resolved_owner_for_the_keystore_checks() {
     let (home, workspace) =
         setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
     let request = DoctorRequest {
-        workspace: DoctorWorkspaceResolution::Selection {
-            path: workspace,
+        workspaces: vec![DoctorWorkspaceResolution::Selection {
+            access: WorkspaceAccess::open(workspace, WorkspaceKind::Regular).unwrap(),
             source: DoctorWorkspaceSource::Cli,
-        },
-        base_dir: home.path().to_path_buf(),
-        member_handle: Some(BOB_MEMBER_HANDLE.to_string()),
+        }],
+        local_state: LocalStateSession::open(home.path().to_path_buf()),
+        member_handle: Ok(Some(BOB_MEMBER_HANDLE.to_string())),
         ci: DoctorCiReadiness::Inactive,
     };
 
@@ -437,12 +439,12 @@ fn test_doctor_verifies_the_trust_store_through_a_symlinked_home() {
     let selected_home = links.path().join("selected-home");
     symlink(home.path(), &selected_home).unwrap();
     let request = DoctorRequest {
-        workspace: DoctorWorkspaceResolution::Selection {
-            path: workspace,
+        workspaces: vec![DoctorWorkspaceResolution::Selection {
+            access: WorkspaceAccess::open(workspace, WorkspaceKind::Regular).unwrap(),
             source: DoctorWorkspaceSource::Cli,
-        },
-        base_dir: selected_home.clone(),
-        member_handle: Some(ALICE_MEMBER_HANDLE.to_string()),
+        }],
+        local_state: LocalStateSession::open(selected_home.clone()),
+        member_handle: Ok(Some(ALICE_MEMBER_HANDLE.to_string())),
         ci: DoctorCiReadiness::Inactive,
     };
 
@@ -500,30 +502,30 @@ fn test_doctor_reports_trust_store_unavailable_for_symlinked_trust_directory() {
 /// rather than the keystore directory the diagnosis never reached.
 #[test]
 fn test_doctor_reports_keystore_root_io_failure_with_unsafe_rule() {
-    use crate::support::path::format_path_relative_to_cwd;
-
     let home = TempDir::new().unwrap();
     let workspace = home.path().join("workspace");
     ensure_workspace_dirs(&workspace);
     let base_dir = home.path().join("x".repeat(300));
     let request = DoctorRequest {
-        workspace: DoctorWorkspaceResolution::Selection {
-            path: workspace,
+        workspaces: vec![DoctorWorkspaceResolution::Selection {
+            access: WorkspaceAccess::open(workspace, WorkspaceKind::Regular).unwrap(),
             source: DoctorWorkspaceSource::Cli,
-        },
-        base_dir: base_dir.clone(),
-        member_handle: Some(ALICE_MEMBER_HANDLE.to_string()),
+        }],
+        local_state: LocalStateSession::open(base_dir.clone()),
+        member_handle: Ok(Some(ALICE_MEMBER_HANDLE.to_string())),
         ci: DoctorCiReadiness::Inactive,
     };
 
     let checks = execute_doctor_command(request).unwrap().checks().to_vec();
-    let check = find_check(&checks, "keystore.root", DoctorStatus::Fail);
+    let check = find_check(&checks, "local_state.resolve", DoctorStatus::Fail);
 
     assert_eq!(check.rule.as_deref(), Some("E_LOCAL_STATE_PATH_UNSAFE"));
+    assert!(check.reason_line().unwrap().contains(&"x".repeat(300)));
     assert_eq!(
-        check.subject,
-        DoctorSubject::Path(format_path_relative_to_cwd(&base_dir))
+        check.next_action.as_deref(),
+        Some("inspect the local state path and permissions")
     );
+    find_check(&checks, "members.incoming.empty", DoctorStatus::Ok);
 }
 
 /// A keystore root other users can reach is named as a warning and the rest of
@@ -636,12 +638,12 @@ fn test_doctor_warns_about_ignored_root_entry_during_owner_fallback() {
     let (home, workspace) = setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE]);
     fs::write(home.path().join("keys/unexpected"), "unexpected").unwrap();
     let request = DoctorRequest {
-        workspace: DoctorWorkspaceResolution::Selection {
-            path: workspace,
+        workspaces: vec![DoctorWorkspaceResolution::Selection {
+            access: WorkspaceAccess::open(workspace, WorkspaceKind::Regular).unwrap(),
             source: DoctorWorkspaceSource::Cli,
-        },
-        base_dir: home.path().to_path_buf(),
-        member_handle: None,
+        }],
+        local_state: LocalStateSession::open(home.path().to_path_buf()),
+        member_handle: Ok(None),
         ci: DoctorCiReadiness::Inactive,
     };
 
@@ -974,12 +976,12 @@ fn test_doctor_without_member_handle_reports_owner_warnings_when_ambiguous() {
     let (home, workspace) =
         setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
     let request = DoctorRequest {
-        workspace: DoctorWorkspaceResolution::Selection {
-            path: workspace,
+        workspaces: vec![DoctorWorkspaceResolution::Selection {
+            access: WorkspaceAccess::open(workspace, WorkspaceKind::Regular).unwrap(),
             source: DoctorWorkspaceSource::Cli,
-        },
-        base_dir: home.path().to_path_buf(),
-        member_handle: None,
+        }],
+        local_state: LocalStateSession::open(home.path().to_path_buf()),
+        member_handle: Ok(None),
         ci: DoctorCiReadiness::Inactive,
     };
 
@@ -1013,12 +1015,12 @@ fn test_doctor_uses_opened_keystore_identity_for_owner_and_trust_store() {
         fs::rename(&replacement_keystore, &keystore_root).unwrap();
     });
     let request = DoctorRequest {
-        workspace: DoctorWorkspaceResolution::Selection {
-            path: workspace,
+        workspaces: vec![DoctorWorkspaceResolution::Selection {
+            access: WorkspaceAccess::open(workspace, WorkspaceKind::Regular).unwrap(),
             source: DoctorWorkspaceSource::Cli,
-        },
-        base_dir: home.path().to_path_buf(),
-        member_handle: None,
+        }],
+        local_state: LocalStateSession::open(home.path().to_path_buf()),
+        member_handle: Ok(None),
         ci: DoctorCiReadiness::Inactive,
     };
 
@@ -1049,12 +1051,12 @@ fn test_doctor_stays_bound_to_the_opened_keystore_for_ambiguous_owner() {
         fs::rename(&replacement_keystore, &keystore_root).unwrap();
     });
     let request = DoctorRequest {
-        workspace: DoctorWorkspaceResolution::Selection {
-            path: workspace,
+        workspaces: vec![DoctorWorkspaceResolution::Selection {
+            access: WorkspaceAccess::open(workspace, WorkspaceKind::Regular).unwrap(),
             source: DoctorWorkspaceSource::Cli,
-        },
-        base_dir: home.path().to_path_buf(),
-        member_handle: None,
+        }],
+        local_state: LocalStateSession::open(home.path().to_path_buf()),
+        member_handle: Ok(None),
         ci: DoctorCiReadiness::Inactive,
     };
 
@@ -1083,12 +1085,12 @@ fn test_doctor_env_key_without_explicit_member_preserves_missing_home() {
     let missing_home = temp.path().join("missing-home");
     ensure_workspace_dirs(&workspace);
     let request = DoctorRequest {
-        workspace: DoctorWorkspaceResolution::Selection {
-            path: workspace,
+        workspaces: vec![DoctorWorkspaceResolution::Selection {
+            access: WorkspaceAccess::open(workspace, WorkspaceKind::Regular).unwrap(),
             source: DoctorWorkspaceSource::Cli,
-        },
-        base_dir: missing_home.clone(),
-        member_handle: None,
+        }],
+        local_state: LocalStateSession::open(missing_home.clone()),
+        member_handle: Ok(None),
         ci: DoctorCiReadiness::active(true, Some("invalid test key".to_string())),
     };
 
@@ -1103,12 +1105,12 @@ fn test_doctor_env_key_without_explicit_member_preserves_missing_home() {
 fn test_doctor_env_key_without_explicit_member_skips_local_owner_fallback() {
     let (home, workspace) = setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE]);
     let request = DoctorRequest {
-        workspace: DoctorWorkspaceResolution::Selection {
-            path: workspace,
+        workspaces: vec![DoctorWorkspaceResolution::Selection {
+            access: WorkspaceAccess::open(workspace, WorkspaceKind::Regular).unwrap(),
             source: DoctorWorkspaceSource::Cli,
-        },
-        base_dir: home.path().to_path_buf(),
-        member_handle: None,
+        }],
+        local_state: LocalStateSession::open(home.path().to_path_buf()),
+        member_handle: Ok(None),
         ci: DoctorCiReadiness::active(true, Some("invalid test key".to_string())),
     };
 
@@ -1122,12 +1124,12 @@ fn test_doctor_env_key_without_explicit_member_skips_local_owner_fallback() {
 fn test_doctor_env_key_respects_explicit_member() {
     let (home, workspace) = setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE]);
     let request = DoctorRequest {
-        workspace: DoctorWorkspaceResolution::Selection {
-            path: workspace,
+        workspaces: vec![DoctorWorkspaceResolution::Selection {
+            access: WorkspaceAccess::open(workspace, WorkspaceKind::Regular).unwrap(),
             source: DoctorWorkspaceSource::Cli,
-        },
-        base_dir: home.path().to_path_buf(),
-        member_handle: Some(ALICE_MEMBER_HANDLE.to_string()),
+        }],
+        local_state: LocalStateSession::open(home.path().to_path_buf()),
+        member_handle: Ok(Some(ALICE_MEMBER_HANDLE.to_string())),
         ci: DoctorCiReadiness::active(true, Some("invalid test key".to_string())),
     };
 

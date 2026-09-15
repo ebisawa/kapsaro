@@ -13,7 +13,8 @@ use kapsaro_core::api::doctor::{
 use kapsaro_core::api::file::encrypt::{resolve_encrypt_file_command, EncryptFileCommand};
 use kapsaro_core::api::file::{
     load_plaintext_bytes, save_decrypted_bytes, save_encrypted_text, FileEncArtifact,
-    FileReadOperation, TrustedFileEncArtifact, VerifiedFileEncArtifact,
+    FileInputTarget, FileOutputTarget, FileReadOperation, TrustedFileEncArtifact,
+    VerifiedFileEncArtifact,
 };
 use kapsaro_core::api::key::generate::KeyGenerationHome;
 use kapsaro_core::api::key::{
@@ -47,7 +48,10 @@ use kapsaro_core::api::trust::{
     TrustRecipientHandleHint, TrustReviewKind, TrustReviewRequest, VerifiedLocalTrustStore,
     VerifiedLocalTrustStoreLoadResult, WorkspaceReadSession,
 };
-use kapsaro_core::api::workspace::{WorkspaceWriteDirectories, SECRETS_DIR_NAME};
+use kapsaro_core::api::workspace::{
+    WorkspaceAccess, WorkspaceCreationTarget, WorkspaceKind, WorkspaceWriteDirectories,
+    SECRETS_DIR_NAME,
+};
 use kapsaro_core::{Error, ErrorKind, Result};
 use std::error::Error as StdError;
 use zeroize::Zeroizing;
@@ -105,25 +109,35 @@ fn api_exposes_use_case_modules() {
 
 #[test]
 fn test_doctor_request_exposes_caller_resolved_workspace() {
+    let root = tempfile::TempDir::new().unwrap();
     let workspace = DoctorWorkspaceResolution::Selection {
-        path: std::path::PathBuf::from("/tmp/workspace"),
+        access: WorkspaceAccess::open(root.path(), WorkspaceKind::Global).unwrap(),
         source: DoctorWorkspaceSource::Cli,
     };
     let _request = DoctorRequest {
-        base_dir: std::path::PathBuf::from("/tmp/home"),
-        workspace,
-        member_handle: None,
+        local_state: LocalStateSession::open(root.path().join("local")),
+        workspaces: vec![workspace],
+        member_handle: Ok(None),
         ci: DoctorCiReadiness::Inactive,
     };
     let _execute: fn(DoctorRequest) -> Result<kapsaro_core::api::doctor::types::DoctorReport> =
         execute_doctor_command;
-    let _unresolved = DoctorWorkspaceResolution::Unresolved;
-    let _failure = DoctorWorkspaceResolution::Failure(Error::build_config_error("failure"));
+    let _unresolved = DoctorWorkspaceResolution::Missing {
+        path: None,
+        source: DoctorWorkspaceSource::AutoDetect,
+        kind: WorkspaceKind::Regular,
+    };
+    let _failure = DoctorWorkspaceResolution::Failure {
+        error: Error::build_config_error("failure"),
+        source: DoctorWorkspaceSource::Global,
+        kind: WorkspaceKind::Global,
+    };
     let _sources = [
         DoctorWorkspaceSource::Cli,
         DoctorWorkspaceSource::Environment,
         DoctorWorkspaceSource::Config,
         DoctorWorkspaceSource::AutoDetect,
+        DoctorWorkspaceSource::Global,
     ];
 }
 
@@ -270,19 +284,28 @@ fn artifact_io_helpers_are_available_through_purpose_specific_modules() {
     std::fs::write(&plaintext_path, b"secret").expect("write plaintext fixture");
 
     assert_eq!(
-        load_plaintext_bytes(&plaintext_path).expect("load plaintext"),
+        load_plaintext_bytes(&FileInputTarget::open(&plaintext_path, None).unwrap())
+            .expect("load plaintext"),
         b"secret"
     );
 
     let encrypted_path = temp.path().join("artifact.kapsaro");
-    save_encrypted_text(&encrypted_path, "encrypted").expect("save encrypted artifact");
+    save_encrypted_text(
+        &FileOutputTarget::open(&encrypted_path, None).unwrap(),
+        "encrypted",
+    )
+    .expect("save encrypted artifact");
     assert_eq!(
         std::fs::read_to_string(encrypted_path).expect("read encrypted artifact"),
         "encrypted"
     );
 
     let decrypted_path = temp.path().join("decrypted");
-    save_decrypted_bytes(&decrypted_path, b"decrypted").expect("save decrypted artifact");
+    save_decrypted_bytes(
+        &FileOutputTarget::open(&decrypted_path, None).unwrap(),
+        b"decrypted",
+    )
+    .expect("save decrypted artifact");
     assert_eq!(
         std::fs::read(decrypted_path).expect("read decrypted artifact"),
         b"decrypted"
@@ -291,7 +314,8 @@ fn artifact_io_helpers_are_available_through_purpose_specific_modules() {
     let import_path = temp.path().join("import.env");
     std::fs::write(&import_path, "KEY=value\n").expect("write import fixture");
     assert_eq!(
-        load_import_text(&import_path).expect("load import text"),
+        load_import_text(&FileInputTarget::open(&import_path, None).unwrap())
+            .expect("load import text"),
         "KEY=value\n"
     );
 
@@ -363,8 +387,19 @@ fn artifact_facades_expose_verified_operations() {
 
 #[test]
 fn test_workspace_write_directories_and_resolvers_are_public() {
-    fn open_directories(path: std::path::PathBuf) -> Result<WorkspaceWriteDirectories> {
-        WorkspaceWriteDirectories::open(path)
+    fn open_workspace(path: &std::path::Path, kind: WorkspaceKind) -> Result<WorkspaceAccess> {
+        WorkspaceAccess::open(path, kind)
+    }
+    fn open_creation(
+        path: &std::path::Path,
+        kind: WorkspaceKind,
+    ) -> Result<WorkspaceCreationTarget> {
+        WorkspaceCreationTarget::open(path, kind)
+    }
+    let _open_workspace = open_workspace;
+    let _open_creation = open_creation;
+    fn open_directories(access: &WorkspaceAccess) -> Result<WorkspaceWriteDirectories> {
+        WorkspaceWriteDirectories::open(access)
     }
 
     fn resolve_encrypt<'a>(
@@ -394,7 +429,7 @@ fn test_workspace_write_directories_and_resolvers_are_public() {
 #[test]
 fn trust_evaluator_exposes_operation_bound_decisions() {
     fn open_rewrap_session<'a>(
-        workspace: &std::path::Path,
+        workspace: &WorkspaceAccess,
         home: Option<std::path::PathBuf>,
         key_ctx: &'a KeyContext,
     ) -> Result<RewrapSession<'a>> {
@@ -402,13 +437,14 @@ fn trust_evaluator_exposes_operation_bound_decisions() {
     }
 
     fn open_rewrap_with_trust<'a>(
-        workspace: &std::path::Path,
+        workspace: &WorkspaceAccess,
         trust: &'a TrustCommandSession,
     ) -> Result<RewrapSession<'a>> {
         RewrapSession::from_trust_command(workspace, trust)
     }
 
-    let _load_snapshot = CurrentMemberSnapshot::load;
+    let _load_snapshot: fn(&WorkspaceAccess) -> Result<CurrentMemberSnapshot> =
+        CurrentMemberSnapshot::load;
     let _evaluate_file = TrustPolicyEvaluator::evaluate_file;
     let _evaluate_kv = TrustPolicyEvaluator::evaluate_kv;
     let _evaluate_kv_mutation = TrustPolicyEvaluator::evaluate_kv_mutation;
@@ -417,7 +453,7 @@ fn trust_evaluator_exposes_operation_bound_decisions() {
     let _rewrap_options = RewrapOptions::new();
     let _open_rewrap_session = open_rewrap_session;
     let _open_rewrap_with_trust = open_rewrap_with_trust;
-    let _open_rewrap_target = |path: &std::path::Path| RewrapTarget::open(path);
+    let _open_rewrap_target = |path: &std::path::Path| RewrapTarget::open(path, None);
     let _workspace_rewrap_target = RewrapSession::workspace_target;
     let _list_workspace_targets = RewrapSession::list_workspace_targets;
     let _post_promotion_warnings = RewrapSession::post_promotion_warnings;
@@ -729,7 +765,7 @@ fn test_trust_approval_constructors_and_from_request_pinned() {
 #[test]
 fn test_read_session_types_and_low_level_review_control_are_public() {
     fn open_session<'a>(
-        workspace: &std::path::Path,
+        workspace: &WorkspaceAccess,
         local_state: Option<&LocalStateSession>,
         key_context: &'a KeyContext,
         options: OperationOptions,
@@ -904,8 +940,8 @@ mod every_public_name {
     };
     use kapsaro_core::api::file::{
         load_plaintext_bytes as _, save_decrypted_bytes as _, save_encrypted_text as _,
-        FileEncArtifact as _, FileReadOperation as _, TrustedFileEncArtifact as _,
-        VerifiedFileEncArtifact as _,
+        FileEncArtifact as _, FileInputTarget as _, FileOutputTarget as _, FileReadOperation as _,
+        TrustedFileEncArtifact as _, VerifiedFileEncArtifact as _,
     };
     use kapsaro_core::api::inspect::{
         inspect_file as _, AeadAlgorithmMetadata as _, ArtifactSignatureMetadata as _,
@@ -1047,7 +1083,9 @@ mod every_public_name {
         WorkspaceReadSession as _, WriteTrustOptions as _,
     };
     use kapsaro_core::api::workspace::{
-        detect_workspace_path as _, resolve_workspace_path as _,
-        select_workspace_creation_path as _, WorkspaceWriteDirectories as _, SECRETS_DIR_NAME as _,
+        detect_workspace_path as _, detect_workspace_path_excluding as _,
+        resolve_workspace_path as _, select_workspace_creation_path as _, WorkspaceAccess as _,
+        WorkspaceCreationTarget as _, WorkspaceKind as _, WorkspaceWriteDirectories as _,
+        SECRETS_DIR_NAME as _,
     };
 }

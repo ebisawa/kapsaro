@@ -8,7 +8,7 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 use crate::cli::common::presentation::format_path_relative_to_cwd;
-use kapsaro_core::api::file::{save_decrypted_bytes, save_encrypted_text};
+use kapsaro_core::api::file::{save_decrypted_bytes, save_encrypted_text, FileOutputTarget};
 use kapsaro_core::{Error, Result};
 
 pub(crate) fn resolve_encrypted_output_path(
@@ -66,16 +66,14 @@ fn extract_input_filename(input_path: &Path) -> Result<&str> {
 }
 
 pub(crate) fn save_encrypted_output(
-    output_path: Option<&PathBuf>,
+    output_path: Option<&FileOutputTarget>,
     content: &str,
     quiet: bool,
 ) -> Result<()> {
     match output_path {
         Some(path) => {
-            // Encrypted artifacts are meant to be shared (committed, sent to
-            // teammates), so this writes with unrestricted permissions.
             save_encrypted_text(path, content)?;
-            print_output_notice("Encrypted to", path, quiet);
+            print_output_notice("Encrypted to", path.path(), quiet);
         }
         None => print!("{}", content),
     }
@@ -83,7 +81,7 @@ pub(crate) fn save_encrypted_output(
 }
 
 pub(crate) fn save_decrypted_output(
-    output_path: Option<&Path>,
+    output_path: Option<&FileOutputTarget>,
     plaintext_bytes: &[u8],
     quiet: bool,
 ) -> Result<()> {
@@ -92,7 +90,7 @@ pub(crate) fn save_decrypted_output(
             // Decrypted plaintext is secret material, so this restricts
             // permissions to the owner (0600) unlike the encrypted output path.
             save_decrypted_bytes(path, plaintext_bytes)?;
-            print_output_notice("Decrypted to", path, quiet);
+            print_output_notice("Decrypted to", path.path(), quiet);
         }
         None => {
             let stdout = io::stdout();

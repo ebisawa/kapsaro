@@ -52,7 +52,7 @@ fn setup_swapped_workspace_session() -> SwappedWorkspaceFixture {
         ..CommonOptions::default()
     };
     let context = CliContext::resolve(&options).unwrap();
-    let directories = WorkspaceWriteDirectories::open(&workspace_path).unwrap();
+    let directories = WorkspaceWriteDirectories::open(context.workspace_access().unwrap()).unwrap();
 
     let original_for_swap = original_workspace.clone();
     let replacement_for_swap = replacement_source.clone();

@@ -1460,6 +1460,30 @@ fn dir_mode(path: &std::path::Path) -> u32 {
     fs::metadata(path).unwrap().permissions().mode() & 0o777
 }
 
+isolated_umask_test! {
+    /// Global storage preserves owner access and excludes other accounts for every umask.
+    #[cfg(unix)]
+    fn test_global_scope_pins_directory_and_atomic_file_modes_across_umasks() {
+        use super::{ensure_scoped_child_dir_at, open_dir_following, save_text_at};
+        use crate::support::fs::test_umask::with_umask;
+
+        for mask in [0o000, 0o022, 0o777] {
+            let root = crate::test_utils::local_state_temp_dir();
+            let directory = open_dir_following(root.path(), DirectoryScope::GlobalWorkspace).unwrap();
+            with_umask(mask, || {
+                let child = ensure_scoped_child_dir_at(&directory, "secrets").unwrap();
+                save_text_at(&child, "entry", "initial").unwrap();
+                assert_eq!(dir_mode(&root.path().join("secrets/entry")), 0o600);
+                save_text_at(&child, "entry", "replaced").unwrap();
+            });
+            assert_eq!(dir_mode(&root.path().join("secrets")), 0o700);
+            assert_eq!(dir_mode(&root.path().join("secrets/entry")), 0o600);
+            assert_eq!(fs::read_to_string(root.path().join("secrets/entry")).unwrap(), "replaced");
+            assert_eq!(fs::read_dir(root.path().join("secrets")).unwrap().count(), 1);
+        }
+    }
+}
+
 /// The decoded names a directory holds, in the order the walk returned them.
 fn list_child_names_at<D>(dir: &D) -> crate::Result<Vec<String>>
 where

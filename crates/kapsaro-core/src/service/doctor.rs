@@ -1,7 +1,8 @@
 // Copyright 2026 Satoshi Ebisawa
 // SPDX-License-Identifier: Apache-2.0
 
-//! Read-only workspace health diagnostics for API callers.
+//! Read-only diagnostics for independently resolved workspace and local state targets.
+//! Preserves partial failures and reuses the caller's opened workspace capabilities.
 
 pub mod artifacts;
 pub mod ci;
@@ -12,196 +13,308 @@ pub mod workspace;
 
 use std::path::PathBuf;
 
-use crate::support::fs::anchor::AnchoredDir;
+use self::types::{
+    DoctorCategory, DoctorCheck, DoctorReport, DoctorSubject, DoctorTarget, DoctorTargetKind,
+};
+use crate::error::LOCAL_STATE_PATH_UNSAFE_RECOVERY;
+use crate::service::config::LocalStateSession;
+use crate::service::workspace::{WorkspaceAccess, WorkspaceKind};
 use crate::support::warning::clear_local_state_warnings;
-use crate::Result;
-use tracing::debug;
+use crate::{Error, ErrorKind, Result};
 
-use self::types::DoctorReport;
-
-#[derive(Debug)]
 pub struct DoctorRequest {
-    pub base_dir: PathBuf,
-    pub workspace: DoctorWorkspaceResolution,
-    pub member_handle: Option<String>,
+    pub local_state: Result<LocalStateSession>,
+    pub workspaces: Vec<DoctorWorkspaceResolution>,
+    pub member_handle: Result<Option<String>>,
     pub ci: ci::DoctorCiReadiness,
 }
 
-/// Workspace resolution completed by the caller before diagnostics begin.
-#[derive(Debug)]
-pub enum DoctorWorkspaceResolution {
-    /// An absolute workspace path selected from the named source.
-    Selection {
-        path: PathBuf,
-        source: DoctorWorkspaceSource,
-    },
-    /// No workspace was selected by any configured source or auto-detection.
-    Unresolved,
-    /// Workspace resolution failed, preserved so diagnostics can report it.
-    Failure(crate::Error),
+impl std::fmt::Debug for DoctorRequest {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("DoctorRequest")
+            .field(
+                "local_state",
+                &self.local_state.as_ref().map(LocalStateSession::base_dir),
+            )
+            .field("workspaces", &self.workspaces)
+            .field("member_handle", &self.member_handle)
+            .field("ci", &self.ci)
+            .finish()
+    }
 }
 
-/// Origin of the workspace path selected by the caller.
+/// Each selection retains either its opened directory or its resolution failure.
+#[derive(Debug)]
+pub enum DoctorWorkspaceResolution {
+    Selection {
+        access: WorkspaceAccess,
+        source: DoctorWorkspaceSource,
+    },
+    Missing {
+        path: Option<PathBuf>,
+        source: DoctorWorkspaceSource,
+        kind: WorkspaceKind,
+    },
+    Failure {
+        error: Error,
+        source: DoctorWorkspaceSource,
+        kind: WorkspaceKind,
+    },
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DoctorWorkspaceSource {
     Cli,
     Environment,
     Config,
     AutoDetect,
+    Global,
 }
 
 impl DoctorWorkspaceSource {
-    pub(crate) fn as_str(self) -> &'static str {
+    pub fn as_str(self) -> &'static str {
         match self {
             Self::Cli => "CLI option",
             Self::Environment => "environment variable",
             Self::Config => "global configuration",
             Self::AutoDetect => "auto-detection",
+            Self::Global => "HOME",
         }
     }
 }
 
-/// Run every diagnostic and hand back the report.
-///
-/// The collected warnings are dropped on the way out whichever way the run
-/// ends. A check that fails early leaves the same violations behind, and a
-/// long-lived caller would then see them again on its next command.
+impl DoctorWorkspaceResolution {
+    fn target(&self) -> DoctorTarget {
+        let (kind, source, path) = match self {
+            Self::Selection { access, source } => (access.kind(), *source, Some(access.path())),
+            Self::Missing { path, source, kind } => (*kind, *source, path.as_deref()),
+            Self::Failure { source, kind, .. } => (*kind, *source, None),
+        };
+        DoctorTarget {
+            kind: if kind == WorkspaceKind::Global {
+                DoctorTargetKind::GlobalWorkspace
+            } else {
+                DoctorTargetKind::Workspace
+            },
+            sources: vec![source],
+            path: path.map(|path| path.to_string_lossy().into_owned()),
+        }
+    }
+}
+
 pub fn execute_doctor_command(request: DoctorRequest) -> Result<DoctorReport> {
     let report = build_doctor_report(request);
-    // The same violations are already reported as findings of this command, so
-    // the collected warnings would name every one of them a second time.
     clear_local_state_warnings();
     report
 }
 
 fn build_doctor_report(request: DoctorRequest) -> Result<DoctorReport> {
-    log_doctor_start(&request);
-    let allow_local_owner_fallback = matches!(&request.ci, ci::DoctorCiReadiness::Inactive);
-
-    let mut workspace_state = workspace::check_workspace(&request.base_dir, &request.workspace);
-    let mut report = DoctorReport::new(workspace_state.workspace_display());
-    report.extend(std::mem::take(&mut workspace_state.checks));
-    log_doctor_count("workspace", report.checks().len());
-
-    let local_state = extend_local_state_checks(
-        &mut report,
-        &request.base_dir,
-        request.member_handle.as_deref(),
-        allow_local_owner_fallback,
-    )?;
-    if let Some(workspace_dir) = workspace_state.scoped_workspace() {
-        extend_workspace_scoped_checks(
-            &mut report,
-            &request.base_dir,
-            workspace_dir,
-            &local_state,
-        )?;
+    let DoctorRequest {
+        workspaces,
+        local_state,
+        member_handle,
+        ci,
+    } = request;
+    let WorkspaceTargets {
+        resolutions: workspaces,
+        mut targets,
+        failures,
+    } = merge_workspace_targets(workspaces);
+    let local_target = targets.len();
+    targets.push(DoctorTarget {
+        kind: DoctorTargetKind::LocalState,
+        sources: Vec::new(),
+        path: local_state
+            .as_ref()
+            .ok()
+            .map(|state| state.base_dir().to_string_lossy().into_owned()),
+    });
+    let mut report = DoctorReport::new(targets);
+    report.select_target(local_target);
+    let local = collect_local_state(&mut report, &local_state, &member_handle, &ci);
+    for (index, resolution) in workspaces.iter().enumerate() {
+        report.select_target(index);
+        for (_, error) in failures.iter().filter(|(target, _)| *target == index) {
+            report.extend([diagnostic_failure(
+                "workspace.identity",
+                DoctorCategory::Workspace,
+                error,
+            )]);
+        }
+        collect_workspace(&mut report, resolution, local.as_ref());
     }
-    extend_ci_readiness_checks(&mut report, request.ci);
-    log_doctor_complete(&report);
+    report.select_target(local_target);
+    report.extend(ci::check_ci_readiness(ci));
     Ok(report)
 }
 
-fn log_doctor_start(request: &DoctorRequest) {
-    if !tracing::enabled!(tracing::Level::DEBUG) {
+struct WorkspaceTargets {
+    resolutions: Vec<DoctorWorkspaceResolution>,
+    targets: Vec<DoctorTarget>,
+    failures: Vec<(usize, Error)>,
+}
+
+fn find_duplicate_workspace(
+    inputs: &[DoctorWorkspaceResolution],
+    input: &DoctorWorkspaceResolution,
+) -> Result<Option<usize>> {
+    let DoctorWorkspaceResolution::Selection { access, .. } = input else {
+        return Ok(None);
+    };
+    for (index, existing) in inputs.iter().enumerate() {
+        if let DoctorWorkspaceResolution::Selection { access: other, .. } = existing {
+            if access.same_directory(other)? {
+                return Ok(Some(index));
+            }
+        }
+    }
+    Ok(None)
+}
+
+fn merge_workspace_targets(inputs: Vec<DoctorWorkspaceResolution>) -> WorkspaceTargets {
+    let mut resolutions: Vec<DoctorWorkspaceResolution> = Vec::new();
+    let mut targets: Vec<DoctorTarget> = Vec::new();
+    let mut failures = Vec::new();
+    for input in inputs {
+        let duplicate = match find_duplicate_workspace(&resolutions, &input) {
+            Ok(duplicate) => duplicate,
+            Err(error) => {
+                failures.push((targets.len(), error));
+                None
+            }
+        };
+        let target = input.target();
+        if let Some(index) = duplicate {
+            targets[index].sources.extend(target.sources);
+            if target.kind == DoctorTargetKind::GlobalWorkspace {
+                targets[index].kind = target.kind;
+                resolutions[index] = input;
+            }
+        } else {
+            targets.push(target);
+            resolutions.push(input);
+        }
+    }
+    WorkspaceTargets {
+        resolutions,
+        targets,
+        failures,
+    }
+}
+
+fn collect_local_state(
+    report: &mut DoctorReport,
+    local_state: &Result<LocalStateSession>,
+    member_handle: &Result<Option<String>>,
+    ci: &ci::DoctorCiReadiness,
+) -> Option<local_state::LocalStateDiagnostics> {
+    if let Err(error) = member_handle {
+        report.extend([diagnostic_failure(
+            "local_state.owner.resolve",
+            DoctorCategory::LocalState,
+            error,
+        )]);
+    }
+    let session = match local_state {
+        Ok(session) => session,
+        Err(error) => {
+            let mut check =
+                diagnostic_failure("local_state.resolve", DoctorCategory::LocalState, error);
+            if matches!(error.kind(), ErrorKind::Io | ErrorKind::InvalidOperation) {
+                check = check
+                    .with_rule(
+                        error
+                            .recovery()
+                            .or_else(|| error.rule())
+                            .or(Some(LOCAL_STATE_PATH_UNSAFE_RECOVERY)),
+                    )
+                    .with_next_action("inspect the local state path and permissions");
+            }
+            report.extend([check]);
+            return None;
+        }
+    };
+    let owner = member_handle
+        .as_ref()
+        .ok()
+        .and_then(|value| value.as_deref());
+    let fallback = member_handle.is_ok() && matches!(ci, ci::DoctorCiReadiness::Inactive);
+    match local_state::check_local_state(session, owner, fallback) {
+        Ok(mut local) => {
+            report.extend(std::mem::take(&mut local.checks));
+            report.extend(local_state::check_trust_store(
+                session.base_dir(),
+                &mut local,
+            ));
+            Some(local)
+        }
+        Err(error) => {
+            report.extend([diagnostic_failure(
+                "local_state.inspect",
+                DoctorCategory::LocalState,
+                &error,
+            )]);
+            None
+        }
+    }
+}
+
+fn collect_workspace(
+    report: &mut DoctorReport,
+    resolution: &DoctorWorkspaceResolution,
+    local: Option<&local_state::LocalStateDiagnostics>,
+) {
+    let mut state = workspace::check_workspace(resolution);
+    report.extend(std::mem::take(&mut state.checks));
+    let Some(directory) = state.scoped_workspace() else {
         return;
+    };
+    extend_diagnostic_result(
+        report,
+        "members.inspect",
+        DoctorCategory::MembersActive,
+        members::check_members(directory),
+    );
+    if let Some(local) = local {
+        if let (Some(owner), Some(known_keys)) = (local.owner.as_ref(), local.known_keys.as_ref()) {
+            extend_diagnostic_result(
+                report,
+                "trust.inspect",
+                DoctorCategory::LocalTrustStore,
+                local_state::check_active_member_approvals(directory, owner.as_str(), known_keys),
+            );
+        }
     }
-    debug!(
-        "[DOCTOR] start: workspace={}, home={}, member_handle={}",
-        format_workspace_resolution(&request.workspace),
-        request.base_dir.display(),
-        request.member_handle.as_deref().unwrap_or("(unresolved)")
+    extend_diagnostic_result(
+        report,
+        "artifacts.inspect",
+        DoctorCategory::Artifacts,
+        artifacts::check_artifacts(directory),
     );
 }
 
-fn format_workspace_resolution(workspace: &DoctorWorkspaceResolution) -> String {
-    match workspace {
-        DoctorWorkspaceResolution::Selection { path, .. } => path.display().to_string(),
-        DoctorWorkspaceResolution::Unresolved => "(unresolved)".to_string(),
-        DoctorWorkspaceResolution::Failure(_) => "(resolution failed)".to_string(),
+fn extend_diagnostic_result(
+    report: &mut DoctorReport,
+    id: &'static str,
+    category: DoctorCategory,
+    checks: Result<Vec<DoctorCheck>>,
+) {
+    match checks {
+        Ok(checks) => report.extend(checks),
+        Err(error) => report.extend([diagnostic_failure(id, category, &error)]),
     }
 }
 
-fn extend_local_state_checks(
-    report: &mut DoctorReport,
-    base_dir: &std::path::Path,
-    member_handle: Option<&str>,
-    allow_owner_fallback: bool,
-) -> Result<local_state::LocalStateDiagnostics> {
-    let mut local_state =
-        local_state::check_local_state(base_dir, member_handle, allow_owner_fallback)?;
-    let local_count = local_state.checks.len();
-    report.extend(std::mem::take(&mut local_state.checks));
-    log_doctor_count("local_state", local_count);
-    Ok(local_state)
-}
-
-/// Run every check that is about the workspace, all against the one descriptor
-/// this run bound to.
-///
-/// Reading each of them from the workspace path again would let a path
-/// repointed mid-run put two different trees into one report, where the findings
-/// on one contradict the repair advice given for the other.
-fn extend_workspace_scoped_checks(
-    report: &mut DoctorReport,
-    base_dir: &std::path::Path,
-    workspace_dir: &AnchoredDir,
-    local_state: &local_state::LocalStateDiagnostics,
-) -> Result<()> {
-    extend_member_checks(report, workspace_dir)?;
-    extend_trust_store_checks(report, base_dir, workspace_dir, local_state)?;
-    extend_artifact_checks(report, workspace_dir)?;
-    Ok(())
-}
-
-fn extend_member_checks(report: &mut DoctorReport, workspace_dir: &AnchoredDir) -> Result<()> {
-    let checks = members::check_members(workspace_dir)?;
-    log_doctor_count("members", checks.len());
-    report.extend(checks);
-    Ok(())
-}
-
-fn extend_trust_store_checks(
-    report: &mut DoctorReport,
-    base_dir: &std::path::Path,
-    workspace_dir: &AnchoredDir,
-    local_state: &local_state::LocalStateDiagnostics,
-) -> Result<()> {
-    let checks = local_state::check_trust_store(
-        base_dir,
-        local_state.owner.as_ref(),
-        workspace_dir,
-        local_state.keystore.as_ref(),
-        &local_state.home,
-    )?;
-    log_doctor_count("trust_store", checks.len());
-    report.extend(checks);
-    Ok(())
-}
-
-fn extend_artifact_checks(report: &mut DoctorReport, workspace_dir: &AnchoredDir) -> Result<()> {
-    let checks = artifacts::check_artifacts(workspace_dir)?;
-    log_doctor_count("artifacts", checks.len());
-    report.extend(checks);
-    Ok(())
-}
-
-fn extend_ci_readiness_checks(report: &mut DoctorReport, input: ci::DoctorCiReadiness) {
-    let checks = ci::check_ci_readiness(input);
-    log_doctor_count("ci_readiness", checks.len());
-    report.extend(checks);
-}
-
-fn log_doctor_complete(report: &DoctorReport) {
-    debug!(
-        "[DOCTOR] complete: overall={}, checks={}",
-        report.overall_status().as_str(),
-        report.checks().len()
-    );
-}
-
-fn log_doctor_count(category: &str, count: usize) {
-    debug!("[DOCTOR] category={} checks={}", category, count);
+fn diagnostic_failure(id: &'static str, category: DoctorCategory, error: &Error) -> DoctorCheck {
+    DoctorCheck::fail(
+        id,
+        category,
+        DoctorSubject::General(category.title().to_string()),
+        "Diagnostic input or inspection failed",
+    )
+    .with_reason(error.format_user_message())
+    .with_rule(error.recovery().or_else(|| error.rule()))
 }
 
 #[cfg(test)]

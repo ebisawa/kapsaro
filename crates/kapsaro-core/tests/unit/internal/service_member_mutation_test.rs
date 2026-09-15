@@ -3,6 +3,7 @@
 
 use std::collections::HashMap;
 use std::fs;
+use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
 use super::{evaluate_member_removal, remove_member};
@@ -11,6 +12,8 @@ use crate::feature::encrypt::file::encrypt_file_document;
 use crate::feature::kv::encrypt::encrypt_kv_map_with_wrap_mutation;
 use crate::format::token::TokenCodec;
 use crate::io::workspace::members::load_active_member_files;
+use crate::service::workspace::{WorkspaceAccess, WorkspaceKind};
+use crate::support::fs::test_umask::{isolated_umask_test, with_umask};
 use crate::test_support::storage::keystore::storage::{list_kids, load_public_key};
 use crate::test_utils::keygen_helpers::build_verified_recipient_keys;
 use crate::test_utils::{setup_member_key_context, setup_test_workspace_from_fixtures};
@@ -19,6 +22,136 @@ use tempfile::TempDir;
 
 const ALICE_MEMBER_HANDLE: &str = "alice@example.com";
 const BOB_MEMBER_HANDLE: &str = "bob@example.com";
+
+isolated_umask_test! {
+    fn test_member_add_global_directory_permissions() {
+        for mask in [0o022, 0o777] {
+            for existing_members in [false, true] {
+                assert_member_add_permissions(WorkspaceKind::Global, mask, existing_members);
+            }
+        }
+    }
+}
+
+isolated_umask_test! {
+    fn test_member_add_regular_directory_permissions() {
+        assert_member_add_permissions(WorkspaceKind::Regular, 0o022, false);
+    }
+}
+
+fn assert_member_add_permissions(kind: WorkspaceKind, mask: libc::mode_t, existing: bool) {
+    use crate::service::diagnostics::{take_local_state_warnings, DiagnosticCode};
+    use crate::service::file::FileInputTarget;
+
+    let (_home, source) = setup_test_workspace_from_fixtures(&[BOB_MEMBER_HANDLE]);
+    let key = source.join(format!("members/active/{BOB_MEMBER_HANDLE}.json"));
+    let content = fs::read(&key).unwrap();
+    let input = FileInputTarget::open(&key, None).unwrap();
+    let destination = TempDir::new().unwrap();
+    fs::set_permissions(destination.path(), fs::Permissions::from_mode(0o700)).unwrap();
+    let members = destination.path().join("members");
+    if existing {
+        fs::create_dir(&members).unwrap();
+        fs::set_permissions(&members, fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    let access = WorkspaceAccess::open(destination.path(), kind).unwrap();
+    take_local_state_warnings();
+    with_umask(mask, || {
+        assert_eq!(
+            super::add_member(&access, &input, false).unwrap(),
+            BOB_MEMBER_HANDLE
+        );
+    });
+    assert_member_storage_permissions(&members, kind, existing);
+    let saved = members.join(format!("incoming/{BOB_MEMBER_HANDLE}.json"));
+    assert_eq!(fs::read(&saved).unwrap(), content);
+    let warnings = take_local_state_warnings();
+    if existing {
+        assert!(warnings.diagnostics().iter().any(|finding| {
+            finding.code() == DiagnosticCode::GlobalWorkspacePermissions
+                && finding.path() == members
+        }));
+    }
+}
+
+fn assert_member_storage_permissions(members: &Path, kind: WorkspaceKind, existing: bool) {
+    let mode = if kind == WorkspaceKind::Global {
+        0o700
+    } else {
+        0o755
+    };
+    for (path, expected) in [
+        (members.to_path_buf(), if existing { 0o755 } else { mode }),
+        (members.join("active"), mode),
+        (members.join("incoming"), mode),
+    ] {
+        assert_eq!(
+            fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+            expected,
+            "{path:?}"
+        );
+    }
+    let saved = members.join(format!("incoming/{BOB_MEMBER_HANDLE}.json"));
+    if kind == WorkspaceKind::Global {
+        assert_eq!(
+            fs::metadata(&saved).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+    }
+}
+
+#[test]
+fn member_add_retains_global_input_after_the_selected_link_is_replaced() {
+    use crate::service::diagnostics::{take_local_state_warnings, DiagnosticCode};
+    use crate::service::file::FileInputTarget;
+    use crate::service::workspace::WorkspaceCreationTarget;
+    use std::os::unix::fs::{symlink, PermissionsExt};
+    let (_source_home, source) = setup_test_workspace_from_fixtures(&[BOB_MEMBER_HANDLE]);
+    let (_destination_home, destination) =
+        setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE]);
+    let key = source
+        .join("members/active")
+        .join(format!("{BOB_MEMBER_HANDLE}.json"));
+    fs::set_permissions(&key, fs::Permissions::from_mode(0o644)).unwrap();
+    let selected = source.join("public-key.json");
+    symlink(&key, &selected).unwrap();
+    let global = WorkspaceCreationTarget::open(&source, WorkspaceKind::Global).unwrap();
+    take_local_state_warnings();
+    let input = FileInputTarget::open(&selected, Some(&global)).unwrap();
+    fs::remove_file(&selected).unwrap();
+    fs::write(&selected, "invalid replacement").unwrap();
+    let workspace = WorkspaceAccess::open(&destination, WorkspaceKind::Regular).unwrap();
+    assert_eq!(
+        super::add_member(&workspace, &input, false).unwrap(),
+        BOB_MEMBER_HANDLE
+    );
+    assert!(destination
+        .join("members/incoming")
+        .join(format!("{BOB_MEMBER_HANDLE}.json"))
+        .is_file());
+    assert!(take_local_state_warnings()
+        .diagnostics()
+        .iter()
+        .any(
+            |finding| finding.code() == DiagnosticCode::GlobalWorkspacePermissions
+                && finding.path() == selected
+        ));
+}
+
+#[test]
+fn member_removal_uses_the_selected_workspace_after_root_replacement() {
+    use crate::service::workspace::{WorkspaceAccess, WorkspaceKind};
+    let (_home, workspace) =
+        setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
+    let access = WorkspaceAccess::open(&workspace, WorkspaceKind::Global).unwrap();
+    let moved = workspace.with_extension("retained");
+    fs::rename(&workspace, &moved).unwrap();
+    fs::create_dir(&workspace).unwrap();
+    let report = evaluate_member_removal(&access, BOB_MEMBER_HANDLE, false).unwrap();
+    assert_eq!(report.member_handle, BOB_MEMBER_HANDLE);
+    remove_member(&report).unwrap();
+    assert_eq!(load_active_member_files(&moved).unwrap().len(), 1);
+}
 
 fn build_verified_members(
     temp_dir: &TempDir,
@@ -133,7 +266,8 @@ fn test_evaluate_member_removal_detects_file_enc_recipient() {
         "shared.json",
         &[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE],
     );
-    let result = evaluate_member_removal(&workspace_dir, BOB_MEMBER_HANDLE, false).unwrap();
+    let workspace = WorkspaceAccess::open(&workspace_dir, WorkspaceKind::Regular).unwrap();
+    let result = evaluate_member_removal(&workspace, BOB_MEMBER_HANDLE, false).unwrap();
 
     assert_eq!(result.affected_artifacts.len(), 1);
     assert!(result.affected_artifacts[0].ends_with("shared.json"));
@@ -155,7 +289,8 @@ fn test_evaluate_member_removal_detects_kv_enc_recipient() {
         "default.kvenc",
         &[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE],
     );
-    let result = evaluate_member_removal(&workspace_dir, BOB_MEMBER_HANDLE, false).unwrap();
+    let workspace = WorkspaceAccess::open(&workspace_dir, WorkspaceKind::Regular).unwrap();
+    let result = evaluate_member_removal(&workspace, BOB_MEMBER_HANDLE, false).unwrap();
 
     assert_eq!(result.affected_artifacts.len(), 1);
     assert!(result.affected_artifacts[0].ends_with("default.kvenc"));
@@ -176,7 +311,8 @@ fn test_evaluate_member_removal_ignores_unrelated_artifact() {
         "alice-only.json",
         &[ALICE_MEMBER_HANDLE],
     );
-    let result = evaluate_member_removal(&workspace_dir, BOB_MEMBER_HANDLE, false).unwrap();
+    let workspace = WorkspaceAccess::open(&workspace_dir, WorkspaceKind::Regular).unwrap();
+    let result = evaluate_member_removal(&workspace, BOB_MEMBER_HANDLE, false).unwrap();
 
     assert!(result.affected_artifacts.is_empty());
     assert!(result.warnings.is_empty());
@@ -186,7 +322,8 @@ fn test_evaluate_member_removal_ignores_unrelated_artifact() {
 fn test_remove_member_deletes_active_member_file() {
     let (_temp_dir, workspace_dir) =
         setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
-    let review = evaluate_member_removal(&workspace_dir, BOB_MEMBER_HANDLE, false).unwrap();
+    let workspace = WorkspaceAccess::open(&workspace_dir, WorkspaceKind::Regular).unwrap();
+    let review = evaluate_member_removal(&workspace, BOB_MEMBER_HANDLE, false).unwrap();
     let result = remove_member(&review).unwrap();
 
     assert_eq!(result.member_handle, BOB_MEMBER_HANDLE);
@@ -203,7 +340,8 @@ fn test_evaluate_member_removal_collects_warning_for_invalid_artifact() {
     let (_temp_dir, workspace_dir) =
         setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
     fs::write(workspace_dir.join("secrets").join("broken.json"), "{broken").unwrap();
-    let result = evaluate_member_removal(&workspace_dir, BOB_MEMBER_HANDLE, false).unwrap();
+    let workspace = WorkspaceAccess::open(&workspace_dir, WorkspaceKind::Regular).unwrap();
+    let result = evaluate_member_removal(&workspace, BOB_MEMBER_HANDLE, false).unwrap();
 
     assert!(result.affected_artifacts.is_empty());
     assert_eq!(result.warnings.len(), 1);
@@ -227,7 +365,8 @@ fn test_evaluate_member_removal_continues_after_tampered_artifact() {
         &[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE],
     );
     tamper_file_artifact_signature(&workspace_dir, "tampered.json");
-    let result = evaluate_member_removal(&workspace_dir, BOB_MEMBER_HANDLE, false).unwrap();
+    let workspace = WorkspaceAccess::open(&workspace_dir, WorkspaceKind::Regular).unwrap();
+    let result = evaluate_member_removal(&workspace, BOB_MEMBER_HANDLE, false).unwrap();
 
     assert_eq!(result.affected_artifacts.len(), 1);
     assert!(result.affected_artifacts[0].ends_with("valid.json"));
@@ -247,7 +386,8 @@ fn test_evaluate_member_removal_collects_warning_for_invalid_signature() {
         &[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE],
     );
     tamper_file_artifact_signature(&workspace_dir, "tampered.json");
-    let result = evaluate_member_removal(&workspace_dir, BOB_MEMBER_HANDLE, false).unwrap();
+    let workspace = WorkspaceAccess::open(&workspace_dir, WorkspaceKind::Regular).unwrap();
+    let result = evaluate_member_removal(&workspace, BOB_MEMBER_HANDLE, false).unwrap();
 
     assert!(result.affected_artifacts.is_empty());
     assert_eq!(result.warnings.len(), 1);

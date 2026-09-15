@@ -7,19 +7,19 @@
 use std::borrow::Cow;
 use std::collections::BTreeSet;
 
+use super::DoctorWorkspaceSource;
 use crate::support::fs::anchor::AnchoredDir;
 
 pub(crate) enum LocalStateHome {
     Opened(AnchoredDir),
     Missing,
-    Unavailable { reason: String },
 }
 
 impl LocalStateHome {
     pub(crate) fn opened(&self) -> Option<&AnchoredDir> {
         match self {
             Self::Opened(home) => Some(home),
-            Self::Missing | Self::Unavailable { .. } => None,
+            Self::Missing => None,
         }
     }
 }
@@ -124,6 +124,7 @@ impl DoctorReason {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DoctorCheck {
+    pub target: Option<usize>,
     pub id: &'static str,
     pub category: DoctorCategory,
     pub status: DoctorStatus,
@@ -143,6 +144,7 @@ impl DoctorCheck {
         message: impl Into<String>,
     ) -> Self {
         Self {
+            target: None,
             id,
             category,
             status,
@@ -262,29 +264,64 @@ impl DoctorCheck {
 }
 
 #[derive(Debug, Clone)]
+pub struct DoctorTarget {
+    pub kind: DoctorTargetKind,
+    pub sources: Vec<DoctorWorkspaceSource>,
+    pub path: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DoctorTargetKind {
+    Workspace,
+    GlobalWorkspace,
+    LocalState,
+}
+
+impl DoctorTargetKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Workspace => "workspace",
+            Self::GlobalWorkspace => "global_workspace",
+            Self::LocalState => "local_state",
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct DoctorReport {
-    workspace_display: String,
+    targets: Vec<DoctorTarget>,
+    current_target: Option<usize>,
     checks: Vec<DoctorCheck>,
 }
 
 impl DoctorReport {
-    pub fn new(workspace_display: String) -> Self {
+    pub fn new(targets: Vec<DoctorTarget>) -> Self {
         Self {
-            workspace_display,
+            targets,
+            current_target: None,
             checks: Vec::new(),
         }
     }
 
     pub fn extend(&mut self, checks: impl IntoIterator<Item = DoctorCheck>) {
-        self.checks.extend(checks);
+        self.checks.extend(checks.into_iter().map(|mut check| {
+            if check.target.is_none() {
+                check.target = self.current_target;
+            }
+            check
+        }));
     }
 
     pub fn checks(&self) -> &[DoctorCheck] {
         &self.checks
     }
 
-    pub fn workspace_display(&self) -> &str {
-        &self.workspace_display
+    pub fn targets(&self) -> &[DoctorTarget] {
+        &self.targets
+    }
+
+    pub(crate) fn select_target(&mut self, target: usize) {
+        self.current_target = Some(target);
     }
 
     pub fn overall_status(&self) -> DoctorStatus {
@@ -365,7 +402,7 @@ impl DoctorReport {
         self.checks
             .iter()
             .filter(|check| matches!(check.subject, DoctorSubject::Artifact(_)))
-            .map(|check| check.subject.as_str())
+            .map(|check| (check.target, check.subject.as_str()))
             .collect::<BTreeSet<_>>()
             .len()
     }
@@ -374,7 +411,7 @@ impl DoctorReport {
         self.checks
             .iter()
             .filter(|check| check.next_action.as_deref() == Some("run kapsaro rewrap"))
-            .map(|check| check.subject.as_str())
+            .map(|check| (check.target, check.subject.as_str()))
             .collect::<BTreeSet<_>>()
             .len()
     }

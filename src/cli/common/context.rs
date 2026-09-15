@@ -16,7 +16,10 @@ use kapsaro_core::api::key::{validate_github_login, MemberHandle};
 use kapsaro_core::api::ssh::{resolve_ssh_agent_socket, SshSigningInputs, SshSigningMethod};
 use kapsaro_core::api::trust::{StrictKeyChecking, StrictKeyCheckingResolution};
 use kapsaro_core::api::workspace::select_workspace_creation_path;
-use kapsaro_core::api::workspace::{detect_workspace_path, resolve_workspace_path};
+use kapsaro_core::api::workspace::{
+    detect_workspace_candidate_path, detect_workspace_path, detect_workspace_path_excluding,
+    WorkspaceAccess, WorkspaceCreationTarget, WorkspaceKind,
+};
 use kapsaro_core::{Error, ErrorKind, Result};
 use tracing::debug;
 
@@ -35,21 +38,38 @@ pub(crate) struct CliContext {
     common: CommonOptions,
     base_dir: OnceCell<Option<PathBuf>>,
     local_state: OnceCell<Option<LocalStateSession>>,
-    current_dir: OnceCell<PathBuf>,
-    home: OnceCell<Option<PathBuf>>,
+    current_dir: std::result::Result<PathBuf, String>,
+    home: std::result::Result<Option<PathBuf>, String>,
+    workspace_environment: std::result::Result<Option<PathBuf>, String>,
+    workspace: OnceCell<WorkspaceAccess>,
+    creation_target: OnceCell<WorkspaceCreationTarget>,
+    global_target: OnceCell<Option<WorkspaceCreationTarget>>,
     agent_socket: OnceCell<Option<PathBuf>>,
 }
 
 impl CliContext {
     pub(crate) fn resolve(common: &impl ToCommonOptions) -> Result<Self> {
-        Ok(Self {
+        let context = Self::resolve_doctor(common);
+        if context.common.global {
+            context.global_workspace_path()?;
+        }
+        Ok(context)
+    }
+
+    pub(crate) fn resolve_doctor(common: &impl ToCommonOptions) -> Self {
+        Self {
             common: common.to_common_options(),
             base_dir: OnceCell::new(),
             local_state: OnceCell::new(),
-            current_dir: OnceCell::new(),
-            home: OnceCell::new(),
+            current_dir: std::env::current_dir().map_err(|error| error.to_string()),
+            home: optional_env_path("HOME").map_err(|error| error.to_string()),
+            workspace_environment: optional_env_path(ENV_WORKSPACE)
+                .map_err(|error| error.to_string()),
+            workspace: OnceCell::new(),
+            creation_target: OnceCell::new(),
+            global_target: OnceCell::new(),
             agent_socket: OnceCell::new(),
-        })
+        }
     }
 
     pub(crate) fn base_dir(&self) -> Result<&Path> {
@@ -92,11 +112,38 @@ impl CliContext {
             .expect("local state is fixed after successful resolution"))
     }
 
-    pub(crate) fn workspace_path(&self) -> Result<PathBuf> {
-        if let Some(path) = self.selected_workspace_path()? {
-            return resolve_workspace_path(&path);
+    pub(crate) fn workspace_access(&self) -> Result<&WorkspaceAccess> {
+        if self.workspace.get().is_none() {
+            let path = match self.selected_workspace_path()? {
+                Some(path) => self.absolute_path(&path)?,
+                None => self.detect_regular_workspace()?,
+            };
+            let target = self.open_workspace_target(&path)?;
+            let access = target.existing_access().cloned().ok_or_else(|| {
+                if target.kind() == WorkspaceKind::Global {
+                    Error::build_not_found_error(format!(
+                        "Global workspace {} is not initialized. Run kapsaro init --global.",
+                        path.display()
+                    ))
+                } else {
+                    Error::build_config_error(format!(
+                        "Invalid workspace path '{}': directory does not exist. Select an existing workspace or run kapsaro init.",
+                        format_path_relative_to_cwd(&path)
+                    ))
+                }
+            })?;
+            access.validate()?;
+            let _ = self.workspace.set(access);
         }
-        detect_workspace_path(self.current_dir()?).map_err(|error| {
+        Ok(self.workspace.get().expect("workspace selection is fixed"))
+    }
+
+    fn detect_regular_workspace(&self) -> Result<PathBuf> {
+        let result = match self.optional_global_target()? {
+            Some(global) => detect_workspace_path_excluding(self.current_dir()?, global),
+            None => detect_workspace_path(self.current_dir()?),
+        };
+        result.map_err(|error| {
             if error.kind() == ErrorKind::NotFound {
                 workspace_required_error()
             } else {
@@ -105,35 +152,86 @@ impl CliContext {
         })
     }
 
-    pub(crate) fn registration_workspace_path(&self) -> Result<PathBuf> {
-        if let Some(path) = self.selected_workspace_path()? {
-            return Ok(path);
+    pub(crate) fn registration_workspace_target(&self) -> Result<&WorkspaceCreationTarget> {
+        if self.creation_target.get().is_none() {
+            let explicit = self.selected_workspace_path()?;
+            let path = match &explicit {
+                Some(path) => self.absolute_path(path)?,
+                None => select_workspace_creation_path(self.current_dir()?)?,
+            };
+            let target = self.open_workspace_target(&path)?;
+            if explicit.is_none() && target.kind() == WorkspaceKind::Global {
+                return Err(Error::build_invalid_argument_error(
+                    "Select the global workspace explicitly with --global or --workspace <path>.",
+                ));
+            }
+            let _ = self.creation_target.set(target);
         }
-        select_workspace_creation_path(self.current_dir()?)
+        Ok(self
+            .creation_target
+            .get()
+            .expect("workspace creation target is fixed"))
     }
 
-    pub(crate) fn doctor_workspace_resolution(&self) -> DoctorWorkspaceResolution {
-        self.try_doctor_workspace_resolution()
-            .unwrap_or_else(DoctorWorkspaceResolution::Failure)
+    pub(crate) fn doctor_workspace_resolutions(&self) -> Vec<DoctorWorkspaceResolution> {
+        let regular = self
+            .try_doctor_workspace_resolution()
+            .unwrap_or_else(|error| DoctorWorkspaceResolution::Failure {
+                error,
+                source: DoctorWorkspaceSource::AutoDetect,
+                kind: WorkspaceKind::Regular,
+            });
+        let global = self
+            .global_workspace_path()
+            .and_then(|path| self.doctor_selection(&path, DoctorWorkspaceSource::Global))
+            .unwrap_or_else(|error| DoctorWorkspaceResolution::Failure {
+                error,
+                source: DoctorWorkspaceSource::Global,
+                kind: WorkspaceKind::Global,
+            });
+        vec![regular, global]
     }
 
     fn try_doctor_workspace_resolution(&self) -> Result<DoctorWorkspaceResolution> {
         if let Some(path) = &self.common.workspace {
             return self.doctor_selection(path, DoctorWorkspaceSource::Cli);
         }
-        if let Some(path) = optional_env_path(ENV_WORKSPACE)? {
-            return self.doctor_selection(&path, DoctorWorkspaceSource::Environment);
+        match self.workspace_environment.as_ref() {
+            Ok(Some(path)) => {
+                return self.doctor_selection(path, DoctorWorkspaceSource::Environment)
+            }
+            Ok(None) => {}
+            Err(error) => {
+                return Ok(DoctorWorkspaceResolution::Failure {
+                    error: Error::build_config_error(error),
+                    source: DoctorWorkspaceSource::Environment,
+                    kind: WorkspaceKind::Regular,
+                })
+            }
         }
-        if let Some(path) = self.configured_workspace_path()? {
-            return self.doctor_selection(&path, DoctorWorkspaceSource::Config);
+        match self.configured_workspace_path() {
+            Ok(Some(path)) => return self.doctor_selection(&path, DoctorWorkspaceSource::Config),
+            Ok(None) => {}
+            Err(error) => {
+                return Ok(DoctorWorkspaceResolution::Failure {
+                    error,
+                    source: DoctorWorkspaceSource::Config,
+                    kind: WorkspaceKind::Regular,
+                })
+            }
         }
-        match detect_workspace_path(self.current_dir()?) {
-            Ok(path) => Ok(DoctorWorkspaceResolution::Selection {
-                path,
-                source: DoctorWorkspaceSource::AutoDetect,
-            }),
+        let detected = detect_workspace_candidate_path(
+            self.current_dir()?,
+            self.optional_global_target().ok().flatten(),
+        );
+        match detected {
+            Ok(path) => self.doctor_selection(&path, DoctorWorkspaceSource::AutoDetect),
             Err(error) if error.kind() == ErrorKind::NotFound => {
-                Ok(DoctorWorkspaceResolution::Unresolved)
+                Ok(DoctorWorkspaceResolution::Missing {
+                    path: None,
+                    source: DoctorWorkspaceSource::AutoDetect,
+                    kind: WorkspaceKind::Regular,
+                })
             }
             Err(error) => Err(error),
         }
@@ -292,11 +390,18 @@ impl CliContext {
     }
 
     fn selected_workspace_path(&self) -> Result<Option<PathBuf>> {
+        if self.common.global {
+            return self.global_workspace_path().map(Some);
+        }
         if let Some(path) = &self.common.workspace {
             return Ok(Some(path.clone()));
         }
-        if let Some(path) = optional_env_path(ENV_WORKSPACE)? {
-            return Ok(Some(path));
+        if let Some(path) = self
+            .workspace_environment
+            .as_ref()
+            .map_err(Error::build_config_error)?
+        {
+            return Ok(Some(path.clone()));
         }
         self.configured_workspace_path()
     }
@@ -370,27 +475,81 @@ impl CliContext {
     /// The operating system home directory of the running process, which is
     /// distinct from the kapsaro base directory `base_dir` resolves.
     fn resolve_home(&self) -> Result<Option<&Path>> {
-        if self.home.get().is_none() {
-            let _ = self.home.set(optional_env_path("HOME")?);
-        }
-        Ok(self
-            .home
-            .get()
-            .expect("home is fixed after successful resolution")
-            .as_deref())
+        self.home
+            .as_ref()
+            .map(|home| home.as_deref())
+            .map_err(Error::build_config_error)
     }
 
     fn current_dir(&self) -> Result<&Path> {
-        if self.current_dir.get().is_none() {
-            let current_dir = std::env::current_dir().map_err(|error| {
-                Error::build_config_error(format!("Failed to get current directory: {error}"))
-            })?;
-            let _ = self.current_dir.set(current_dir);
+        self.current_dir.as_deref().map_err(|error| {
+            Error::build_config_error(format!("Failed to get current directory: {error}"))
+        })
+    }
+
+    fn absolute_path(&self, path: &Path) -> Result<PathBuf> {
+        Ok(if path.is_absolute() {
+            path.to_path_buf()
+        } else {
+            self.current_dir()?.join(path)
+        })
+    }
+
+    fn global_workspace_path(&self) -> Result<PathBuf> {
+        let home = self
+            .resolve_home()
+            .ok()
+            .flatten()
+            .filter(|home| home.is_absolute());
+        home.map(|home| home.join(".kapsaro")).ok_or_else(|| Error::build_invalid_argument_error(
+            "HOME must be set to a non-empty absolute path. Correct HOME before selecting the global workspace."
+        ))
+    }
+
+    pub(crate) fn global_workspace_access(&self) -> Result<Option<&WorkspaceAccess>> {
+        Ok(self
+            .optional_global_target()?
+            .and_then(WorkspaceCreationTarget::existing_access))
+    }
+
+    pub(crate) fn optional_global_target(&self) -> Result<Option<&WorkspaceCreationTarget>> {
+        if self.global_target.get().is_none() {
+            let target = self
+                .resolve_home()
+                .ok()
+                .flatten()
+                .filter(|home| home.is_absolute())
+                .map(|home| {
+                    WorkspaceCreationTarget::open(home.join(".kapsaro"), WorkspaceKind::Global)
+                })
+                .transpose()?;
+            let _ = self.global_target.set(target);
         }
         Ok(self
-            .current_dir
+            .global_target
             .get()
-            .expect("current directory is fixed after successful resolution"))
+            .expect("global target is fixed")
+            .as_ref())
+    }
+
+    fn open_workspace_target(&self, path: &Path) -> Result<WorkspaceCreationTarget> {
+        let global = self.optional_global_target()?;
+        if self.common.global {
+            return global.cloned().ok_or_else(|| {
+                Error::build_invalid_argument_error(
+                    "Correct HOME before selecting the global workspace.",
+                )
+            });
+        }
+        let candidate = WorkspaceCreationTarget::open(path.to_path_buf(), WorkspaceKind::Regular)?;
+        let Some(global) = global else {
+            return Ok(candidate);
+        };
+        if candidate.same_target(global)? {
+            candidate.with_kind(WorkspaceKind::Global)
+        } else {
+            Ok(candidate)
+        }
     }
 
     fn configured_workspace_path(&self) -> Result<Option<PathBuf>> {
@@ -407,12 +566,51 @@ impl CliContext {
         path: &Path,
         source: DoctorWorkspaceSource,
     ) -> Result<DoctorWorkspaceResolution> {
-        let path = if path.is_absolute() {
-            path.to_path_buf()
-        } else {
-            self.current_dir()?.join(path)
+        let path = match self.absolute_path(path) {
+            Ok(path) => path,
+            Err(error) => {
+                return Ok(DoctorWorkspaceResolution::Failure {
+                    error,
+                    source,
+                    kind: if source == DoctorWorkspaceSource::Global {
+                        WorkspaceKind::Global
+                    } else {
+                        WorkspaceKind::Regular
+                    },
+                })
+            }
         };
-        Ok(DoctorWorkspaceResolution::Selection { path, source })
+        let selection = if source == DoctorWorkspaceSource::Global {
+            self.optional_global_target()
+                .and_then(|target| target.cloned().ok_or_else(home_required_error))
+        } else {
+            WorkspaceCreationTarget::open(path.clone(), WorkspaceKind::Regular)
+        };
+        let target = match selection {
+            Ok(target) => target,
+            Err(error) => {
+                return Ok(DoctorWorkspaceResolution::Failure {
+                    error,
+                    source,
+                    kind: if source == DoctorWorkspaceSource::Global {
+                        WorkspaceKind::Global
+                    } else {
+                        WorkspaceKind::Regular
+                    },
+                })
+            }
+        };
+        Ok(match target.existing_access() {
+            Some(access) => DoctorWorkspaceResolution::Selection {
+                access: access.clone(),
+                source,
+            },
+            None => DoctorWorkspaceResolution::Missing {
+                path: Some(path),
+                source,
+                kind: target.kind(),
+            },
+        })
     }
 
     fn ssh_agent_socket(&self) -> Result<Option<&PathBuf>> {

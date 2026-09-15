@@ -7,21 +7,24 @@ mod paths;
 mod promotion;
 mod store;
 
-pub use paths::{get_active_member_file_path, get_incoming_member_file_path, MemberStatus};
-pub(crate) use paths::{
-    has_member_document_extension, ACTIVE_DIR_NAME, INCOMING_DIR_NAME, MEMBERS_DIR_NAME,
-};
+pub use paths::MemberStatus;
+pub(crate) use paths::{ACTIVE_DIR_NAME, INCOMING_DIR_NAME, MEMBERS_DIR_NAME};
 pub use promotion::{
     capture_promotion_destination_at, promote_snapshotted_incoming_members_at,
     IncomingMemberPromotionSnapshot, PromotionDestinationState,
 };
-pub use store::{
-    list_active_member_paths, list_incoming_member_paths, load_active_member_files,
-    load_member_file, load_member_file_from_path, load_verified_member_file_from_path,
-    review_active_member_document, save_member_content, save_member_content_keeping_existing,
-    MemberDocumentWrite, ReviewedMemberDocument,
+pub(crate) use store::MemberWriteStore;
+#[cfg(test)]
+pub(crate) use store::{
+    list_active_member_paths, load_member_file, load_verified_member_file_from_path,
+    save_member_content_keeping_existing,
 };
+#[cfg(any(test, feature = "cli-test-support"))]
+pub use store::{load_active_member_files, load_member_file_from_path};
 pub(crate) use store::{load_active_member_files_at, open_member_documents_at, MemberDocuments};
+pub use store::{
+    review_active_member_document, save_member_content, MemberDocumentWrite, ReviewedMemberDocument,
+};
 #[cfg(test)]
 pub(crate) use store::{
     set_member_post_quarantine_hook, set_member_pre_quarantine_hook, set_post_open_save_dirs_hook,

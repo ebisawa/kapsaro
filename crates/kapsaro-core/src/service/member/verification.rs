@@ -10,29 +10,61 @@ use crate::feature::member::verification::{
 };
 use crate::io::verify_online::github::verify_github_account;
 use crate::io::verify_online::VerificationResult;
-use crate::io::workspace::members::{get_active_member_file_path, list_active_member_paths};
+use crate::io::workspace::members::{open_member_documents_at, MemberDocuments, MemberStatus};
 use crate::model::identity::MemberHandle;
+use crate::service::workspace::WorkspaceAccess;
 use crate::support::display::sanitize_display_field;
 use crate::support::path::format_path_relative_to_cwd;
 use crate::support::runtime::block_on;
 use crate::{Error, Result};
+#[cfg(any(test, feature = "cli-test-support"))]
 use std::path::{Path, PathBuf};
 
 use super::types::MemberVerificationResult;
 use super::view::build_member_verification_result;
 
 pub fn evaluate_members_online(
-    workspace_path: &Path,
+    workspace: &WorkspaceAccess,
     member_handles: &[String],
 ) -> Result<Vec<MemberVerificationResult>> {
-    let member_files = select_verification_member_files(workspace_path, member_handles)?;
-    let results = block_on(verify_member_files(&member_files))?;
+    let documents = open_member_documents_at(workspace.directory(), MemberStatus::Active)?;
+    let names = select_verification_member_names(documents.names(), member_handles)?;
+    let results = block_on(async {
+        let mut results = Vec::new();
+        for name in names {
+            results.push(verify_workspace_member_online(&documents, &name).await);
+        }
+        results
+    })?;
     Ok(results
         .into_iter()
         .map(build_member_verification_result)
         .collect())
 }
 
+async fn verify_workspace_member_online(
+    documents: &MemberDocuments,
+    name: &str,
+) -> VerificationResult {
+    let path = documents.document_path(name);
+    let handle = derive_member_handle_from_path(&path);
+    let subject = documents.load(name).and_then(|key| {
+        verify_member_public_key_file(&key, Some(&handle), &format_path_relative_to_cwd(&path))
+    });
+    match subject {
+        Ok(subject) => {
+            verify_public_key_online(
+                &subject.member_handle,
+                &subject.public_key,
+                &subject.warnings,
+            )
+            .await
+        }
+        Err(error) => build_offline_verification_failure(&handle, error, false),
+    }
+}
+
+#[cfg(any(test, feature = "cli-test-support"))]
 pub(crate) async fn verify_member_files(member_files: &[PathBuf]) -> Vec<VerificationResult> {
     let mut results = Vec::new();
     for member_file in member_files {
@@ -89,6 +121,7 @@ pub(crate) async fn verify_member_public_keys(
     Ok(results)
 }
 
+#[cfg(any(test, feature = "cli-test-support"))]
 fn build_verified_member_file_subject(
     member_file: &Path,
 ) -> Result<crate::feature::member::verification::VerifiedMemberFile> {
@@ -116,12 +149,12 @@ async fn verify_public_key_online(
     append_verification_warnings(result, warnings)
 }
 
-fn select_verification_member_files(
-    workspace_path: &Path,
+fn select_verification_member_names(
+    names: &[String],
     member_handles: &[String],
-) -> Result<Vec<PathBuf>> {
+) -> Result<Vec<String>> {
     if member_handles.is_empty() {
-        return list_active_member_paths(workspace_path);
+        return Ok(names.to_vec());
     }
 
     member_handles
@@ -130,8 +163,8 @@ fn select_verification_member_files(
             // The handle names one entry of members/active, so it is validated
             // as a handle before it is joined onto that directory.
             let member_handle = MemberHandle::try_from(member_handle.as_str())?;
-            let path = get_active_member_file_path(workspace_path, member_handle.as_str());
-            path.exists().then_some(path).ok_or_else(|| {
+            let name = format!("{member_handle}.json");
+            names.contains(&name).then_some(name).ok_or_else(|| {
                 Error::build_not_found_error(format!(
                     "Member '{}' not found in active/",
                     sanitize_display_field(member_handle.as_str())

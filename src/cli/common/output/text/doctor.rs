@@ -20,7 +20,7 @@ pub(crate) fn format_doctor_report(report: &DoctorReport, verbose: bool) -> Stri
 
 fn push_summary(out: &mut String, report: &DoctorReport) {
     out.push_str(&format!("Status: {}\n", report.overall_status().as_str()));
-    push_value(out, "Workspace: ", report.workspace_display());
+    push_targets(out, report);
     out.push_str(&format!(
         "Checks: {} OK, {} WARN, {} FAIL, {} SKIP\n",
         report.count(DoctorStatus::Ok),
@@ -58,7 +58,20 @@ fn push_findings(out: &mut String, report: &DoctorReport, verbose: bool) {
         out.push_str("No findings.\n");
         return;
     }
-    for check in findings {
+    for (target, descriptor) in report.targets().iter().enumerate() {
+        let group: Vec<_> = findings
+            .iter()
+            .filter(|check| check.target == Some(target))
+            .collect();
+        if group.is_empty() {
+            continue;
+        }
+        push_value(out, "\n", descriptor.kind.as_str());
+        for check in group {
+            push_finding(out, check, verbose);
+        }
+    }
+    for check in findings.iter().filter(|check| check.target.is_none()) {
         push_finding(out, check, verbose);
     }
 }
@@ -89,15 +102,51 @@ fn push_healthy_areas(out: &mut String, report: &DoctorReport) {
         out.push_str("No healthy areas reported.\n");
         return;
     }
-    for category in categories {
-        push_value(out, "OK  ", category.title());
+    for (index, target) in report.targets().iter().enumerate() {
+        let categories: std::collections::BTreeSet<_> = report
+            .checks()
+            .iter()
+            .filter(|check| check.target == Some(index) && check.status == DoctorStatus::Ok)
+            .map(|check| check.category)
+            .collect();
+        if categories.is_empty() {
+            continue;
+        }
+        push_value(out, "", target.kind.as_str());
+        for category in categories {
+            push_value(out, "OK  ", category.title());
+        }
+    }
+    if report.targets().is_empty() {
+        for category in categories {
+            push_value(out, "OK  ", category.title());
+        }
     }
 }
 
 fn push_details(out: &mut String, report: &DoctorReport) {
     out.push_str("\nDetails\n");
-    push_value(out, "Workspace: ", report.workspace_display());
+    push_targets(out, report);
     out.push_str(&format!("Checks: {}\n", report.checks().len()));
+}
+
+fn push_targets(out: &mut String, report: &DoctorReport) {
+    for target in report.targets() {
+        let sources = target
+            .sources
+            .iter()
+            .map(|source| source.as_str())
+            .collect::<Vec<_>>()
+            .join(", ");
+        push_value(
+            out,
+            &format!("{}: ", target.kind.as_str()),
+            target.path.as_deref().unwrap_or("(unresolved)"),
+        );
+        if !sources.is_empty() {
+            push_value(out, "  Sources: ", &sources);
+        }
+    }
 }
 
 fn push_value(out: &mut String, prefix: &str, value: &str) {

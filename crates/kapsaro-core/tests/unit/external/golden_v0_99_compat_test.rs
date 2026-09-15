@@ -21,6 +21,7 @@ use serde_json::Value;
 use tempfile::TempDir;
 
 use crate::test_utils::ed25519_backend::Ed25519DirectBackend;
+use crate::test_utils::open_test_workspace;
 
 /// Bridges the recorded SSH key into the facade signing trait.
 struct GoldenSshBackend {
@@ -50,7 +51,7 @@ fn test_golden_file_enc_verifies_and_decrypts() {
 
     let artifact = FileEncArtifact::load(fixture_dir().join("file_enc.json")).unwrap();
     let verified = artifact.verify(OperationOptions::default()).unwrap();
-    let members = CurrentMemberSnapshot::load(staged.path()).unwrap();
+    let members = CurrentMemberSnapshot::load(&open_test_workspace(staged.path())).unwrap();
     let evaluator = TrustPolicyEvaluator::new(members, None);
     let TrustDecision::Trusted(trusted) = evaluator
         .evaluate_file(
@@ -80,7 +81,7 @@ fn test_golden_kv_enc_verifies_and_decrypts() {
 
     let artifact = KvEncArtifact::load(fixture_dir().join("kv_enc.kvenc")).unwrap();
     let verified = artifact.verify(OperationOptions::default()).unwrap();
-    let members = CurrentMemberSnapshot::load(staged.path()).unwrap();
+    let members = CurrentMemberSnapshot::load(&open_test_workspace(staged.path())).unwrap();
     let evaluator = TrustPolicyEvaluator::new(members, None);
     let TrustDecision::Trusted(trusted) = evaluator
         .evaluate_kv(

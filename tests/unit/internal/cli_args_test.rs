@@ -4,6 +4,126 @@
 use clap::Parser;
 
 use super::{Cli, Commands};
+use crate::cli::member::MemberCommands;
+use crate::cli::options::{CommonOptions, ToCommonOptions};
+
+const GLOBAL_COMMANDS: &[(&[&str], &[&str])] = &[
+    (&["init"], &[]),
+    (&["join"], &[]),
+    (&["encrypt"], &["input.txt"]),
+    (&["decrypt"], &["input.fileenc", "--stdout"]),
+    (&["get"], &["KEY"]),
+    (&["set"], &["KEY", "VALUE"]),
+    (&["unset"], &["KEY"]),
+    (&["list"], &[]),
+    (&["import"], &["input.env"]),
+    (&["run"], &["--", "true"]),
+    (&["rewrap"], &[]),
+    (&["member", "list"], &[]),
+    (&["member", "add"], &["member.json"]),
+    (&["member", "remove"], &["alice@example.com"]),
+    (&["member", "show"], &["alice@example.com"]),
+    (&["member", "verify"], &[]),
+];
+
+fn global_arguments<'a>(
+    command: &'a [&'a str],
+    arguments: &'a [&'a str],
+    options: &'a [&'a str],
+) -> Vec<&'a str> {
+    std::iter::once("kapsaro")
+        .chain(command.iter().copied())
+        .chain(options.iter().copied())
+        .chain(arguments.iter().copied())
+        .collect()
+}
+
+fn workspace_options(cli: &Cli) -> CommonOptions {
+    match &cli.command {
+        Commands::Init(args) => args.common.to_common_options(),
+        Commands::Join(args) => args.common.to_common_options(),
+        Commands::Encrypt(args) => args.common.to_common_options(),
+        Commands::Decrypt(args) => args.common.to_common_options(),
+        Commands::Get(args) => args.common.to_common_options(),
+        Commands::Set(args) => args.common.to_common_options(),
+        Commands::Unset(args) => args.common.to_common_options(),
+        Commands::List(args) => args.common.to_common_options(),
+        Commands::Import(args) => args.common.to_common_options(),
+        Commands::Run(args) => args.common.to_common_options(),
+        Commands::Rewrap(args) => args.common.to_common_options(),
+        Commands::Member(args) => match &args.command {
+            MemberCommands::List(args) => args.common.to_common_options(),
+            MemberCommands::Add(args) => args.common.to_common_options(),
+            MemberCommands::Remove(args) => args.common.to_common_options(),
+            MemberCommands::Show(args) => args.common.to_common_options(),
+            MemberCommands::Verify(args) => args.common.to_common_options(),
+        },
+        _ => panic!("expected a workspace command"),
+    }
+}
+
+#[test]
+fn test_all_workspace_commands_resolve_both_global_spellings() {
+    for &(command, arguments) in GLOBAL_COMMANDS {
+        for flag in ["--global", "-g"] {
+            let options = [flag];
+            let args = global_arguments(command, arguments, &options);
+            let cli =
+                Cli::try_parse_from(&args).unwrap_or_else(|error| panic!("{args:?}: {error}"));
+            let options = workspace_options(&cli);
+            assert!(options.global, "{args:?}");
+            assert!(options.workspace.is_none(), "{args:?}");
+        }
+    }
+}
+
+#[test]
+fn test_all_global_command_spellings_enforce_explicit_workspace_conflicts() {
+    for &(command, arguments) in GLOBAL_COMMANDS {
+        for flag in ["--global", "-g"] {
+            let options = [flag, "--workspace", "workspace"];
+            let args = global_arguments(command, arguments, &options);
+            assert_eq!(
+                parse_error(&args).kind(),
+                clap::error::ErrorKind::ArgumentConflict,
+                "{args:?}"
+            );
+        }
+    }
+}
+
+#[test]
+#[serial_test::serial]
+fn test_all_global_command_spellings_validate_home_before_local_state_creation() {
+    use crate::cli::common::context::CliContext;
+    let _guard = crate::test_utils::EnvGuard::new(&["HOME"]);
+    let local = tempfile::TempDir::new().unwrap();
+    for home in [None, Some(""), Some("relative-home")] {
+        match home {
+            Some(home) => std::env::set_var("HOME", home),
+            None => std::env::remove_var("HOME"),
+        }
+        for &(command, arguments) in GLOBAL_COMMANDS {
+            for flag in ["--global", "-g"] {
+                let flags = [flag];
+                let args = global_arguments(command, arguments, &flags);
+                let cli =
+                    Cli::try_parse_from(&args).unwrap_or_else(|error| panic!("{args:?}: {error}"));
+                let mut options = workspace_options(&cli);
+                options.home = Some(local.path().join("local-state"));
+                let error = CliContext::resolve(&options)
+                    .err()
+                    .expect("invalid HOME must fail");
+                assert_eq!(
+                    error.kind(),
+                    kapsaro_core::ErrorKind::InvalidArgument,
+                    "{args:?}"
+                );
+            }
+        }
+    }
+    assert_eq!(std::fs::read_dir(local.path()).unwrap().count(), 0);
+}
 
 fn parse_error(args: &[&str]) -> clap::Error {
     match Cli::try_parse_from(args) {

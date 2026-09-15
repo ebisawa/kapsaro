@@ -7,6 +7,7 @@
 use std::path::PathBuf;
 
 use crate::io::keystore::access::KeystoreAccess;
+use crate::io::workspace::members::{MemberStatus, MemberWriteStore};
 use crate::model::identity::{Kid, MemberHandle};
 use crate::model::ssh::SshDeterminismStatus;
 use crate::service::key::generate::KeyGenerationHome;
@@ -100,16 +101,16 @@ impl RegistrationTarget {
     }
 }
 
-impl From<crate::io::workspace::members::MemberStatus> for RegistrationTarget {
-    fn from(value: crate::io::workspace::members::MemberStatus) -> Self {
+impl From<MemberStatus> for RegistrationTarget {
+    fn from(value: MemberStatus) -> Self {
         match value {
-            crate::io::workspace::members::MemberStatus::Active => Self::Active,
-            crate::io::workspace::members::MemberStatus::Incoming => Self::Incoming,
+            MemberStatus::Active => Self::Active,
+            MemberStatus::Incoming => Self::Incoming,
         }
     }
 }
 
-impl From<RegistrationTarget> for crate::io::workspace::members::MemberStatus {
+impl From<RegistrationTarget> for MemberStatus {
     fn from(value: RegistrationTarget) -> Self {
         match value {
             RegistrationTarget::Active => Self::Active,
@@ -151,6 +152,7 @@ pub struct MemberKeySetupResult {
 pub struct RegistrationCommand {
     pub mode: RegistrationMode,
     pub workspace_path: PathBuf,
+    pub(crate) members: MemberWriteStore,
     pub setup: MemberSetupResult,
     pub target: RegistrationTarget,
     pub is_new_workspace: bool,

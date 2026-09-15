@@ -29,6 +29,7 @@ pub(crate) const MAX_LOCAL_STATE_WARNINGS: usize = 64;
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(crate) enum LocalStateWarningCode {
     Permissions,
+    GlobalWorkspacePermissions,
 }
 
 /// One local state finding, kept as its parts rather than as a rendered line.

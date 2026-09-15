@@ -4,7 +4,7 @@
 //! CLI resolution for key contexts used by workspace read and write commands.
 //! Captures environment-key secrets and loads filesystem-backed signing keys.
 
-use std::path::Path;
+use kapsaro_core::api::workspace::WorkspaceAccess;
 
 use crate::cli::common::command::require_member_handle;
 use crate::cli::common::context::CliContext;
@@ -19,13 +19,13 @@ const ENV_KEY_PASSWORD: &str = "KAPSARO_KEY_PASSWORD";
 
 pub(crate) fn load_read_key_context(
     context: &CliContext,
-    workspace_path: &Path,
+    workspace: &WorkspaceAccess,
     member_handle: Option<String>,
     kid: Option<&str>,
 ) -> Result<KeyContext> {
     if std::env::var_os(ENV_PRIVATE_KEY).is_some() {
         debug!("[CTX] execution mode=env-key");
-        return load_environment_key(workspace_path, member_handle, kid);
+        return load_environment_key(workspace, member_handle, kid);
     }
     debug!("[CTX] execution mode=local-key");
     load_signing_key_context(context, member_handle, kid)
@@ -59,7 +59,7 @@ pub(crate) fn load_trust_command_session(
 }
 
 fn load_environment_key(
-    workspace_path: &Path,
+    workspace: &WorkspaceAccess,
     member_handle: Option<String>,
     kid: Option<&str>,
 ) -> Result<KeyContext> {
@@ -70,7 +70,7 @@ fn load_environment_key(
     debug!("[ENV_KEY] load private key: private key env present");
     let password = load_secret_environment(ENV_KEY_PASSWORD, true)?;
     debug!("[ENV_KEY] load private key: password env present");
-    KeyContext::load_environment_key(encoded, password, workspace_path.to_path_buf())
+    KeyContext::load_environment_key(encoded, password, workspace)
 }
 
 fn local_key_request(

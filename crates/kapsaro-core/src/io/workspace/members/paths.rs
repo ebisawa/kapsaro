@@ -5,11 +5,15 @@
 //! Opens each status directory as the descriptor the member store operates on.
 
 use crate::support::fs::relative::{
-    ensure_child_dir_at, open_child_dir, open_dir_nofollow, open_optional_child_dir, DirectoryFd,
-    DirectoryScope, OpenDir,
+    ensure_scoped_child_dir_at, open_child_dir, open_optional_child_dir, DirectoryFd, OpenDir,
 };
+#[cfg(any(test, feature = "cli-test-support"))]
+use crate::support::fs::relative::{open_dir_nofollow, DirectoryScope};
+#[cfg(any(test, feature = "cli-test-support"))]
 use crate::support::path::format_path_relative_to_cwd;
-use crate::{Error, ErrorKind, Result};
+use crate::Result;
+#[cfg(any(test, feature = "cli-test-support"))]
+use crate::{Error, ErrorKind};
 use std::path::{Path, PathBuf};
 
 /// Status of a member in the workspace.
@@ -60,19 +64,12 @@ pub(crate) fn has_member_document_extension(name: &str) -> bool {
     Path::new(name).extension().and_then(|ext| ext.to_str()) == Some(MEMBER_DOCUMENT_EXTENSION)
 }
 
-pub(super) fn member_file_path(
-    workspace_path: &Path,
-    status: MemberStatus,
-    member_handle: &str,
-) -> PathBuf {
-    members_dir(workspace_path, status).join(member_file_name(member_handle))
-}
-
 /// Open the directory a status lives in, reporting nothing when it is absent.
 ///
 /// A link in the final position is refused rather than followed: every member
 /// document is addressed relative to this descriptor, so the one step that must
 /// stay inside the workspace is the step that produces it.
+#[cfg(any(test, feature = "cli-test-support"))]
 pub(super) fn open_optional_members_dir(
     workspace_path: &Path,
     status: MemberStatus,
@@ -151,13 +148,14 @@ pub(super) fn ensure_members_root_at<D>(workspace: &D) -> Result<OpenDir>
 where
     D: DirectoryFd,
 {
-    let members = ensure_child_dir_at(workspace, MEMBERS_DIR_NAME)?;
-    ensure_child_dir_at(&members, ACTIVE_DIR_NAME)?;
-    ensure_child_dir_at(&members, INCOMING_DIR_NAME)?;
+    let members = ensure_scoped_child_dir_at(workspace, MEMBERS_DIR_NAME)?;
+    ensure_scoped_child_dir_at(&members, ACTIVE_DIR_NAME)?;
+    ensure_scoped_child_dir_at(&members, INCOMING_DIR_NAME)?;
     Ok(members)
 }
 
 /// Open the directory holding a member document named by its full path.
+#[cfg(any(test, feature = "cli-test-support"))]
 pub(super) fn open_member_document_parent(path: &Path) -> Result<(OpenDir, String)> {
     let name = path
         .file_name()
@@ -175,14 +173,4 @@ pub(super) fn open_member_document_parent(path: &Path) -> Result<(OpenDir, Strin
         .unwrap_or_else(|| Path::new("."));
     let dir = open_dir_nofollow(parent, DirectoryScope::Generic)?;
     Ok((dir, name))
-}
-
-/// Return the path to a member file in the active/ directory.
-pub fn get_active_member_file_path(workspace_path: &Path, member_handle: &str) -> PathBuf {
-    member_file_path(workspace_path, MemberStatus::Active, member_handle)
-}
-
-/// Return the path to a member file in the incoming/ directory.
-pub fn get_incoming_member_file_path(workspace_path: &Path, member_handle: &str) -> PathBuf {
-    member_file_path(workspace_path, MemberStatus::Incoming, member_handle)
 }

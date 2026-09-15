@@ -17,9 +17,9 @@ use crate::io::workspace::members::{
 use crate::service::artifact::{
     list_workspace_encrypted_artifacts_at, load_artifact_content, ArtifactRef,
 };
+use crate::service::file::FileInputTarget;
+use crate::service::workspace::WorkspaceAccess;
 use crate::support::fs::anchor::AnchoredDir;
-use crate::support::fs::load_text_with_limit;
-use crate::support::fs::relative::DirectoryScope;
 use crate::support::limits::MAX_JSON_DOCUMENT_READ_SIZE;
 use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, ErrorKind, Result};
@@ -32,14 +32,18 @@ use super::types::{MemberRemovalReport, MemberRemoveResult};
 /// The workspace is bound to a descriptor before the write, so the document
 /// lands in the tree this command resolved rather than in whatever the workspace
 /// path names by the time the member store takes its lock.
-pub fn add_member(workspace_path: &Path, filename: &Path, force: bool) -> Result<String> {
-    let content = load_text_with_limit(filename, MAX_JSON_DOCUMENT_READ_SIZE, "PublicKey file")?;
-    let source_name = format_path_relative_to_cwd(filename);
+pub fn add_member(
+    workspace: &WorkspaceAccess,
+    input: &FileInputTarget,
+    force: bool,
+) -> Result<String> {
+    let content = input.load_text(MAX_JSON_DOCUMENT_READ_SIZE, "PublicKey file")?;
+    let source_name = format_path_relative_to_cwd(input.path());
     let member_handle = build_member_addition_from_content(&content, &source_name)?;
-    let workspace_dir = open_workspace_directory(workspace_path)?;
+    let workspace_dir = workspace.directory();
 
     save_member_content(
-        &workspace_dir,
+        workspace_dir,
         MemberStatus::Incoming,
         &member_handle,
         &content,
@@ -47,15 +51,6 @@ pub fn add_member(workspace_path: &Path, filename: &Path, force: bool) -> Result
     )?;
 
     Ok(member_handle)
-}
-
-/// Bind the workspace root a command resolved to the directory it opened.
-fn open_workspace_directory(root_path: &Path) -> Result<AnchoredDir> {
-    AnchoredDir::open(
-        root_path.to_path_buf(),
-        DirectoryScope::Generic,
-        "workspace root",
-    )
 }
 
 /// Read what removing one member would cost, holding open what it would remove.
@@ -66,13 +61,13 @@ fn open_workspace_directory(root_path: &Path) -> Result<AnchoredDir> {
 /// itself is held open for the same reason, because the confirmation prompt sits
 /// between this and the write.
 pub fn evaluate_member_removal(
-    workspace_path: &Path,
+    workspace: &WorkspaceAccess,
     member_handle: &str,
     allow_expired_key: bool,
 ) -> Result<MemberRemovalReport> {
-    let workspace_dir = open_workspace_directory(workspace_path)?;
-    let reviewed = review_active_member_document(&workspace_dir, member_handle)?;
-    let scan = scan_artifacts_for_member(&workspace_dir, member_handle, allow_expired_key)?;
+    let workspace_dir = workspace.directory();
+    let reviewed = review_active_member_document(workspace_dir, member_handle)?;
+    let scan = scan_artifacts_for_member(workspace_dir, member_handle, allow_expired_key)?;
     Ok(MemberRemovalReport {
         member_handle: member_handle.to_string(),
         affected_artifacts: scan.affected_artifacts,

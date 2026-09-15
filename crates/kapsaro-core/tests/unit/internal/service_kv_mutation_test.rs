@@ -96,7 +96,8 @@ fn read_kv_values(
     let artifact =
         KvEncArtifact::load(resolve_test_kv_target_path(options, None).unwrap()).unwrap();
     let verified = artifact.verify(options.operation_options()).unwrap();
-    let members = CurrentMemberSnapshot::load(options.workspace.as_ref().unwrap()).unwrap();
+    let workspace = crate::test_utils::open_test_workspace(options.workspace.as_ref().unwrap());
+    let members = CurrentMemberSnapshot::load(&workspace).unwrap();
     let key_store =
         LocalKeyStore::open(options.resolve_keystore_root().unwrap()).expect("open keystore");
     let trust_store = LocalTrustStore::open(

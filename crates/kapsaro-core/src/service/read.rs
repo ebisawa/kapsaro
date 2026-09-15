@@ -6,8 +6,6 @@
 
 use std::borrow::Cow;
 use std::fs::File;
-use std::io::{Seek, SeekFrom};
-use std::path::Path;
 use std::sync::{Arc, OnceLock};
 
 use uuid::Uuid;
@@ -15,9 +13,9 @@ use uuid::Uuid;
 use crate::io::trust::paths::TRUST_DIR_NAME;
 use crate::io::workspace::setup::SECRETS_DIR_NAME;
 use crate::support::fs::anchor::AnchoredDir;
-use crate::support::fs::read::open_regular_file;
+use crate::support::fs::read::FileReader;
 use crate::support::fs::relative::{
-    open_child_dir, open_dir_identity, open_optional_child_dir, DirectoryScope, OpenDir,
+    open_child_dir, open_dir_identity, open_optional_child_dir, OpenDir,
 };
 use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
@@ -25,7 +23,8 @@ use crate::{Error, Result};
 use super::artifact::verified::{ReadableEncArtifact, VerifiedEncArtifact};
 use super::config::LocalStateSession;
 use super::file::{
-    FileEncArtifact, FileReadOperation, TrustedFileEncArtifact, VerifiedFileEncArtifact,
+    FileEncArtifact, FileInputTarget, FileReadOperation, TrustedFileEncArtifact,
+    VerifiedFileEncArtifact,
 };
 use super::key::{KeyContext, Kid, MemberHandle};
 use super::kv::{KvEncArtifact, KvReadOperation, TrustedKvEncArtifact, VerifiedKvEncArtifact};
@@ -39,6 +38,7 @@ use super::trust::{
     LocalTrustStore, NonMemberSignerReview, ReadTrustExceptions, ReadTrustReview, TrustApproval,
     TrustApprovalOutcome, TrustPolicyEvaluator, TrustReviewRequest,
 };
+use super::workspace::WorkspaceAccess;
 
 /// A read decision that either grants a capability or returns opaque review state.
 pub enum ReadSessionDecision<T> {
@@ -155,12 +155,13 @@ enum ReadSource {
 impl<'a> WorkspaceReadSession<'a> {
     /// Open a read session using caller-fixed local-state capabilities.
     pub fn open_with_local_state(
-        workspace_path: impl AsRef<Path>,
+        workspace_access: &WorkspaceAccess,
         local_state: Option<&LocalStateSession>,
         key_ctx: &'a KeyContext,
         options: OperationOptions,
     ) -> Result<Self> {
-        let (workspace, secrets_dir) = open_workspace_directories(workspace_path.as_ref())?;
+        let workspace = workspace_access.directory().clone();
+        let secrets_dir = Arc::new(open_child_dir(&workspace, SECRETS_DIR_NAME)?);
         let key_home = key_ctx
             .inner()
             .local_keystore_access()
@@ -240,12 +241,11 @@ impl<'a> WorkspaceReadSession<'a> {
     }
 
     /// Open and retain the exact regular file one read command will review.
-    pub fn open_file_read_target(&self, path: impl AsRef<Path>) -> Result<FileReadTarget> {
-        let path = path.as_ref();
+    pub fn open_file_read_target(&self, input: &FileInputTarget) -> Result<FileReadTarget> {
         Ok(FileReadTarget {
             source: ReadSource::File {
-                file: Arc::new(open_regular_file(path)?),
-                source_name: format_path_relative_to_cwd(path),
+                file: input.file().clone(),
+                source_name: format_path_relative_to_cwd(input.path()),
             },
         })
     }
@@ -462,12 +462,7 @@ impl<'a> WorkspaceReadSession<'a> {
     fn load_verified_file(&self, source: &ReadSource) -> Result<VerifiedFileEncArtifact> {
         match source {
             ReadSource::File { file, source_name } => {
-                let mut reader = file.try_clone().map_err(|error| {
-                    Error::build_io_error_with_source("Failed to clone reviewed file", error)
-                })?;
-                reader.seek(SeekFrom::Start(0)).map_err(|error| {
-                    Error::build_io_error_with_source("Failed to reread reviewed file", error)
-                })?;
+                let reader = FileReader::new(file);
                 FileEncArtifact::load_reader(reader, source_name.clone())?.verify(self.options)
             }
             ReadSource::Content { raw, source_name } => {
@@ -540,16 +535,6 @@ impl<'a> WorkspaceReadSession<'a> {
             crate::support::fs::relative::ensure_child_dir_restricted_at(home, TRUST_DIR_NAME)?;
         Ok(self.trust_dir.get_or_init(|| Arc::new(opened)).as_ref())
     }
-}
-
-fn open_workspace_directories(path: &Path) -> Result<(AnchoredDir, Arc<OpenDir>)> {
-    let workspace = AnchoredDir::open(
-        path.to_path_buf(),
-        DirectoryScope::Generic,
-        "workspace root",
-    )?;
-    let secrets_dir = Arc::new(open_child_dir(&workspace, SECRETS_DIR_NAME)?);
-    Ok((workspace, secrets_dir))
 }
 
 fn select_local_state_home(

@@ -25,6 +25,45 @@ fn build_context(home: &std::path::Path) -> CliContext {
     .expect("CLI context should resolve")
 }
 
+#[test]
+#[serial]
+fn test_global_selection_uses_initial_home_over_workspace_environment() {
+    let _guard = EnvGuard::new(&["HOME", "KAPSARO_WORKSPACE"]);
+    let home = tempfile::TempDir::new().unwrap();
+    env::set_var("HOME", home.path());
+    env::set_var("KAPSARO_WORKSPACE", "/missing/lower-priority-workspace");
+    let context = CliContext::resolve(&CommonOptions {
+        global: true,
+        ..CommonOptions::default()
+    })
+    .unwrap();
+    env::set_var("HOME", "/different-home");
+    assert_eq!(
+        context.registration_workspace_target().unwrap().path(),
+        home.path().join(".kapsaro")
+    );
+}
+
+#[test]
+#[serial]
+fn test_global_selection_validates_home_before_workspace_access() {
+    let _guard = EnvGuard::new(&["HOME"]);
+    for value in [None, Some(""), Some("relative/home")] {
+        match value {
+            Some(value) => env::set_var("HOME", value),
+            None => env::remove_var("HOME"),
+        }
+        let result = CliContext::resolve(&CommonOptions {
+            global: true,
+            ..CommonOptions::default()
+        });
+        let error = result
+            .err()
+            .expect("global selection requires an absolute HOME");
+        assert!(error.to_string().contains("HOME"));
+    }
+}
+
 fn save_github_user_config(home: &std::path::Path, github_user: &str) {
     save_local_state_file(
         &home.join("config.toml"),
@@ -275,6 +314,7 @@ fn test_explicit_workspace_resolution_does_not_require_home() {
     env::remove_var("KAPSARO_HOME");
     env::remove_var("KAPSARO_WORKSPACE");
     std::fs::create_dir_all(workspace.path().join("members/active")).unwrap();
+    std::fs::create_dir_all(workspace.path().join("members/incoming")).unwrap();
     std::fs::create_dir(workspace.path().join("secrets")).unwrap();
     let context = CliContext::resolve(&CommonOptions {
         workspace: Some(workspace.path().to_path_buf()),
@@ -282,10 +322,142 @@ fn test_explicit_workspace_resolution_does_not_require_home() {
     })
     .unwrap();
 
+    assert_eq!(context.workspace_access().unwrap().path(), workspace.path());
+}
+
+#[test]
+#[serial]
+fn test_global_selection_is_independent_of_local_state_home() {
+    let _guard = EnvGuard::new(&["HOME", "KAPSARO_HOME"]);
+    let home = tempfile::TempDir::new().unwrap();
+    let local = local_state_temp_dir();
+    env::set_var("HOME", home.path());
+    env::set_var("KAPSARO_HOME", local.path());
+    for explicit in [None, Some(local.path().join("other"))] {
+        let context = CliContext::resolve(&CommonOptions {
+            global: true,
+            home: explicit.clone(),
+            ..CommonOptions::default()
+        })
+        .unwrap();
+        assert_eq!(
+            context.registration_workspace_target().unwrap().path(),
+            home.path().join(".kapsaro")
+        );
+        assert_eq!(
+            context.base_dir().unwrap(),
+            explicit.as_deref().unwrap_or(local.path())
+        );
+    }
+}
+
+#[test]
+#[serial]
+fn test_explicit_global_alias_retains_global_kind() {
+    use kapsaro_core::api::workspace::WorkspaceKind;
+    let _guard = EnvGuard::new(&["HOME"]);
+    let home = tempfile::TempDir::new().unwrap();
+    let global = home.path().join(".kapsaro");
+    std::fs::create_dir_all(global.join("members/active")).unwrap();
+    std::fs::create_dir_all(global.join("members/incoming")).unwrap();
+    std::fs::create_dir(global.join("secrets")).unwrap();
+    let alias = home.path().join("alias");
+    std::os::unix::fs::symlink(&global, &alias).unwrap();
+    env::set_var("HOME", home.path());
+    let context = CliContext::resolve(&CommonOptions {
+        workspace: Some(alias),
+        ..CommonOptions::default()
+    })
+    .unwrap();
     assert_eq!(
-        context.workspace_path().unwrap(),
-        workspace.path().canonicalize().unwrap()
+        context.workspace_access().unwrap().kind(),
+        WorkspaceKind::Global
     );
+}
+
+#[test]
+#[serial]
+fn test_workspace_selection_retains_directory_after_root_replacement() {
+    use kapsaro_core::api::workspace::{WorkspaceAccess, WorkspaceKind};
+    let _guard = EnvGuard::new(&["HOME"]);
+    let home = tempfile::TempDir::new().unwrap();
+    let global = home.path().join(".kapsaro");
+    std::fs::create_dir_all(global.join("members/active")).unwrap();
+    std::fs::create_dir_all(global.join("members/incoming")).unwrap();
+    std::fs::create_dir(global.join("secrets")).unwrap();
+    env::set_var("HOME", home.path());
+    let context = CliContext::resolve(&CommonOptions {
+        global: true,
+        ..CommonOptions::default()
+    })
+    .unwrap();
+    let original = context.workspace_access().unwrap().clone();
+    std::fs::rename(&global, home.path().join("original")).unwrap();
+    std::fs::create_dir(&global).unwrap();
+    let replacement = WorkspaceAccess::open(global, WorkspaceKind::Global).unwrap();
+    assert!(context
+        .workspace_access()
+        .unwrap()
+        .same_directory(&original)
+        .unwrap());
+    assert!(!context
+        .workspace_access()
+        .unwrap()
+        .same_directory(&replacement)
+        .unwrap());
+}
+
+#[test]
+#[serial]
+fn test_home_git_root_requires_explicit_global_registration() {
+    let _guard = EnvGuard::new(&["HOME", "KAPSARO_HOME", "KAPSARO_WORKSPACE"]);
+    let home = tempfile::TempDir::new().unwrap();
+    let local = local_state_temp_dir();
+    std::fs::create_dir(home.path().join(".git")).unwrap();
+    env::set_var("HOME", home.path());
+    env::set_var("KAPSARO_HOME", local.path());
+    env::remove_var("KAPSARO_WORKSPACE");
+    kapsaro_test_support::guards::with_temp_cwd(home.path(), || {
+        for existing in [false, true] {
+            if existing {
+                std::fs::create_dir_all(home.path().join(".kapsaro/members/active")).unwrap();
+                std::fs::create_dir(home.path().join(".kapsaro/secrets")).unwrap();
+            }
+            let context = CliContext::resolve(&CommonOptions::default()).unwrap();
+            let error = context.registration_workspace_target().unwrap_err();
+            assert!(error.to_string().contains("--global"));
+            let error = context.workspace_access().unwrap_err();
+            assert_eq!(error.kind(), kapsaro_core::ErrorKind::NotFound);
+        }
+    });
+}
+
+#[test]
+#[serial]
+fn test_worktree_global_candidate_reports_regular_workspace_missing() {
+    let _guard = EnvGuard::new(&["HOME", "KAPSARO_HOME", "KAPSARO_WORKSPACE"]);
+    let home = tempfile::TempDir::new().unwrap();
+    let worktree = tempfile::TempDir::new().unwrap();
+    let local = local_state_temp_dir();
+    let gitdir = home.path().join(".git/worktrees/topic");
+    std::fs::create_dir_all(&gitdir).unwrap();
+    std::fs::write(gitdir.join("commondir"), "../..\n").unwrap();
+    std::fs::write(
+        worktree.path().join(".git"),
+        format!("gitdir: {}\n", gitdir.display()),
+    )
+    .unwrap();
+    std::fs::create_dir_all(home.path().join(".kapsaro/members/active")).unwrap();
+    std::fs::create_dir(home.path().join(".kapsaro/secrets")).unwrap();
+    env::set_var("HOME", home.path());
+    env::set_var("KAPSARO_HOME", local.path());
+    env::remove_var("KAPSARO_WORKSPACE");
+    kapsaro_test_support::guards::with_temp_cwd(worktree.path(), || {
+        let context = CliContext::resolve(&CommonOptions::default()).unwrap();
+        let error = context.workspace_access().unwrap_err();
+        assert_eq!(error.kind(), kapsaro_core::ErrorKind::NotFound);
+        assert!(error.to_string().contains("--workspace"));
+    });
 }
 
 #[test]

@@ -4,9 +4,7 @@
 //! Directory creation policy for paths addressed by name.
 //! Pins the descriptor chain each level is made on and the answers an inspection may give.
 
-use super::{ensure_real_directory_tree, is_real_dir, run_after_next_level_created, DirectoryKind};
-#[cfg(unix)]
-use crate::support::fs::test_umask::{isolated_umask_test, with_umask};
+use super::{ensure_real_directory_tree, is_real_dir, run_after_next_level_created};
 #[cfg(unix)]
 use crate::test_utils::permission_denial_can_be_staged;
 use crate::ErrorKind;
@@ -18,7 +16,7 @@ fn test_ensure_real_directory_tree_creates_every_missing_level() {
     let temp = TempDir::new().unwrap();
     let deep = temp.path().join("a").join("b").join("c");
 
-    ensure_real_directory_tree(&deep, DirectoryKind::General).unwrap();
+    ensure_real_directory_tree(&deep).unwrap();
 
     assert!(deep.is_dir());
 }
@@ -48,7 +46,7 @@ fn test_ensure_real_directory_tree_keeps_later_levels_below_the_directory_it_ope
     };
     run_after_next_level_created(swap);
 
-    ensure_real_directory_tree(&first.join("second"), DirectoryKind::General).unwrap();
+    ensure_real_directory_tree(&first.join("second")).unwrap();
 
     assert!(
         moved.join("second").is_dir(),
@@ -71,8 +69,7 @@ fn test_ensure_real_directory_tree_refuses_a_symlinked_ancestor() {
     fs::create_dir(&real).unwrap();
     symlink(&real, &linked).unwrap();
 
-    let error =
-        ensure_real_directory_tree(&linked.join("nested"), DirectoryKind::Workspace).unwrap_err();
+    let error = ensure_real_directory_tree(&linked.join("nested")).unwrap_err();
 
     assert_eq!(error.kind(), ErrorKind::InvalidOperation);
     assert!(
@@ -168,25 +165,5 @@ impl Drop for RestoredMode {
         // A restore that did not take shows up as the temporary directory
         // refusing to be removed.
         let _ = fs::set_permissions(&self.0, fs::Permissions::from_mode(0o700));
-    }
-}
-
-isolated_umask_test! {
-    /// The umask decides the mode of a workspace directory, which is shared
-    /// through git. Pinning it to 0700 would make the tree unreadable to
-    /// everyone else and change mode on every machine that checks it out.
-    #[cfg(unix)]
-    fn test_ensure_real_directory_tree_leaves_the_mode_to_the_umask() {
-        use std::os::unix::fs::PermissionsExt;
-
-        let temp = TempDir::new().unwrap();
-        let created = temp.path().join("shared");
-
-        with_umask(0o022, || {
-            ensure_real_directory_tree(&created, DirectoryKind::Workspace).unwrap();
-        });
-
-        let mode = fs::metadata(&created).unwrap().permissions().mode() & 0o777;
-        assert_eq!(mode, 0o755);
     }
 }

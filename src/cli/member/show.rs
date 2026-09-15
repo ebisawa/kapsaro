@@ -13,6 +13,6 @@ use super::ShowArgs;
 
 pub(crate) fn run(args: ShowArgs) -> Result<(), Error> {
     let context = CliContext::resolve(&args.common)?;
-    let result = load_member_show_result(&context.workspace_path()?, &args.member_handle)?;
+    let result = load_member_show_result(context.workspace_access()?, &args.member_handle)?;
     print_member_show(args.common.json.json, &result)
 }

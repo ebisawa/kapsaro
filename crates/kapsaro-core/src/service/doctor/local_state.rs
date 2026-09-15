@@ -28,10 +28,11 @@ use crate::io::workspace::members::{open_member_documents_at, MemberDocuments, M
 use crate::model::identity::{Kid, MemberHandle};
 use crate::model::public_key::PublicKey;
 use crate::model::trust_store::KnownKey;
+use crate::service::config::LocalStateSession;
 use crate::service::trust::store::load_optional_trust_store;
 use crate::support::display::format_path_for_message;
 use crate::support::fs::anchor::AnchoredDir;
-use crate::support::fs::relative::{open_optional_child_dir, DirectoryScope};
+use crate::support::fs::relative::open_optional_child_dir;
 use crate::support::kid::format_kid_half_display_lossy;
 use crate::support::path::format_path_relative_to_cwd;
 use crate::support::shell::append_repair_command;
@@ -41,6 +42,7 @@ use tracing::debug;
 use super::types::{DoctorCategory, DoctorCheck, DoctorSubject, LocalStateHome};
 
 pub(super) struct LocalStateDiagnostics {
+    pub(super) known_keys: Option<Vec<KnownKey>>,
     pub(super) checks: Vec<DoctorCheck>,
     pub(super) owner: Option<MemberHandle>,
     pub(super) keystore: Option<KeystoreAccess>,
@@ -55,6 +57,7 @@ impl LocalStateDiagnostics {
         home: LocalStateHome,
     ) -> Self {
         Self {
+            known_keys: None,
             checks,
             owner: None,
             keystore,
@@ -68,11 +71,11 @@ impl LocalStateDiagnostics {
 /// Splitting this out keeps the resolution of the owner, which can end the
 /// diagnosis early, separate from the checks that always run.
 fn check_keystore_layout(
-    base_dir: &Path,
+    session: &LocalStateSession,
     keystore_root: &Path,
 ) -> (Vec<DoctorCheck>, Option<KeystoreAccess>, LocalStateHome) {
     let mut checks = vec![build_paths_resolved_check(keystore_root)];
-    let (root_check, access, home) = check_keystore_root(base_dir, keystore_root);
+    let (root_check, access, home) = check_keystore_root(session, keystore_root);
     checks.push(root_check);
     run_post_keystore_open_hook(access.as_ref());
     checks.extend(
@@ -84,14 +87,16 @@ fn check_keystore_layout(
 }
 
 pub(super) fn check_local_state(
-    base_dir: &Path,
+    session: &LocalStateSession,
     member_handle: Option<&str>,
     allow_owner_fallback: bool,
 ) -> Result<LocalStateDiagnostics> {
+    let base_dir = session.base_dir();
     let keystore_root = crate::io::keystore::paths::get_keystore_root_from_base(base_dir);
     log_local_state_start(base_dir, &keystore_root);
 
-    let (mut checks, access, home) = check_keystore_layout(base_dir, &keystore_root);
+    let (mut checks, access, home) = check_keystore_layout(session, &keystore_root);
+    checks.push(check_configuration(session));
     checks.extend(collect_home_scoped_checks(base_dir, &home));
 
     let owner = match resolve_diagnostic_owner(
@@ -110,11 +115,35 @@ pub(super) fn check_local_state(
     log_resolved_owner(owner.as_str());
     extend_with_member_keystore_checks(&mut checks, access.as_ref(), &owner, &keystore_root);
     Ok(LocalStateDiagnostics {
+        known_keys: None,
         checks,
         owner: Some(owner),
         keystore: access,
         home,
     })
+}
+
+fn check_configuration(session: &LocalStateSession) -> DoctorCheck {
+    let subject = DoctorSubject::Path(format_path_relative_to_cwd(
+        &session.base_dir().join("config.toml"),
+    ));
+    match session.load_config() {
+        Ok(_) => DoctorCheck::ok(
+            "config.validation",
+            DoctorCategory::LocalState,
+            subject,
+            "Configuration is valid",
+        ),
+        Err(error) => DoctorCheck::fail(
+            "config.validation",
+            DoctorCategory::LocalState,
+            subject,
+            "Configuration could not be loaded",
+        )
+        .with_reason(error.format_user_message())
+        .with_rule(error.recovery().or_else(|| error.rule()))
+        .with_next_action("repair config.toml, then run kapsaro doctor again"),
+    }
 }
 
 /// Everything the local state root can be judged on without an owner, which
@@ -245,47 +274,26 @@ fn build_paths_resolved_check(keystore_root: &Path) -> DoctorCheck {
     )
 }
 
-/// Outcome of opening the local state root, before the keystore under it.
-enum LocalStateHomeResolution {
-    Opened(AnchoredDir),
-    Reported(DoctorCheck, LocalStateHome),
-}
-
-/// Open the local state root, reporting a root that cannot be opened at all.
-fn check_local_state_home(base_dir: &Path, subject: DoctorSubject) -> LocalStateHomeResolution {
-    let home = match AnchoredDir::open(base_dir, DirectoryScope::LocalState, "local state root") {
-        Ok(home) => home,
-        Err(error) if error.kind() == ErrorKind::NotFound => {
-            return LocalStateHomeResolution::Reported(
-                build_missing_keystore_root_check(subject),
-                LocalStateHome::Missing,
-            );
-        }
-        Err(error) => {
-            let reason = error.format_user_message().to_string();
-            return LocalStateHomeResolution::Reported(
-                build_unsafe_keystore_root_check(subject, &reason),
-                LocalStateHome::Unavailable { reason },
-            );
-        }
-    };
-    LocalStateHomeResolution::Opened(home)
-}
-
 fn check_keystore_root(
-    base_dir: &Path,
+    session: &LocalStateSession,
     keystore_root: &Path,
 ) -> (DoctorCheck, Option<KeystoreAccess>, LocalStateHome) {
     // The probe opens the local state root, so a root that cannot be opened is
     // named by its own path rather than by the keystore under it.
-    let home_subject = DoctorSubject::Path(format_path_relative_to_cwd(base_dir));
-    let home = match check_local_state_home(base_dir, home_subject) {
-        LocalStateHomeResolution::Opened(home) => home,
-        LocalStateHomeResolution::Reported(check, home) => return (check, None, home),
+    let home_subject = DoctorSubject::Path(format_path_relative_to_cwd(session.base_dir()));
+    let home = match session.home() {
+        Some(home) => home,
+        None => {
+            return (
+                build_missing_keystore_root_check(home_subject),
+                None,
+                LocalStateHome::Missing,
+            )
+        }
     };
     let subject = DoctorSubject::Path(format_path_relative_to_cwd(keystore_root));
-    let (check, access) = check_opened_keystore_root(&home, subject);
-    (check, access, LocalStateHome::Opened(home))
+    let (check, access) = check_opened_keystore_root(home, subject);
+    (check, access, LocalStateHome::Opened(home.clone()))
 }
 
 /// Open the keystore under an already verified local state root.
@@ -455,31 +463,24 @@ fn log_resolved_owner(owner: &str) {
 
 pub(super) fn check_trust_store(
     base_dir: &Path,
-    owner: Option<&MemberHandle>,
-    workspace: &AnchoredDir,
-    keystore: Option<&KeystoreAccess>,
-    home: &LocalStateHome,
-) -> Result<Vec<DoctorCheck>> {
-    let Some(owner) = owner else {
-        return Ok(vec![check_unresolved_trust_store_owner(base_dir)]);
+    local: &mut LocalStateDiagnostics,
+) -> Vec<DoctorCheck> {
+    let Some(owner) = local.owner.as_ref() else {
+        return vec![check_unresolved_trust_store_owner(base_dir)];
     };
 
     let path = get_trust_store_file_path(base_dir, owner);
     log_trust_store_path(&path, owner.as_str());
-    let state = match load_trust_store_state(&path, home, keystore, owner.as_str()) {
-        TrustStoreCheck::Loaded(state) => state,
-        TrustStoreCheck::Missing => return Ok(vec![check_missing_trust_store(&path)]),
-        TrustStoreCheck::Finding(check) => return Ok(vec![check]),
-    };
+    let state =
+        match load_trust_store_state(&path, &local.home, local.keystore.as_ref(), owner.as_str()) {
+            TrustStoreCheck::Loaded(state) => state,
+            TrustStoreCheck::Missing => return vec![check_missing_trust_store(&path)],
+            TrustStoreCheck::Finding(check) => return vec![check],
+        };
     log_trust_store_state(&state);
 
-    let mut checks = vec![check_verified_trust_store(&path)];
-    checks.extend(check_active_member_approvals(
-        workspace,
-        owner.as_str(),
-        &state.protected.known_keys,
-    )?);
-    Ok(checks)
+    local.known_keys = Some(state.protected.known_keys);
+    vec![check_verified_trust_store(&path)]
 }
 
 fn check_unresolved_trust_store_owner(base_dir: &Path) -> DoctorCheck {
@@ -525,9 +526,6 @@ fn load_trust_store_state(
     let base = match home {
         LocalStateHome::Opened(base) => base,
         LocalStateHome::Missing => return TrustStoreCheck::Missing,
-        LocalStateHome::Unavailable { reason } => {
-            return TrustStoreCheck::Finding(build_unavailable_trust_store_check(path, reason));
-        }
     };
     let loaded = MemberHandle::try_from(owner).and_then(|owner| {
         let trust_dir = open_optional_child_dir(base, TRUST_DIR_NAME)?;
@@ -590,6 +588,14 @@ fn build_missing_trust_signer_key_check(path: &Path, error: &Error) -> DoctorChe
     .with_rule(reportable_code(error))
 }
 
+fn log_trust_store_state(state: &TrustStoreState) {
+    debug!(
+        "[DOCTOR] trust store: loaded known_keys={}, recipient_sets={}",
+        state.protected.known_keys.len(),
+        state.protected.recipient_sets.len()
+    );
+}
+
 fn build_unavailable_trust_store_check(path: &Path, reason: &str) -> DoctorCheck {
     DoctorCheck::fail_with_reason_and_next_action(
         "trust_store.integrity",
@@ -600,14 +606,6 @@ fn build_unavailable_trust_store_check(path: &Path, reason: &str) -> DoctorCheck
         "inspect the local state path and permissions",
     )
     .with_rule(Some(LOCAL_STATE_PATH_UNSAFE_RECOVERY))
-}
-
-fn log_trust_store_state(state: &TrustStoreState) {
-    debug!(
-        "[DOCTOR] trust store: loaded known_keys={}, recipient_sets={}",
-        state.protected.known_keys.len(),
-        state.protected.recipient_sets.len()
-    );
 }
 
 fn check_verified_trust_store(path: &Path) -> DoctorCheck {
@@ -895,7 +893,7 @@ fn build_expired_public_key_check(path: &Path, expires_at: String) -> DoctorChec
 /// the diagnosis at the first document that will not parse, and the report
 /// gathered up to that point — the keystore, the permissions, the members —
 /// would be dropped for a single error naming one file.
-fn check_active_member_approvals(
+pub(super) fn check_active_member_approvals(
     workspace: &AnchoredDir,
     owner: &str,
     known_keys: &[KnownKey],

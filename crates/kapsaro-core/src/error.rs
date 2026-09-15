@@ -40,6 +40,7 @@ pub(crate) const KID_INVALID_RULE: &str = "E_KID_INVALID";
 // Diagnostic codes. Reported on a check the diagnostic command emits, never on
 // an `Error`.
 pub(crate) const LOCAL_STATE_PERMISSIONS_RULE: &str = "W_LOCAL_STATE_PERMISSIONS";
+pub(crate) const GLOBAL_WORKSPACE_PERMISSIONS_RULE: &str = "W_GLOBAL_WORKSPACE_PERMISSIONS";
 
 /// An ancestor of local state owned by neither the operator nor the machine
 /// administrator. Reported by the diagnostic command only.

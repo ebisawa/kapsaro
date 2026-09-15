@@ -4,7 +4,7 @@
 //! Shared CLI inputs and review loop for trust-gated read sessions.
 //! Resolves command inputs once, then drives service reviews until a read is authorized.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use crate::cli::common::command::ReadCommandLabels;
 use crate::cli::common::context::CliContext;
@@ -23,11 +23,13 @@ use kapsaro_core::api::trust::{
     AuthorizedRead, KnownKeyReview, ReadAcceptance, ReadReview, ReadSessionDecision,
     WorkspaceReadSession,
 };
+use kapsaro_core::api::workspace::{WorkspaceAccess, WorkspaceCreationTarget};
 use kapsaro_core::{Error, Result};
 
 /// Inputs a read command resolves once before it opens a workspace read session.
 pub(crate) struct ReadSessionInputs {
-    workspace_path: PathBuf,
+    workspace: WorkspaceAccess,
+    global_workspace: Option<WorkspaceCreationTarget>,
     local_state: Option<LocalStateSession>,
     key_ctx: KeyContext,
     options: OperationOptions,
@@ -52,7 +54,7 @@ impl ReadSessionInputs {
         Select: FnOnce(&CliContext) -> Result<bool>,
     {
         let context = CliContext::resolve(common)?;
-        let workspace_path = context.workspace_path()?;
+        let workspace = context.workspace_access()?.clone();
         let options = OperationOptions::new()
             .with_allow_expired_key(context.allow_expired_key(allow_expired_key)?);
         let allow_non_member = select_allow_non_member(&context)?;
@@ -61,10 +63,12 @@ impl ReadSessionInputs {
         } else {
             KnownKeyReview::Required
         };
-        let key_ctx = load_read_key_context(&context, &workspace_path, member_handle, kid)?;
+        let key_ctx = load_read_key_context(&context, &workspace, member_handle, kid)?;
+        let global_workspace = context.optional_global_target()?.cloned();
         let local_state = context.into_optional_local_state()?;
         Ok(Self {
-            workspace_path,
+            workspace,
+            global_workspace,
             local_state,
             key_ctx,
             options,
@@ -74,7 +78,11 @@ impl ReadSessionInputs {
     }
 
     pub(crate) fn workspace_path(&self) -> &Path {
-        &self.workspace_path
+        self.workspace.path()
+    }
+
+    pub(crate) fn global_workspace(&self) -> Option<&WorkspaceCreationTarget> {
+        self.global_workspace.as_ref()
     }
 
     pub(crate) fn allow_non_member(&self) -> bool {
@@ -83,7 +91,7 @@ impl ReadSessionInputs {
 
     pub(crate) fn open_workspace_session(&self) -> Result<WorkspaceReadSession<'_>> {
         WorkspaceReadSession::open_with_local_state(
-            &self.workspace_path,
+            &self.workspace,
             self.local_state.as_ref(),
             &self.key_ctx,
             self.options,

@@ -24,6 +24,8 @@ pub mod api_key_duration_test;
 pub mod api_key_manage_test;
 #[path = "unit/external/api_ssh_test.rs"]
 pub mod api_ssh_test;
+#[path = "unit/external/file_input_concurrency_test.rs"]
+pub mod file_input_concurrency_test;
 #[path = "unit/external/format_token_encode_test.rs"]
 pub mod format_token_encode_test;
 #[path = "unit/external/golden_v0_99_compat_test.rs"]

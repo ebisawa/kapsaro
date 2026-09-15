@@ -122,7 +122,15 @@ impl Drop for PtySession {
 pub fn cmd() -> Command {
     let mut c = cargo::cargo_bin_cmd!("kapsaro");
     c.env("KAPSARO_SSH_SIGNING_METHOD", "ssh-keygen");
+    c.env("HOME", isolated_home());
     c
+}
+
+fn isolated_home() -> &'static std::path::Path {
+    static CLI_HOME: std::sync::OnceLock<tempfile::TempDir> = std::sync::OnceLock::new();
+    CLI_HOME
+        .get_or_init(|| tempfile::TempDir::new().expect("isolated CLI HOME"))
+        .path()
 }
 
 /// Returns the path to the kapsaro binary under test.
@@ -139,6 +147,7 @@ pub fn kapsaro_bin() -> PathBuf {
 pub fn kapsaro_std_cmd() -> StdCommand {
     let mut command = StdCommand::new(kapsaro_bin());
     command.env("KAPSARO_SSH_SIGNING_METHOD", "ssh-keygen");
+    command.env("HOME", isolated_home());
     command
 }
 

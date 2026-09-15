@@ -27,6 +27,39 @@ const TEST_PASSWORD: &str = "cli-integration-test-password-42";
 const ENV_MODE_SUPPORTED_COMMANDS_MESSAGE: &str =
     "Supported commands: run, decrypt, get, list, doctor";
 
+#[test]
+fn test_global_environment_key_reads_selected_workspace_without_creating_local_state() {
+    let (workspace, local, _ssh, identity, exported) = setup_env_key_workspace();
+    set_value_with_member_set_review(
+        workspace.path(),
+        local.path(),
+        &identity,
+        "GLOBAL_VALUE",
+        "environment-key-value",
+        None,
+        None,
+    );
+    let home = TempDir::new().unwrap();
+    std::fs::rename(workspace.path(), home.path().join(".kapsaro")).unwrap();
+    let absent_local = home.path().join("local-state");
+    env_key_cmd_at(&absent_local, &exported, TEST_PASSWORD)
+        .env("HOME", home.path())
+        .env("KAPSARO_STRICT_KEY_CHECKING", "no")
+        .args(["get", "-g", "GLOBAL_VALUE"])
+        .assert()
+        .success()
+        .stdout("environment-key-value\n");
+    env_key_cmd_at(&absent_local, &exported, TEST_PASSWORD)
+        .env("HOME", home.path())
+        .args(["set", "-g", "GLOBAL_VALUE", "replacement"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            ENV_MODE_SUPPORTED_COMMANDS_MESSAGE,
+        ));
+    assert!(!absent_local.exists());
+}
+
 // ============================================================================
 // Setup Helper
 // ============================================================================

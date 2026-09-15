@@ -20,7 +20,7 @@ use crate::support::warning::{
 };
 use crate::Result;
 
-use super::policy::{ensure_real_directory_tree, DirectoryKind};
+use super::policy::ensure_real_directory_tree;
 #[cfg(unix)]
 use super::relative::{
     open_dir_identity, open_scanned_child_dir, scan_child_entries_at, ChildName, ChildType,
@@ -28,7 +28,7 @@ use super::relative::{
 };
 
 pub fn ensure_dir(path: &Path) -> Result<()> {
-    ensure_real_directory_tree(path, DirectoryKind::General)
+    ensure_real_directory_tree(path)
 }
 
 /// What makes one local state entry unsafe for its owner.
@@ -769,7 +769,9 @@ where
 {
     match dir.scope() {
         DirectoryScope::Generic => None,
-        DirectoryScope::LocalState => inspect_open_permission(file, display_path),
+        DirectoryScope::LocalState | DirectoryScope::GlobalWorkspace => {
+            inspect_open_permission(file, display_path)
+        }
     }
 }
 
@@ -1181,11 +1183,18 @@ pub(crate) fn report_scoped_open_permission<D>(dir: &D, file: &File, display_pat
 where
     D: DirectoryFd + ?Sized,
 {
-    report_violations(
-        inspect_scoped_open_permission(dir, file, display_path)
-            .into_iter()
-            .collect(),
-    );
+    if let Some(violation) = inspect_scoped_open_permission(dir, file, display_path) {
+        let code = if dir.scope() == DirectoryScope::GlobalWorkspace {
+            LocalStateWarningCode::GlobalWorkspacePermissions
+        } else {
+            LocalStateWarningCode::Permissions
+        };
+        record_local_state_warning(LocalStateWarning::new(
+            code,
+            &violation.path,
+            violation.message,
+        ));
+    }
 }
 
 #[cfg(test)]

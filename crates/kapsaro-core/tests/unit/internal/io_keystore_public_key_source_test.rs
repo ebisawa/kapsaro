@@ -9,6 +9,8 @@ use crate::io::keystore::public_key_source::{
 };
 use crate::model::identity::{Kid, MemberHandle};
 use crate::service_test_utils::add_generated_key;
+use crate::support::fs::anchor::AnchoredDir;
+use crate::support::fs::relative::DirectoryScope;
 use crate::test_utils::{
     setup_test_keystore_from_fixtures, setup_test_workspace_from_fixtures, ALICE_MEMBER_HANDLE,
     BOB_MEMBER_HANDLE,
@@ -132,7 +134,9 @@ fn test_workspace_public_key_source_load_public_key() {
     let kid = "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD";
     setup_workspace_member(workspace_path, member_handle, kid);
 
-    let source = WorkspacePublicKeySource::new(workspace_path.to_path_buf());
+    let source = WorkspacePublicKeySource::new(
+        AnchoredDir::open(workspace_path, DirectoryScope::Generic, "test workspace").unwrap(),
+    );
     let result = source.load_public_key(&parse_member_handle(member_handle));
     assert!(result.is_ok(), "Expected Ok, got: {:?}", result);
 
@@ -147,7 +151,9 @@ fn test_workspace_public_key_source_load_not_found() {
     let workspace_path = temp_dir.path();
     std::fs::create_dir_all(workspace_path.join("members/active")).unwrap();
 
-    let source = WorkspacePublicKeySource::new(workspace_path.to_path_buf());
+    let source = WorkspacePublicKeySource::new(
+        AnchoredDir::open(workspace_path, DirectoryScope::Generic, "test workspace").unwrap(),
+    );
     let result = source.load_public_key(&parse_member_handle("nonexistent@example.com"));
     assert!(result.is_err());
 }
@@ -172,7 +178,9 @@ fn test_workspace_public_key_source_rejects_incoming_member() {
         "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GE",
     );
 
-    let source = WorkspacePublicKeySource::new(workspace_path.to_path_buf());
+    let source = WorkspacePublicKeySource::new(
+        AnchoredDir::open(workspace_path, DirectoryScope::Generic, "test workspace").unwrap(),
+    );
     let result = source.load_public_key(&parse_member_handle("pending@example.com"));
     assert!(result.is_err(), "Incoming member should be rejected");
     let err = result.unwrap_err().to_string();
@@ -201,7 +209,9 @@ fn test_workspace_public_key_source_bulk_rejects_incoming_member() {
         "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GE",
     );
 
-    let source = WorkspacePublicKeySource::new(workspace_path.to_path_buf());
+    let source = WorkspacePublicKeySource::new(
+        AnchoredDir::open(workspace_path, DirectoryScope::Generic, "test workspace").unwrap(),
+    );
     let member_handles = vec![
         parse_member_handle("alice@example.com"),
         parse_member_handle("pending@example.com"),
@@ -228,7 +238,9 @@ fn test_workspace_public_key_source_load_multiple() {
         setup_workspace_member(workspace_path, member_handle, kid);
     }
 
-    let source = WorkspacePublicKeySource::new(workspace_path.to_path_buf());
+    let source = WorkspacePublicKeySource::new(
+        AnchoredDir::open(workspace_path, DirectoryScope::Generic, "test workspace").unwrap(),
+    );
     let member_handles: Vec<MemberHandle> = members
         .iter()
         .map(|(id, _)| parse_member_handle(id))
@@ -264,7 +276,9 @@ fn test_workspace_public_key_source_rejects_mismatched_active_file() {
     )
     .unwrap();
 
-    let source = WorkspacePublicKeySource::new(workspace_path.to_path_buf());
+    let source = WorkspacePublicKeySource::new(
+        AnchoredDir::open(workspace_path, DirectoryScope::Generic, "test workspace").unwrap(),
+    );
     let result = source.load_public_key(&parse_member_handle("alice@example.com"));
     assert!(result.is_err(), "mismatched member file should be rejected");
     let message = result.unwrap_err().to_string();
@@ -283,7 +297,9 @@ fn test_workspace_public_key_source_load_public_key_for_kid() {
     let kid = "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD";
     setup_workspace_member(workspace_path, member_handle, kid);
 
-    let source = WorkspacePublicKeySource::new(workspace_path.to_path_buf());
+    let source = WorkspacePublicKeySource::new(
+        AnchoredDir::open(workspace_path, DirectoryScope::Generic, "test workspace").unwrap(),
+    );
     let public_key = source
         .load_public_key_for_kid(
             &parse_member_handle(member_handle),
@@ -307,7 +323,9 @@ fn test_workspace_public_key_source_rejects_other_kid() {
         "7M2Q9D4R1H8VW6PKT3XNC5JY2F9AR8GD",
     );
 
-    let source = WorkspacePublicKeySource::new(workspace_path.to_path_buf());
+    let source = WorkspacePublicKeySource::new(
+        AnchoredDir::open(workspace_path, DirectoryScope::Generic, "test workspace").unwrap(),
+    );
     let error = source
         .load_public_key_for_kid(
             &parse_member_handle(member_handle),

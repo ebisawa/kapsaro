@@ -3,12 +3,13 @@
 
 use crate::cli::common::output::text::doctor::format_doctor_report;
 use kapsaro_core::api::doctor::types::{
-    DoctorCategory, DoctorCheck, DoctorReport, DoctorStatus, DoctorSubject,
+    DoctorCategory, DoctorCheck, DoctorReport, DoctorStatus, DoctorSubject, DoctorTarget,
+    DoctorTargetKind,
 };
 
 #[test]
 fn test_doctor_text_output_orders_sections() {
-    let mut report = DoctorReport::new("workspace".to_string());
+    let mut report = DoctorReport::new(Vec::new());
     report.extend([DoctorCheck::new(
         "workspace.resolve",
         DoctorCategory::Workspace,
@@ -41,7 +42,7 @@ fn test_doctor_text_output_orders_sections() {
 
 #[test]
 fn test_doctor_report_exit_code_fails_only_on_fail() {
-    let mut report = DoctorReport::new("workspace".to_string());
+    let mut report = DoctorReport::new(Vec::new());
     report.extend([DoctorCheck::new(
         "members.incoming.pending",
         DoctorCategory::MembersIncoming,
@@ -74,7 +75,11 @@ fn test_doctor_text_output_keeps_long_messages_and_paths_inline() {
         "abcdef0123456789".repeat(8)
     );
     let next_action = format!("run kapsaro rewrap --target {subject}");
-    let mut report = DoctorReport::new(workspace);
+    let mut report = DoctorReport::new(vec![DoctorTarget {
+        kind: DoctorTargetKind::Workspace,
+        path: Some(workspace),
+        sources: Vec::new(),
+    }]);
     report.extend([DoctorCheck::new(
         "artifact.recipient_handle",
         DoctorCategory::Artifacts,

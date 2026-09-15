@@ -16,6 +16,53 @@ use crate::support::fs::relative::{
 };
 use crate::support::path::format_path_relative_to_cwd;
 use crate::{Error, Result};
+use std::sync::Arc;
+
+/// Member directories retained across registration review and publication.
+#[derive(Debug, Clone)]
+pub(crate) struct MemberWriteStore {
+    members: Arc<OpenDir>,
+    active: Arc<OpenDir>,
+    incoming: Arc<OpenDir>,
+}
+
+impl MemberWriteStore {
+    pub(crate) fn open<D: DirectoryFd>(workspace: &D) -> Result<Self> {
+        let members = Arc::new(ensure_members_root_at(workspace)?);
+        let active = Arc::new(open_status_dir_at(members.as_ref(), MemberStatus::Active)?);
+        let incoming = Arc::new(open_status_dir_at(
+            members.as_ref(),
+            MemberStatus::Incoming,
+        )?);
+        Ok(Self {
+            members,
+            active,
+            incoming,
+        })
+    }
+
+    pub(crate) fn save(
+        &self,
+        status: MemberStatus,
+        member_handle: &str,
+        content: &str,
+        overwrite: bool,
+    ) -> Result<MemberDocumentWrite> {
+        let public_key =
+            parse_public_key_str(content, &format!("member content for {member_handle}"))?;
+        let request = MemberDocumentWriteRequest {
+            status,
+            member_handle,
+            content,
+            kid: &public_key.protected.kid,
+            overwrite,
+        };
+        with_exclusive_locked_directory(self.members.as_ref(), |_| {
+            run_post_open_save_dirs_hook();
+            save_member_document_locked(&self.active, &self.incoming, &request)
+        })
+    }
+}
 
 /// What one save found standing at the name it writes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

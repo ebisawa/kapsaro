@@ -62,10 +62,14 @@ pub(crate) fn run(args: DecryptArgs) -> Result<()> {
         args.member.member_handle.clone(),
         args.kid.as_deref(),
     )?;
+    let output = output_path
+        .as_ref()
+        .map(|path| session.open_output(path))
+        .transpose()?;
     let plaintext = session.decrypt(args.input.as_ref(), args.stdin)?;
 
     save_decrypted_output(
-        output_path.as_deref(),
+        output.as_ref(),
         plaintext.expose_secret(),
         args.common.quiet.quiet,
     )

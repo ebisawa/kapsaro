@@ -3,13 +3,58 @@
 
 //! Unit tests for support/fs module.
 
-use crate::support::fs::read::load_bytes_with_limit;
+use crate::support::fs::read::{load_bytes_with_limit, load_capped_bytes, FileReader};
 use crate::support::fs::snapshot::TextFileSnapshot;
 use crate::support::fs::{ensure_dir, load_bytes, load_text_with_limit};
 use crate::support::limits::MAX_PLAINTEXT_INPUT_SIZE;
 use crate::support::path::format_path_relative_to_cwd;
 use std::fs;
+use std::io::{self, Read, Seek, SeekFrom};
 use tempfile::TempDir;
+
+#[test]
+fn test_file_readers_keep_independent_positions() {
+    let mut file = tempfile::tempfile().unwrap();
+    use std::io::Write;
+    file.write_all(b"abcdefghij").unwrap();
+    file.seek(SeekFrom::Start(7)).unwrap();
+    let mut first = FileReader::new(&file);
+    let mut second = FileReader::new(&file);
+    let mut first_bytes = Vec::new();
+    let mut second_bytes = Vec::new();
+    for _ in 0..5 {
+        let mut chunk = [0; 2];
+        first.read_exact(&mut chunk).unwrap();
+        first_bytes.extend_from_slice(&chunk);
+        let mut chunk = [0; 1];
+        second.read_exact(&mut chunk).unwrap();
+        second_bytes.extend_from_slice(&chunk);
+    }
+    second.read_to_end(&mut second_bytes).unwrap();
+    assert_eq!(first_bytes, b"abcdefghij");
+    assert_eq!(second_bytes, b"abcdefghij");
+    assert_eq!(file.stream_position().unwrap(), 7);
+}
+
+#[test]
+fn test_capped_reader_reports_io_failure_after_partial_content() {
+    struct FailingReader(bool);
+    impl Read for FailingReader {
+        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+            if self.0 {
+                return Err(io::Error::other("injected failure"));
+            }
+            self.0 = true;
+            let secret = b"private-value";
+            buf[..secret.len()].copy_from_slice(secret);
+            Ok(secret.len())
+        }
+    }
+    let error = load_capped_bytes(&mut FailingReader(false), 64, "input", "input").unwrap_err();
+    assert_eq!(error.kind(), crate::ErrorKind::Io);
+    assert!(error.to_string().contains("injected failure"));
+    assert!(!format!("{error:?}").contains("private-value"));
+}
 
 #[test]
 fn test_load_text_with_limit() {

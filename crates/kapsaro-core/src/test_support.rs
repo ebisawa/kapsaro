@@ -4,6 +4,9 @@
 //! Hidden first-party test support allow-list.
 //! This module exposes narrow helpers used by repository tests.
 
+#[path = "../tests/test_support/invalid_ciphertext.rs"]
+pub mod invalid_ciphertext;
+
 pub mod settings {
     pub mod types {
         pub use crate::config::types::SshSigningMethod;

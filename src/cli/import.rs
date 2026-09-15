@@ -14,6 +14,7 @@ use crate::cli::common::trust::confirm_recipient_set_approval;
 use crate::cli::options::{
     AllowExpiredKeyOption, KvStoreNameOption, MemberHandleOption, SigningQuietOutputOptions,
 };
+use kapsaro_core::api::file::FileInputTarget;
 use kapsaro_core::api::kv::load_import_text;
 use kapsaro_core::api::kv::mutation::import_kv_command_with_recipient_set_confirmation;
 use kapsaro_core::Result;
@@ -38,8 +39,9 @@ pub(crate) struct ImportArgs {
 }
 
 pub(crate) fn run(args: ImportArgs) -> Result<()> {
-    let content = load_import_text(std::path::Path::new(&args.filename))?;
     let context = CliContext::resolve(&args.common)?;
+    let input = FileInputTarget::open(&args.filename, context.optional_global_target()?)?;
+    let content = load_import_text(&input)?;
     let allow_expired_key = context.allow_expired_key(args.allow_expired_key.allow_expired_key)?;
     let session = open_cli_write_session(
         &context,

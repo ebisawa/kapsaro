@@ -5,7 +5,7 @@
 //! Covers current-member authorization, review requests, and trusted reads.
 
 use crate::api::config::LocalStateSession;
-use crate::api::file::{FileEncArtifact, FileReadOperation};
+use crate::api::file::{FileEncArtifact, FileInputTarget, FileReadOperation};
 use crate::api::key::{KeyContext, KeyContextOptions, Kid, LocalKeyStore};
 use crate::api::kv::{KvEncArtifact, KvInputEntry, KvReadOperation};
 use crate::api::operation::OperationOptions;
@@ -23,9 +23,11 @@ use crate::io::workspace::members::load_active_member_files;
 use crate::io::workspace::members::test_support::remove_active_member as remove_member;
 use crate::model::trust_store::{RecipientHandleHint, TrustStoreProtected};
 use crate::model::wire::format::LOCAL_TRUST_V1;
+use crate::service::workspace::{WorkspaceAccess, WorkspaceKind};
 use crate::test_support::storage::keystore::active::set_active_kid;
 use crate::test_support::storage::keystore::storage::save_key_pair_atomic;
 use crate::test_support::storage::trust::store::save_trust_store;
+use crate::test_utils::open_test_workspace;
 use crate::test_utils::{
     build_expiring_soon_timestamp, build_test_private_key, keygen_test, member_handle,
     save_active_public_key_to_workspace, setup_member_key_context,
@@ -35,6 +37,28 @@ use crate::test_utils::{
 
 struct HomeBoundSshBackend {
     inner: crate::test_utils::ed25519_backend::Ed25519DirectBackend,
+}
+
+#[test]
+fn test_member_snapshot_load_retains_selected_workspace_after_path_replacement() {
+    let (home, workspace) = setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE]);
+    let access = open_test_workspace(&workspace);
+    std::fs::rename(&workspace, home.path().join("original-workspace")).unwrap();
+    std::fs::create_dir_all(workspace.join("members/active")).unwrap();
+
+    let snapshot = CurrentMemberSnapshot::load(&access).unwrap();
+
+    assert_eq!(snapshot.members_by_kid.len(), 1);
+    assert_eq!(
+        snapshot
+            .members_by_kid
+            .values()
+            .next()
+            .unwrap()
+            .protected
+            .subject_handle,
+        ALICE_MEMBER_HANDLE
+    );
 }
 
 impl SshSignatureBackend for HomeBoundSshBackend {
@@ -140,7 +164,7 @@ fn open_read_session<'a>(
 ) -> WorkspaceReadSession<'a> {
     let local_state = LocalStateSession::open(home.path()).unwrap();
     WorkspaceReadSession::open_with_local_state(
-        workspace,
+        &WorkspaceAccess::open(workspace, WorkspaceKind::Regular).unwrap(),
         Some(&local_state),
         key_ctx,
         OperationOptions::default(),
@@ -156,7 +180,7 @@ fn test_workspace_read_session_requires_an_existing_secrets_directory() {
 
     let local_state = LocalStateSession::open(home.path()).unwrap();
     let error = match WorkspaceReadSession::open_with_local_state(
-        &workspace,
+        &WorkspaceAccess::open(&workspace, WorkspaceKind::Regular).unwrap(),
         Some(&local_state),
         &decrypt_ctx,
         OperationOptions::default(),
@@ -177,7 +201,7 @@ fn test_workspace_read_session_rejects_a_different_local_state_home() {
     let local_state = LocalStateSession::open(other_home.path()).unwrap();
 
     let error = match WorkspaceReadSession::open_with_local_state(
-        &workspace,
+        &WorkspaceAccess::open(&workspace, WorkspaceKind::Regular).unwrap(),
         Some(&local_state),
         &key_ctx,
         OperationOptions::default(),
@@ -204,7 +228,7 @@ fn test_workspace_read_session_keeps_the_matching_local_state_capability_after_r
     let key_ctx = load_home_bound_key_context(&home, ALICE_MEMBER_HANDLE);
     let local_state = LocalStateSession::open(&alias).unwrap();
     let session = WorkspaceReadSession::open_with_local_state(
-        &workspace,
+        &WorkspaceAccess::open(&workspace, WorkspaceKind::Regular).unwrap(),
         Some(&local_state),
         &key_ctx,
         OperationOptions::default(),
@@ -243,7 +267,9 @@ fn test_workspace_read_session_resumes_non_member_for_exact_file_artifact() {
     remove_member(&workspace, BOB_MEMBER_HANDLE).expect("remove current signer");
     let decrypt_ctx = load_key_context(&home, ALICE_MEMBER_HANDLE);
     let session = open_read_session(&home, &workspace, &decrypt_ctx);
-    let target = session.open_file_read_target(&artifact_path).unwrap();
+    let target = session
+        .open_file_read_target(&FileInputTarget::open(&artifact_path, None).unwrap())
+        .unwrap();
 
     let decision = session
         .begin_file_read(&target, FileReadOperation::Decrypt, true)
@@ -322,7 +348,9 @@ fn test_workspace_read_session_marks_current_signer_key_review_first() {
     let artifact_path = save_file_artifact(&workspace, "reviewed.json", &artifact);
     let decrypt_ctx = load_key_context(&home, ALICE_MEMBER_HANDLE);
     let session = open_read_session(&home, &workspace, &decrypt_ctx);
-    let target = session.open_file_read_target(&artifact_path).unwrap();
+    let target = session
+        .open_file_read_target(&FileInputTarget::open(&artifact_path, None).unwrap())
+        .unwrap();
 
     let ReadSessionDecision::ReviewRequired(review) = session
         .begin_file_read(&target, FileReadOperation::Decrypt, false)
@@ -345,7 +373,9 @@ fn test_workspace_read_session_skips_current_file_signer_key_review() {
     let decrypt_ctx = load_key_context(&home, ALICE_MEMBER_HANDLE);
     let session = open_read_session(&home, &workspace, &decrypt_ctx)
         .with_known_key_review(KnownKeyReview::Skipped);
-    let target = session.open_file_read_target(&artifact_path).unwrap();
+    let target = session
+        .open_file_read_target(&FileInputTarget::open(&artifact_path, None).unwrap())
+        .unwrap();
 
     let ReadSessionDecision::Authorized(authorized) = session
         .begin_file_read(&target, FileReadOperation::Decrypt, false)
@@ -416,7 +446,9 @@ fn test_workspace_read_session_coalesces_same_file_signer_and_decryption_key_war
         load_file_artifact(&home, ALICE_MEMBER_HANDLE, &[ALICE_MEMBER_HANDLE]);
     let artifact_path = save_file_artifact(&workspace, "expiring.json", &artifact);
     let session = open_read_session(&home, &workspace, &decrypt_ctx);
-    let target = session.open_file_read_target(&artifact_path).unwrap();
+    let target = session
+        .open_file_read_target(&FileInputTarget::open(&artifact_path, None).unwrap())
+        .unwrap();
 
     let ReadSessionDecision::Authorized(authorized) = session
         .begin_file_read(&target, FileReadOperation::Decrypt, false)
@@ -492,7 +524,9 @@ fn test_workspace_read_session_reloads_trust_store_after_key_approval() {
     let artifact_path = save_file_artifact(&workspace, "reviewed.json", &artifact);
     let decrypt_ctx = load_key_context(&home, ALICE_MEMBER_HANDLE);
     let session = open_read_session(&home, &workspace, &decrypt_ctx);
-    let target = session.open_file_read_target(&artifact_path).unwrap();
+    let target = session
+        .open_file_read_target(&FileInputTarget::open(&artifact_path, None).unwrap())
+        .unwrap();
 
     let ReadSessionDecision::ReviewRequired(review) = session
         .begin_file_read(&target, FileReadOperation::Decrypt, false)
@@ -530,7 +564,9 @@ fn test_workspace_read_session_reloads_members_before_resume() {
     let artifact_path = save_file_artifact(&workspace, "reviewed.json", &artifact);
     let decrypt_ctx = load_key_context(&home, ALICE_MEMBER_HANDLE);
     let session = open_read_session(&home, &workspace, &decrypt_ctx);
-    let target = session.open_file_read_target(&artifact_path).unwrap();
+    let target = session
+        .open_file_read_target(&FileInputTarget::open(&artifact_path, None).unwrap())
+        .unwrap();
 
     let ReadSessionDecision::ReviewRequired(review) = session
         .begin_file_read(&target, FileReadOperation::Decrypt, false)
@@ -561,7 +597,9 @@ fn test_workspace_read_session_carries_acceptance_into_recipient_only_review() {
     remove_member(&workspace, BOB_MEMBER_HANDLE).unwrap();
     let decrypt_ctx = load_key_context(&home, ALICE_MEMBER_HANDLE);
     let session = open_read_session(&home, &workspace, &decrypt_ctx);
-    let target = session.open_file_read_target(&artifact_path).unwrap();
+    let target = session
+        .open_file_read_target(&FileInputTarget::open(&artifact_path, None).unwrap())
+        .unwrap();
 
     let ReadSessionDecision::ReviewRequired(mut signer_review) = session
         .begin_file_read(&target, FileReadOperation::Decrypt, true)
@@ -604,7 +642,9 @@ fn test_workspace_read_session_rejects_acceptance_for_changed_artifact() {
     remove_member(&workspace, BOB_MEMBER_HANDLE).expect("remove current signer");
     let decrypt_ctx = load_key_context(&home, ALICE_MEMBER_HANDLE);
     let session = open_read_session(&home, &workspace, &decrypt_ctx);
-    let target = session.open_file_read_target(&artifact_path).unwrap();
+    let target = session
+        .open_file_read_target(&FileInputTarget::open(&artifact_path, None).unwrap())
+        .unwrap();
 
     let ReadSessionDecision::ReviewRequired(mut review) = session
         .begin_file_read(&target, FileReadOperation::Decrypt, true)
@@ -780,7 +820,7 @@ fn test_output_recipient_preflight_requires_review_for_other_member_key() {
         setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE, BOB_MEMBER_HANDLE]);
     let recipients = load_active_member_files(&workspace).expect("load active recipients");
     let evaluator = TrustPolicyEvaluator::new(
-        CurrentMemberSnapshot::load(&workspace).expect("load members"),
+        CurrentMemberSnapshot::load(&open_test_workspace(&workspace)).expect("load members"),
         None,
     );
     let key_ctx = load_key_context(&home, ALICE_MEMBER_HANDLE);
@@ -806,7 +846,7 @@ fn test_evaluate_file_self_artifact_trusted() {
         .expect("verify artifact");
     let decrypt_ctx = load_key_context(&home, ALICE_MEMBER_HANDLE);
     let evaluator = TrustPolicyEvaluator::new(
-        CurrentMemberSnapshot::load(&workspace).expect("load members"),
+        CurrentMemberSnapshot::load(&open_test_workspace(&workspace)).expect("load members"),
         None,
     );
 
@@ -837,7 +877,7 @@ fn test_evaluate_file_current_unknown_signer_requires_review() {
         .expect("verify artifact");
     let decrypt_ctx = load_key_context(&home, ALICE_MEMBER_HANDLE);
     let evaluator = TrustPolicyEvaluator::new(
-        CurrentMemberSnapshot::load(&workspace).expect("load members"),
+        CurrentMemberSnapshot::load(&open_test_workspace(&workspace)).expect("load members"),
         None,
     );
 
@@ -875,7 +915,7 @@ fn test_evaluate_file_known_current_signer_trusted() {
     let decrypt_ctx = load_key_context(&home, ALICE_MEMBER_HANDLE);
     let key_store = LocalKeyStore::open(home.path().join("keys")).expect("open keystore");
     let initial = TrustPolicyEvaluator::new(
-        CurrentMemberSnapshot::load(&workspace).expect("load members"),
+        CurrentMemberSnapshot::load(&open_test_workspace(&workspace)).expect("load members"),
         None,
     )
     .evaluate_file(
@@ -909,7 +949,7 @@ fn test_evaluate_file_known_current_signer_trusted() {
         .expect("trust store exists")
         .into_store();
     let evaluator = TrustPolicyEvaluator::new(
-        CurrentMemberSnapshot::load(&workspace).expect("load members"),
+        CurrentMemberSnapshot::load(&open_test_workspace(&workspace)).expect("load members"),
         Some(verified_store),
     );
 
@@ -938,7 +978,7 @@ fn test_evaluate_file_non_member_signer_error() {
         .expect("verify artifact");
     let decrypt_ctx = load_key_context(&home, ALICE_MEMBER_HANDLE);
     let evaluator = TrustPolicyEvaluator::new(
-        CurrentMemberSnapshot::load(&workspace).expect("load members"),
+        CurrentMemberSnapshot::load(&open_test_workspace(&workspace)).expect("load members"),
         None,
     );
 
@@ -964,8 +1004,10 @@ fn test_evaluate_file_skips_only_known_key_review() {
         load_file_artifact(&home, BOB_MEMBER_HANDLE, &[ALICE_MEMBER_HANDLE]);
     let verified = artifact.verify(OperationOptions::default()).unwrap();
     let decrypt_ctx = load_key_context(&home, ALICE_MEMBER_HANDLE);
-    let evaluator =
-        TrustPolicyEvaluator::new(CurrentMemberSnapshot::load(&workspace).unwrap(), None);
+    let evaluator = TrustPolicyEvaluator::new(
+        CurrentMemberSnapshot::load(&open_test_workspace(&workspace)).unwrap(),
+        None,
+    );
 
     let decision = evaluator
         .evaluate_file(
@@ -999,8 +1041,10 @@ fn test_preflight_read_keeps_unresolved_recipient_kids_when_review_is_skipped() 
     remove_member(&workspace, BOB_MEMBER_HANDLE).unwrap();
     let verified = artifact.verify(OperationOptions::default()).unwrap();
     let decrypt_ctx = load_key_context(&home, ALICE_MEMBER_HANDLE);
-    let evaluator =
-        TrustPolicyEvaluator::new(CurrentMemberSnapshot::load(&workspace).unwrap(), None);
+    let evaluator = TrustPolicyEvaluator::new(
+        CurrentMemberSnapshot::load(&open_test_workspace(&workspace)).unwrap(),
+        None,
+    );
 
     let review = evaluator
         .preflight_read(&verified, &decrypt_ctx, KnownKeyReview::Skipped, false)
@@ -1031,7 +1075,7 @@ fn test_active_recipient_kid_rejects_mismatched_handle_hint() {
     .unwrap();
     let subject = super::RecipientSetSubject::from_inner(recipient_set).unwrap();
     let evaluator = TrustPolicyEvaluator::new(
-        CurrentMemberSnapshot::load(&workspace).expect("load members"),
+        CurrentMemberSnapshot::load(&open_test_workspace(&workspace)).expect("load members"),
         None,
     );
 
@@ -1058,8 +1102,10 @@ fn test_evaluate_file_accepts_only_the_named_non_member() {
         .into_iter()
         .next()
         .unwrap();
-    let evaluator =
-        TrustPolicyEvaluator::new(CurrentMemberSnapshot::load(&workspace).unwrap(), None);
+    let evaluator = TrustPolicyEvaluator::new(
+        CurrentMemberSnapshot::load(&open_test_workspace(&workspace)).unwrap(),
+        None,
+    );
 
     let accepted = evaluator
         .evaluate_file(
@@ -1115,8 +1161,10 @@ fn test_evaluate_kv_rejects_non_member_exception_for_environment() {
         .into_iter()
         .next()
         .unwrap();
-    let evaluator =
-        TrustPolicyEvaluator::new(CurrentMemberSnapshot::load(&workspace).unwrap(), None);
+    let evaluator = TrustPolicyEvaluator::new(
+        CurrentMemberSnapshot::load(&open_test_workspace(&workspace)).unwrap(),
+        None,
+    );
 
     let error = evaluator
         .evaluate_kv(
@@ -1154,7 +1202,7 @@ fn test_evaluate_kv_self_artifact_trusted_for_bound_list() {
         .verify(OperationOptions::default())
         .expect("verify artifact");
     let evaluator = TrustPolicyEvaluator::new(
-        CurrentMemberSnapshot::load(&workspace).expect("load members"),
+        CurrentMemberSnapshot::load(&open_test_workspace(&workspace)).expect("load members"),
         None,
     );
 
@@ -1204,7 +1252,7 @@ fn test_evaluate_kv_non_member_signer_hides_keys() {
         .verify(OperationOptions::default())
         .expect("cryptographic signature remains valid");
     let evaluator = TrustPolicyEvaluator::new(
-        CurrentMemberSnapshot::load(&workspace).expect("load members"),
+        CurrentMemberSnapshot::load(&open_test_workspace(&workspace)).expect("load members"),
         None,
     );
 
@@ -1247,7 +1295,7 @@ fn test_evaluate_kv_current_recipient_key_requires_review() {
         .verify(OperationOptions::default())
         .expect("verify artifact");
     let evaluator = TrustPolicyEvaluator::new(
-        CurrentMemberSnapshot::load(&workspace).expect("load members"),
+        CurrentMemberSnapshot::load(&open_test_workspace(&workspace)).expect("load members"),
         None,
     );
 

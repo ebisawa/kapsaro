@@ -22,7 +22,8 @@ use crate::cli::options::{MemberHandleOption, SigningQuietOptions};
 use kapsaro_core::api::file::encrypt::{
     execute_encrypt_file_command_with_recipient_set_confirmation, resolve_encrypt_file_command,
 };
-use kapsaro_core::api::file::load_plaintext_bytes;
+use kapsaro_core::api::file::{load_plaintext_bytes, FileInputTarget, FileOutputTarget};
+use kapsaro_core::api::workspace::WorkspaceCreationTarget;
 use kapsaro_core::{Error, Result};
 
 #[derive(Args)]
@@ -55,18 +56,26 @@ pub(crate) struct EncryptArgs {
 }
 
 pub(crate) fn run(args: EncryptArgs) -> Result<()> {
-    let input_bytes = resolve_encrypt_input_bytes(args.input.as_ref(), args.stdin)?;
+    let context = CliContext::resolve(&args.common)?;
+    let input_bytes = resolve_encrypt_input_bytes(
+        args.input.as_ref(),
+        args.stdin,
+        context.optional_global_target()?,
+    )?;
     let output_path = resolve_encrypted_output_path(
         args.out.as_ref(),
         args.stdout,
         args.input.as_deref(),
         args.stdin,
     )?;
-    let context = CliContext::resolve(&args.common)?;
+    let output = output_path
+        .as_ref()
+        .map(|path| FileOutputTarget::open(path, context.optional_global_target()?))
+        .transpose()?;
     let session = open_cli_write_session(&context, args.member.member_handle.clone(), false)?;
     let encrypted = encrypt_under_trust_review(&session, &input_bytes)?;
 
-    save_encrypted_output(output_path.as_ref(), &encrypted, args.common.quiet.quiet)?;
+    save_encrypted_output(output.as_ref(), &encrypted, args.common.quiet.quiet)?;
     Ok(())
 }
 
@@ -94,7 +103,11 @@ fn encrypt_under_trust_review(session: &CliWriteSession, input_bytes: &[u8]) -> 
     })
 }
 
-fn resolve_encrypt_input_bytes(input_path: Option<&PathBuf>, from_stdin: bool) -> Result<Vec<u8>> {
+fn resolve_encrypt_input_bytes(
+    input_path: Option<&PathBuf>,
+    from_stdin: bool,
+    global: Option<&WorkspaceCreationTarget>,
+) -> Result<Vec<u8>> {
     if from_stdin {
         let mut bytes = Vec::new();
         io::stdin().read_to_end(&mut bytes)?;
@@ -102,7 +115,9 @@ fn resolve_encrypt_input_bytes(input_path: Option<&PathBuf>, from_stdin: bool) -
     }
 
     input_path
-        .map(load_plaintext_bytes)
+        .map(|path| {
+            FileInputTarget::open(path, global).and_then(|target| load_plaintext_bytes(&target))
+        })
         .transpose()?
         .ok_or_else(|| {
             Error::build_invalid_argument_error("INPUT is required unless --stdin is used")

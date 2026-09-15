@@ -244,25 +244,29 @@ fn test_local_state_permissions_skip_a_root_that_never_opened() {
     );
 }
 
-/// An unsafe root carries its own explanation, so the skipped check repeats the
-/// reason instead of leaving the operator to match it up with another finding.
+/// Failed local-state resolution preserves the reason in the diagnostic report.
 #[test]
-fn test_local_state_permissions_skip_an_unavailable_root_with_its_reason() {
-    let _guard = LocalStateWarningGuard::new();
-    let outer = local_state_temp_dir();
-    let safe = outer.path().join("safe");
-    ensure_local_state_dir(&safe);
-    let home = LocalStateHome::Unavailable {
-        reason: "refusing to open symlink as directory".to_string(),
-    };
-
-    let checks = permission_checks(&safe.join("home"), &home);
-
-    assert_eq!(checks.len(), 1, "{checks:#?}");
-    assert_eq!(checks[0].status, DoctorStatus::Skip);
+fn test_local_state_resolution_failure_preserves_its_reason() {
+    use crate::service::doctor::ci::DoctorCiReadiness;
+    use crate::service::doctor::{execute_doctor_command, DoctorRequest};
+    let report = execute_doctor_command(DoctorRequest {
+        local_state: Err(crate::Error::build_config_error(
+            "local-state root is unavailable",
+        )),
+        workspaces: Vec::new(),
+        member_handle: Ok(None),
+        ci: DoctorCiReadiness::Inactive,
+    })
+    .unwrap();
+    let check = report
+        .checks()
+        .iter()
+        .find(|check| check.id == "local_state.resolve")
+        .unwrap();
+    assert_eq!(check.status, DoctorStatus::Fail);
     assert_eq!(
-        checks[0].reason_line().as_deref(),
-        Some("refusing to open symlink as directory")
+        check.reason_line().as_deref(),
+        Some("local-state root is unavailable")
     );
 }
 

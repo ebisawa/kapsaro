@@ -14,9 +14,10 @@ use crate::cli::common::read_session::{
 };
 use crate::cli::common::trust::run_with_workspace_read_trust_store_reset_recovery;
 use crate::cli::options::ToCommonOptions;
-use kapsaro_core::api::file::FileReadOperation;
+use kapsaro_core::api::file::{FileInputTarget, FileOutputTarget, FileReadOperation};
 use kapsaro_core::api::secret::SecretBytes;
 use kapsaro_core::api::trust::{FileReadTarget, WorkspaceReadSession};
+use kapsaro_core::api::workspace::WorkspaceCreationTarget;
 use kapsaro_core::{Error, Result};
 use tracing::debug;
 
@@ -26,6 +27,10 @@ pub(crate) struct FileReadSession {
 }
 
 impl FileReadSession {
+    pub(crate) fn open_output(&self, path: &std::path::Path) -> Result<FileOutputTarget> {
+        FileOutputTarget::open(path, self.inputs.global_workspace())
+    }
+
     pub(crate) fn open(
         common: &impl ToCommonOptions,
         allow_expired_key: bool,
@@ -46,7 +51,12 @@ impl FileReadSession {
         from_stdin: bool,
     ) -> Result<SecretBytes> {
         let session = self.inputs.open_workspace_session()?;
-        let target = load_decrypt_target(&session, input_path, from_stdin)?;
+        let target = load_decrypt_target(
+            &session,
+            input_path,
+            from_stdin,
+            self.inputs.global_workspace(),
+        )?;
         let labels = ReadCommandLabels {
             context: "decrypt signer",
             allow_non_member: self.inputs.allow_non_member(),
@@ -78,12 +88,16 @@ fn load_decrypt_target(
     session: &WorkspaceReadSession<'_>,
     input_path: Option<&PathBuf>,
     from_stdin: bool,
+    global: Option<&WorkspaceCreationTarget>,
 ) -> Result<FileReadTarget> {
     if from_stdin {
         return session.capture_file_read_target(io::stdin().lock(), "stdin");
     }
     input_path
-        .map(|path| session.open_file_read_target(path))
+        .map(|path| {
+            FileInputTarget::open(path, global)
+                .and_then(|target| session.open_file_read_target(&target))
+        })
         .transpose()?
         .ok_or_else(|| {
             Error::build_invalid_argument_error("INPUT is required unless --stdin is used")

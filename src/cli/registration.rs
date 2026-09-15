@@ -22,6 +22,7 @@ use kapsaro_core::api::registration::types::{RegistrationCommand, RegistrationMo
 use kapsaro_core::api::registration::{
     ensure_init_workspace_structure, evaluate_init_workspace_status, InitWorkspaceState,
 };
+use kapsaro_core::api::workspace::WorkspaceCreationTarget;
 use kapsaro_core::Error;
 use output::{print_missing_key_notice, print_registration_outcome};
 
@@ -33,14 +34,15 @@ pub(crate) fn run_registration_command(
     mode: RegistrationMode,
 ) -> Result<(), Error> {
     let context = CliContext::resolve(&common)?;
-    let workspace_path = context.registration_workspace_path()?;
-    if run_init_noop(&workspace_path, mode)? {
+    let workspace = context.registration_workspace_target()?;
+    if run_existing_init(workspace, mode)? {
         return Ok(());
     }
+    validate_registration_workspace(workspace, mode)?;
 
     let command = resolve_registration_command_from_local_state(
         &context,
-        &workspace_path,
+        workspace,
         member_handle,
         github_user,
         mode,
@@ -51,13 +53,25 @@ pub(crate) fn run_registration_command(
     Ok(())
 }
 
-/// Run the `init` mode's no-op case, where the workspace already exists.
+/// Complete or reuse an initialized workspace without resolving a member identity.
 /// Returns whether the command was fully answered here.
-fn run_init_noop(workspace_path: &std::path::Path, mode: RegistrationMode) -> Result<bool, Error> {
+fn run_existing_init(
+    workspace: &WorkspaceCreationTarget,
+    mode: RegistrationMode,
+) -> Result<bool, Error> {
     if let RegistrationMode::Init = mode {
-        let init_workspace = evaluate_init_workspace_status(workspace_path)?;
-        if init_workspace.state == InitWorkspaceState::NoOp {
-            ensure_init_workspace_structure(&init_workspace.workspace_path)?;
+        let init_workspace = evaluate_init_workspace_status(workspace)?;
+        if matches!(
+            init_workspace.state,
+            InitWorkspaceState::NoOp | InitWorkspaceState::CompleteStructure
+        ) {
+            ensure_init_workspace_structure(workspace)?;
+            if init_workspace.state == InitWorkspaceState::CompleteStructure {
+                eprintln!(
+                    "Completed workspace structure: {}",
+                    workspace.path().display()
+                );
+            }
             print_init_noop_summary(&init_workspace.workspace_path);
             return Ok(true);
         }
@@ -65,11 +79,29 @@ fn run_init_noop(workspace_path: &std::path::Path, mode: RegistrationMode) -> Re
     Ok(false)
 }
 
+fn validate_registration_workspace(
+    workspace: &WorkspaceCreationTarget,
+    mode: RegistrationMode,
+) -> Result<(), Error> {
+    if mode == RegistrationMode::Join {
+        workspace
+            .existing_access()
+            .ok_or_else(|| {
+                Error::build_not_found_error(format!(
+                    "Workspace does not exist: {}. Initialize it before joining.",
+                    workspace.path().display()
+                ))
+            })?
+            .validate()?;
+    }
+    Ok(())
+}
+
 /// Resolve the member handle, key plan, GitHub user and SSH context from local
 /// state, then build the `RegistrationCommand` they decide together.
 fn resolve_registration_command_from_local_state(
     context: &CliContext,
-    workspace_path: &std::path::Path,
+    workspace: &WorkspaceCreationTarget,
     member_handle: Option<String>,
     github_user: Option<String>,
     mode: RegistrationMode,
@@ -83,10 +115,14 @@ fn resolve_registration_command_from_local_state(
     if needs_new_key {
         print_missing_key_notice(&member_handle);
     }
-    let github_user = resolve_registration_github_user(needs_new_key, github_user, context)?;
+    let github_user = identity_prompt::resolve_cli_key_generation_github_user(
+        needs_new_key,
+        github_user,
+        context,
+    )?;
     let ssh_ctx = resolve_registration_ssh_context(needs_new_key, context)?;
     resolve_registration_command(
-        workspace_path,
+        workspace,
         member_handle,
         github_user,
         key_plan,
@@ -112,14 +148,6 @@ fn resolve_registration_decision(
         }
         other => Ok(other),
     }
-}
-
-fn resolve_registration_github_user(
-    needs_new_key: bool,
-    github_user: Option<String>,
-    context: &CliContext,
-) -> Result<Option<String>, Error> {
-    identity_prompt::resolve_cli_key_generation_github_user(needs_new_key, github_user, context)
 }
 
 fn resolve_registration_ssh_context(

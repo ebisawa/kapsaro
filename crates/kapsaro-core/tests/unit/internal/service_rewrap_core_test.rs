@@ -4,6 +4,8 @@
 //! Tests for the operation-bound rewrap capability.
 //! Covers both artifact formats and fail-closed post-promotion member checks.
 
+use crate::service::workspace::{WorkspaceAccess, WorkspaceKind};
+use crate::test_utils::open_test_workspace;
 use std::fs;
 
 use super::{
@@ -24,6 +26,21 @@ use crate::test_utils::{setup_member_key_context, setup_test_workspace_from_fixt
 const ALICE: &str = "alice@example.com";
 const BOB: &str = "bob@example.com";
 const CAROL: &str = "carol@example.com";
+
+#[test]
+fn explicit_rewrap_target_inherits_global_policy_through_aliases() {
+    use crate::support::fs::relative::{DirectoryFd, DirectoryScope};
+    use std::os::unix::fs::symlink;
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("global");
+    fs::create_dir_all(root.join("secrets")).unwrap();
+    fs::write(root.join("secrets/file.json"), "artifact").unwrap();
+    let alias = temp.path().join("alias");
+    symlink(&root, &alias).unwrap();
+    let global = WorkspaceAccess::open(&root, WorkspaceKind::Global).unwrap();
+    let target = RewrapTarget::open(alias.join("secrets/file.json"), Some(&global)).unwrap();
+    assert_eq!(target.dir.scope(), DirectoryScope::GlobalWorkspace);
+}
 
 fn member(value: &str) -> MemberHandle {
     MemberHandle::try_from(value).unwrap()
@@ -49,7 +66,7 @@ fn test_rewrap_target_missing_entry_error() {
     let root = tempfile::tempdir().unwrap();
     let missing = root.path().join("missing.json");
 
-    let error = match RewrapTarget::open(&missing) {
+    let error = match RewrapTarget::open(&missing, None) {
         Ok(_) => panic!("a missing target must be rejected"),
         Err(error) => error,
     };
@@ -64,7 +81,7 @@ fn test_rewrap_target_non_regular_entry_error() {
     let directory = root.path().join("artifact.json");
     fs::create_dir(&directory).unwrap();
 
-    let error = match RewrapTarget::open(&directory) {
+    let error = match RewrapTarget::open(&directory, None) {
         Ok(_) => panic!("a directory must not become a rewrap target"),
         Err(error) => error,
     };
@@ -84,9 +101,10 @@ fn test_rewrap_target_identity_uses_directory_and_entry_name() {
     fs::write(&original, "artifact").unwrap();
     fs::hard_link(&original, &hardlink).unwrap();
 
-    let direct = RewrapTarget::open(&original).unwrap();
-    let alternate_spelling = RewrapTarget::open(directory.join(".").join("artifact.json")).unwrap();
-    let distinct_hardlink = RewrapTarget::open(&hardlink).unwrap();
+    let direct = RewrapTarget::open(&original, None).unwrap();
+    let alternate_spelling =
+        RewrapTarget::open(directory.join(".").join("artifact.json"), None).unwrap();
+    let distinct_hardlink = RewrapTarget::open(&hardlink, None).unwrap();
 
     assert!(direct == alternate_spelling);
     assert!(direct != distinct_hardlink);
@@ -100,8 +118,9 @@ fn test_rewrap_target_identity_resolves_parent_components() {
     let artifact = root.path().join("artifact.json");
     fs::write(&artifact, "artifact").unwrap();
 
-    let direct = RewrapTarget::open(&artifact).unwrap();
-    let parent_spelling = RewrapTarget::open(root.path().join("nested/../artifact.json")).unwrap();
+    let direct = RewrapTarget::open(&artifact, None).unwrap();
+    let parent_spelling =
+        RewrapTarget::open(root.path().join("nested/../artifact.json"), None).unwrap();
 
     assert!(direct == parent_spelling);
     assert_eq!(
@@ -123,9 +142,9 @@ fn test_rewrap_target_identity_preserves_os_symlink_parent_resolution() {
     fs::write(root.path().join("artifact.json"), "lexical artifact").unwrap();
     symlink(&nested, root.path().join("alias")).unwrap();
 
-    let os_resolved = RewrapTarget::open(root.path().join("alias/../artifact.json")).unwrap();
-    let direct = RewrapTarget::open(resolved.join("artifact.json")).unwrap();
-    let lexical = RewrapTarget::open(root.path().join("artifact.json")).unwrap();
+    let os_resolved = RewrapTarget::open(root.path().join("alias/../artifact.json"), None).unwrap();
+    let direct = RewrapTarget::open(resolved.join("artifact.json"), None).unwrap();
+    let lexical = RewrapTarget::open(root.path().join("artifact.json"), None).unwrap();
 
     assert!(os_resolved == direct);
     assert!(os_resolved != lexical);
@@ -137,7 +156,7 @@ fn test_rewrap_target_root_parent_missing_entry_error() {
     let missing =
         std::path::Path::new("/").join(format!(".kapsaro-rewrap-missing-{}", uuid::Uuid::new_v4()));
 
-    let error = match RewrapTarget::open(&missing) {
+    let error = match RewrapTarget::open(&missing, None) {
         Ok(_) => panic!("a missing target below the fixed root must be rejected"),
         Err(error) => error,
     };
@@ -180,8 +199,10 @@ fn test_file_rewrap_requires_and_uses_authorized_capability() {
         .unwrap()
         .verify(OperationOptions::default())
         .unwrap();
-    let evaluator =
-        TrustPolicyEvaluator::new(CurrentMemberSnapshot::load(&workspace).unwrap(), None);
+    let evaluator = TrustPolicyEvaluator::new(
+        CurrentMemberSnapshot::load(&open_test_workspace(&workspace)).unwrap(),
+        None,
+    );
 
     let TrustDecision::Trusted(authorized) = evaluator
         .evaluate_rewrap(
@@ -218,8 +239,10 @@ fn test_kv_rewrap_requires_and_uses_authorized_capability() {
     .unwrap()
     .verify(OperationOptions::default())
     .unwrap();
-    let evaluator =
-        TrustPolicyEvaluator::new(CurrentMemberSnapshot::load(&workspace).unwrap(), None);
+    let evaluator = TrustPolicyEvaluator::new(
+        CurrentMemberSnapshot::load(&open_test_workspace(&workspace)).unwrap(),
+        None,
+    );
 
     let TrustDecision::Trusted(authorized) = evaluator
         .evaluate_rewrap(
@@ -244,25 +267,55 @@ fn test_kv_rewrap_requires_and_uses_authorized_capability() {
 
 #[test]
 fn test_public_rewrap_session_issues_capabilities_for_both_formats() {
+    assert_rewrap_session_formats(WorkspaceKind::Regular);
+}
+
+#[test]
+fn global_rewrap_publishes_both_formats_with_owner_only_permissions() {
+    assert_rewrap_session_formats(WorkspaceKind::Global);
+}
+
+fn assert_rewrap_session_formats(kind: WorkspaceKind) {
     let (temp, workspace, key_ctx, recipients) = setup_self();
-    let file = FileEncArtifact::encrypt_bytes(b"secret", &recipients, &key_ctx).unwrap();
+    let secrets = save_both_artifacts(&workspace, &key_ctx, &recipients);
+    let trust = TrustCommandSession::from_test_parts(temp.path(), member(ALICE), key_ctx).unwrap();
+    let session = RewrapSession::from_trust_command(
+        &WorkspaceAccess::open(&workspace, kind).unwrap(),
+        &trust,
+    )
+    .unwrap();
+
+    assert!(session.signing_key_warnings().unwrap().is_empty());
+
+    assert_rewrap_formats(&session, &secrets, kind);
+}
+
+fn save_both_artifacts(
+    workspace: &std::path::Path,
+    key_ctx: &KeyContext,
+    recipients: &RecipientKeys,
+) -> std::path::PathBuf {
+    let file = FileEncArtifact::encrypt_bytes(b"secret", recipients, key_ctx).unwrap();
     let kv = KvEncArtifact::encrypt_entries(
         vec![KvInputEntry::new(
             "SECRET",
             SecretString::new("value".to_string()),
         )],
-        &recipients,
-        &key_ctx,
+        recipients,
+        key_ctx,
     )
     .unwrap();
     let secrets = workspace.join("secrets");
     file.save(secrets.join("secret.json")).unwrap();
     kv.save(secrets.join("secret.env.kvenc")).unwrap();
-    let trust = TrustCommandSession::from_test_parts(temp.path(), member(ALICE), key_ctx).unwrap();
-    let session = RewrapSession::from_trust_command(&workspace, &trust).unwrap();
+    secrets
+}
 
-    assert!(session.signing_key_warnings().unwrap().is_empty());
-
+fn assert_rewrap_formats(
+    session: &RewrapSession<'_>,
+    secrets: &std::path::Path,
+    kind: WorkspaceKind,
+) {
     let targets = session.list_workspace_targets().unwrap().into_targets();
     assert_eq!(targets.len(), 2);
     let mut file_target = None;
@@ -297,6 +350,19 @@ fn test_public_rewrap_session_issues_capabilities_for_both_formats() {
         .unwrap();
     file.publish().unwrap();
     kv.publish().unwrap();
+    if kind == WorkspaceKind::Global {
+        use std::os::unix::fs::PermissionsExt;
+        for name in ["secret.json", "secret.env.kvenc"] {
+            assert_eq!(
+                fs::metadata(secrets.join(name))
+                    .unwrap()
+                    .permissions()
+                    .mode()
+                    & 0o777,
+                0o600
+            );
+        }
+    }
     FileEncArtifact::load(secrets.join("secret.json"))
         .unwrap()
         .verify(OperationOptions::default())
@@ -331,7 +397,12 @@ fn test_rewrap_session_reuses_post_promotion_recipients_across_targets() {
     let secrets = workspace.join("secrets");
     file.save(secrets.join("secret.json")).unwrap();
     kv.save(secrets.join("secret.env.kvenc")).unwrap();
-    let session = RewrapSession::open(&workspace, None, &key_ctx).unwrap();
+    let session = RewrapSession::open(
+        &WorkspaceAccess::open(&workspace, WorkspaceKind::Regular).unwrap(),
+        None,
+        &key_ctx,
+    )
+    .unwrap();
 
     assert!(session.begin_promotion_review(false).unwrap().is_none());
     let RewrapSessionDecision::Authorized(file_authorized) = session
@@ -381,14 +452,34 @@ fn test_rewrap_session_reuses_post_promotion_recipients_across_targets() {
 /// and keeping the earlier answer would leave that member unable to read them.
 #[test]
 fn test_apply_promotions_replaces_recipients_fixed_before_the_promotion() {
+    assert_promotions_replace_recipients(WorkspaceKind::Regular);
+}
+
+#[test]
+fn global_promotion_and_rewrap_allow_new_member_to_read_both_formats() {
+    assert_promotions_replace_recipients(WorkspaceKind::Global);
+}
+
+fn assert_promotions_replace_recipients(kind: WorkspaceKind) {
     let (temp, workspace) = setup_test_workspace_from_fixtures(&[ALICE, BOB]);
     let active_bob = workspace.join("members/active").join(format!("{BOB}.json"));
     let incoming = workspace.join("members/incoming");
     fs::create_dir_all(&incoming).unwrap();
     fs::rename(&active_bob, incoming.join(format!("{BOB}.json"))).unwrap();
     let key_ctx = KeyContext::from_inner(setup_member_key_context(&temp, ALICE, None));
-    let session =
-        RewrapSession::open(&workspace, Some(temp.path().to_path_buf()), &key_ctx).unwrap();
+    if kind == WorkspaceKind::Global {
+        let recipients = LocalKeyStore::open(temp.path().join("keys"))
+            .unwrap()
+            .load_recipient_keys([member(ALICE)])
+            .unwrap();
+        save_both_artifacts(&workspace, &key_ctx, &recipients);
+    }
+    let session = RewrapSession::open(
+        &WorkspaceAccess::open(&workspace, kind).unwrap(),
+        Some(temp.path().to_path_buf()),
+        &key_ctx,
+    )
+    .unwrap();
 
     session.post_promotion_warnings().unwrap();
     let review = session
@@ -398,6 +489,13 @@ fn test_apply_promotions_replaces_recipients_fixed_before_the_promotion() {
     let outcome = session
         .apply_promotions(review, &[BOB.to_string()])
         .unwrap();
+    if kind == WorkspaceKind::Global {
+        use std::os::unix::fs::PermissionsExt;
+        assert_eq!(
+            fs::metadata(&active_bob).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+    }
 
     assert_eq!(
         outcome.promoted_member_handles(),
@@ -409,6 +507,101 @@ fn test_apply_promotions_replaces_recipients_fixed_before_the_promotion() {
         "{:?}",
         recipients.recipients().handles()
     );
+    if kind == WorkspaceKind::Global {
+        rewrap_promoted_member_artifacts(&session);
+        let bob = KeyContext::from_inner(setup_member_key_context(&temp, BOB, None));
+        assert_bob_reads_rewrapped_formats(&workspace, &bob);
+    }
+}
+
+fn rewrap_promoted_member_artifacts(session: &RewrapSession<'_>) {
+    use std::os::unix::fs::PermissionsExt;
+    for target in session.list_workspace_targets().unwrap().into_targets() {
+        let path = target.path().to_path_buf();
+        let mut decision = session
+            .begin_rewrap(target, RewrapOptions::new(), false)
+            .unwrap();
+        loop {
+            decision = match decision {
+                RewrapSessionDecision::Authorized(authorized) => {
+                    authorized.publish().unwrap();
+                    assert_eq!(
+                        fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+                        0o600
+                    );
+                    break;
+                }
+                RewrapSessionDecision::ReviewRequired(mut review) => {
+                    let request = review
+                        .requests()
+                        .first()
+                        .expect("rewrap review must identify an approval");
+                    let approval = match request.known_key_candidate() {
+                        Some(candidate) => {
+                            TrustApproval::known_key(candidate, KnownKeyApprovalEvidence::none())
+                                .unwrap()
+                        }
+                        None => TrustApproval::recipient_set(
+                            request.sid().unwrap(),
+                            request.recipient_kids().to_vec(),
+                            request.recipient_handle_hints().to_vec(),
+                        )
+                        .unwrap(),
+                    };
+                    session
+                        .apply_review_approval(&mut review, approval)
+                        .unwrap();
+                    session
+                        .resume_rewrap(review, RewrapOptions::new(), None)
+                        .unwrap()
+                }
+            };
+        }
+    }
+}
+
+fn assert_bob_reads_rewrapped_formats(workspace: &std::path::Path, bob: &KeyContext) {
+    use crate::api::file::FileReadOperation;
+    use crate::api::kv::KvReadOperation;
+    use crate::api::trust::{KnownKeyReview, ReadTrustExceptions};
+    let access = WorkspaceAccess::open(workspace, WorkspaceKind::Global).unwrap();
+    let evaluator = TrustPolicyEvaluator::new(CurrentMemberSnapshot::load(&access).unwrap(), None);
+    let options = OperationOptions::default();
+    let exceptions = || ReadTrustExceptions::none().with_known_key_review(KnownKeyReview::Skipped);
+    let file = FileEncArtifact::load(workspace.join("secrets/secret.json"))
+        .unwrap()
+        .verify(options)
+        .unwrap();
+    let TrustDecision::Trusted(file) = evaluator
+        .evaluate_file(
+            &file,
+            bob,
+            FileReadOperation::Decrypt,
+            options,
+            exceptions(),
+        )
+        .unwrap()
+    else {
+        panic!("promoted Bob must be authorized to decrypt the file");
+    };
+    assert_eq!(file.decrypt_bytes().unwrap().expose_secret(), b"secret");
+    let kv = KvEncArtifact::load(workspace.join("secrets/secret.env.kvenc"))
+        .unwrap()
+        .verify(options)
+        .unwrap();
+    let TrustDecision::Trusted(kv) = evaluator
+        .evaluate_kv(
+            &kv,
+            bob,
+            KvReadOperation::Entry("SECRET".to_string()),
+            options,
+            exceptions(),
+        )
+        .unwrap()
+    else {
+        panic!("promoted Bob must be authorized to decrypt the entry");
+    };
+    assert_eq!(kv.decrypt_entry().unwrap().expose_secret(), "value");
 }
 
 #[test]
@@ -422,7 +615,12 @@ fn rewrap_review_rejects_changed_post_promotion_members() {
     let artifact = FileEncArtifact::encrypt_bytes(b"secret", &recipients, &key_ctx).unwrap();
     let target_path = workspace.join("secrets/secret.json");
     artifact.save(&target_path).unwrap();
-    let session = RewrapSession::open(&workspace, None, &key_ctx).unwrap();
+    let session = RewrapSession::open(
+        &WorkspaceAccess::open(&workspace, WorkspaceKind::Regular).unwrap(),
+        None,
+        &key_ctx,
+    )
+    .unwrap();
 
     let RewrapSessionDecision::ReviewRequired(review) = session
         .begin_rewrap(
@@ -461,8 +659,12 @@ fn test_rewrap_review_member_change_during_approval_error() {
     let artifact = FileEncArtifact::encrypt_bytes(b"secret", &recipients, &key_ctx).unwrap();
     let target_path = workspace.join("secrets/secret.json");
     artifact.save(&target_path).unwrap();
-    let session =
-        RewrapSession::open(&workspace, Some(temp.path().to_path_buf()), &key_ctx).unwrap();
+    let session = RewrapSession::open(
+        &WorkspaceAccess::open(&workspace, WorkspaceKind::Regular).unwrap(),
+        Some(temp.path().to_path_buf()),
+        &key_ctx,
+    )
+    .unwrap();
     let RewrapSessionDecision::ReviewRequired(mut review) = session
         .begin_rewrap(
             session.workspace_target("secret.json").unwrap(),
@@ -513,8 +715,12 @@ fn test_resume_rewrap_kv_content_changed_error() {
     let artifact = KvEncArtifact::encrypt_entries(entries(), &recipients, &key_ctx).unwrap();
     let target_path = workspace.join("secrets/secret.env.kvenc");
     artifact.save(&target_path).unwrap();
-    let session =
-        RewrapSession::open(&workspace, Some(temp.path().to_path_buf()), &key_ctx).unwrap();
+    let session = RewrapSession::open(
+        &WorkspaceAccess::open(&workspace, WorkspaceKind::Regular).unwrap(),
+        Some(temp.path().to_path_buf()),
+        &key_ctx,
+    )
+    .unwrap();
     let RewrapSessionDecision::ReviewRequired(review) = session
         .begin_rewrap(
             session.workspace_target("secret.env.kvenc").unwrap(),
@@ -556,8 +762,12 @@ fn reviewed_approval_advances_only_the_opaque_rewrap_review() {
     artifact
         .save(workspace.join("secrets/secret.json"))
         .unwrap();
-    let session =
-        RewrapSession::open(&workspace, Some(temp.path().to_path_buf()), &key_ctx).unwrap();
+    let session = RewrapSession::open(
+        &WorkspaceAccess::open(&workspace, WorkspaceKind::Regular).unwrap(),
+        Some(temp.path().to_path_buf()),
+        &key_ctx,
+    )
+    .unwrap();
     let RewrapSessionDecision::ReviewRequired(mut review) = session
         .begin_rewrap(
             session.workspace_target("secret.json").unwrap(),
@@ -596,8 +806,12 @@ fn non_member_rewrap_exposes_recipient_reviews_only_after_signer_acceptance() {
         .unwrap();
     fs::remove_file(workspace.join("members/active").join(format!("{BOB}.json"))).unwrap();
     let key_ctx = KeyContext::from_inner(setup_member_key_context(&temp, ALICE, None));
-    let session =
-        RewrapSession::open(&workspace, Some(temp.path().to_path_buf()), &key_ctx).unwrap();
+    let session = RewrapSession::open(
+        &WorkspaceAccess::open(&workspace, WorkspaceKind::Regular).unwrap(),
+        Some(temp.path().to_path_buf()),
+        &key_ctx,
+    )
+    .unwrap();
 
     let RewrapSessionDecision::ReviewRequired(mut signer_review) = session
         .begin_rewrap(
@@ -631,7 +845,12 @@ where
 {
     let (_temp, workspace, key_ctx, recipients) = setup_self();
     let artifact = build_artifact(&recipients, &key_ctx);
-    let session = RewrapSession::open(&workspace, None, &key_ctx).unwrap();
+    let session = RewrapSession::open(
+        &WorkspaceAccess::open(&workspace, WorkspaceKind::Regular).unwrap(),
+        None,
+        &key_ctx,
+    )
+    .unwrap();
     let explicit_root = tempfile::tempdir().unwrap();
     let target_dir = explicit_root.path().join("targets");
     let substitute_dir = explicit_root.path().join("substitute");
@@ -640,7 +859,7 @@ where
     fs::write(target_dir.join(name), &artifact).unwrap();
     fs::write(substitute_dir.join(name), &artifact).unwrap();
 
-    let target = RewrapTarget::open(target_dir.join(name)).unwrap();
+    let target = RewrapTarget::open(target_dir.join(name), None).unwrap();
     let RewrapSessionDecision::Authorized(authorized) = session
         .begin_rewrap(target, RewrapOptions::new(), false)
         .unwrap()
@@ -701,7 +920,12 @@ fn test_explicit_rewrap_parent_component_swap_before_publish_error() {
         .unwrap()
         .as_str()
         .to_string();
-    let session = RewrapSession::open(&workspace, None, &key_ctx).unwrap();
+    let session = RewrapSession::open(
+        &WorkspaceAccess::open(&workspace, WorkspaceKind::Regular).unwrap(),
+        None,
+        &key_ctx,
+    )
+    .unwrap();
     let explicit_root = tempfile::tempdir().unwrap();
     let target_dir = explicit_root.path().join("targets");
     let substitute_dir = explicit_root.path().join("substitute");
@@ -711,7 +935,7 @@ fn test_explicit_rewrap_parent_component_swap_before_publish_error() {
         fs::create_dir(directory.join("nested")).unwrap();
         fs::write(directory.join("secret.json"), &artifact).unwrap();
     }
-    let target = RewrapTarget::open(target_dir.join("nested/../secret.json")).unwrap();
+    let target = RewrapTarget::open(target_dir.join("nested/../secret.json"), None).unwrap();
     let RewrapSessionDecision::Authorized(authorized) = session
         .begin_rewrap(target, RewrapOptions::new(), false)
         .unwrap()
@@ -750,7 +974,7 @@ fn test_rewrap_rejects_recipients_from_stale_post_promotion_snapshot() {
         None,
     );
     let post = TrustPolicyEvaluator::new(
-        CurrentMemberSnapshot::load(&changed_workspace).unwrap(),
+        CurrentMemberSnapshot::load(&open_test_workspace(&changed_workspace)).unwrap(),
         None,
     );
 

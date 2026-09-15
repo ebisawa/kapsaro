@@ -21,6 +21,8 @@ Plaintext handoffs leave secrets in chat histories and on machines, including th
 <a id="dedicated-secret-management-services-can-be-heavy"></a>
 A dedicated service may require server maintenance, permission design, and continuous connectivity. Its setup and operating costs can be disproportionate for a small team, and its change process may sit outside Git reviews.
 
+To use the same secrets across projects, explicitly select HOME/.kapsaro/ with --global (-g). It uses the regular encryption and member verification rules; users manage sharing and backups. See the [global workspace procedure](user_guide_en.md#global-workspace) for initialization and a read check that does not print secret values.
+
 <a id="encryption-alone-leaves-operational-questions-unanswered"></a>
 Encryption also leaves operational work: reviewing key and recipient changes, recording approvals, identifying values that departing members could access, and managing CI credentials. Kapsaro combines these tasks with repository changes; teams still need review practices and credential revocation procedures.
 

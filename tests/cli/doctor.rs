@@ -9,8 +9,265 @@ use predicates::prelude::*;
 use std::fs;
 use tempfile::TempDir;
 
-fn assert_doctor_workspace_source(mut command: assert_cmd::Command, source: &str) {
-    let output = command.assert().success().get_output().stdout.clone();
+#[test]
+fn test_doctor_json_groups_regular_global_and_local_targets() {
+    let (workspace, local, _ssh, _key) = setup_workspace();
+    let user_home = TempDir::new().unwrap();
+    let global = user_home.path().join(".kapsaro");
+    for name in ["members/active", "members/incoming", "secrets"] {
+        fs::create_dir_all(global.join(name)).unwrap();
+    }
+    let output = cmd()
+        .args(["doctor", "--json"])
+        .env("HOME", user_home.path())
+        .env("KAPSARO_HOME", local.path())
+        .env("KAPSARO_WORKSPACE", workspace.path())
+        .output()
+        .unwrap();
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let targets = value["targets"].as_array().unwrap();
+    assert_eq!(targets.len(), 3);
+    for kind in ["workspace", "global_workspace", "local_state"] {
+        let target = targets
+            .iter()
+            .find(|target| target["kind"] == kind)
+            .unwrap();
+        assert!(target["path"].is_string());
+        assert!(value["checks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|check| check["target"] == target["id"]));
+    }
+    let target = targets
+        .iter()
+        .find(|target| target["kind"] == "global_workspace")
+        .unwrap();
+    assert!(value["checks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|check| check["target"] == target["id"]
+            && check["id"] == "workspace.gitless"
+            && check["status"] == "ok"));
+}
+
+#[test]
+fn test_doctor_invalid_home_preserves_regular_and_local_results() {
+    let (workspace, local, _ssh, _key) = setup_workspace();
+    for home in [None, Some(""), Some("relative-home")] {
+        let mut command = cmd();
+        command
+            .args(["doctor", "--json", "--workspace"])
+            .arg(workspace.path())
+            .arg("--home")
+            .arg(local.path());
+        match home {
+            Some(home) => {
+                command.env("HOME", home);
+            }
+            None => {
+                command.env_remove("HOME");
+            }
+        }
+        let output = command.assert().code(1).get_output().stdout.clone();
+        let value: serde_json::Value = serde_json::from_slice(&output).unwrap();
+        assert_eq!(value["targets"].as_array().unwrap().len(), 3);
+        let checks = value["checks"].as_array().unwrap();
+        assert!(checks
+            .iter()
+            .any(|check| check["id"] == "workspace.resolve" && check["status"] == "fail"));
+        assert!(checks
+            .iter()
+            .any(|check| check["id"] == "members.incoming.empty"));
+        assert!(checks.iter().any(|check| check["id"] == "keystore.root"));
+    }
+}
+
+#[test]
+fn test_doctor_unused_workspaces_report_skip_in_json_and_text() {
+    let user_home = TempDir::new().unwrap();
+    let cwd = TempDir::new().unwrap();
+    let local = TempDir::new().unwrap();
+    for json in [false, true] {
+        let mut command = cmd();
+        command
+            .arg("doctor")
+            .arg("--home")
+            .arg(local.path())
+            .env("HOME", user_home.path())
+            .env_remove("KAPSARO_WORKSPACE")
+            .current_dir(cwd.path());
+        if json {
+            command.arg("--json");
+        }
+        let output = command.assert().success().get_output().stdout.clone();
+        if json {
+            let value: serde_json::Value = serde_json::from_slice(&output).unwrap();
+            assert_eq!(
+                value["checks"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .filter(|check| check["id"] == "workspace.resolve" && check["status"] == "skip")
+                    .count(),
+                2
+            );
+        } else {
+            let output = String::from_utf8(output).unwrap();
+            assert!(output.contains("SKIP"));
+            assert!(output.contains("global_workspace:"));
+            assert!(output.contains("kapsaro init --global"));
+        }
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn test_doctor_alias_of_global_has_one_target_with_both_sources() {
+    let (workspace, local, _ssh, _key) = setup_workspace();
+    let user_home = TempDir::new().unwrap();
+    std::os::unix::fs::symlink(workspace.path(), user_home.path().join(".kapsaro")).unwrap();
+    let output = cmd()
+        .args(["doctor", "--json", "--workspace"])
+        .arg(workspace.path())
+        .arg("--home")
+        .arg(local.path())
+        .env("HOME", user_home.path())
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let value: serde_json::Value = serde_json::from_slice(&output).unwrap();
+    let targets = value["targets"].as_array().unwrap();
+    assert_eq!(targets.len(), 2);
+    let target = targets
+        .iter()
+        .find(|target| target["kind"] == "global_workspace")
+        .unwrap();
+    assert_eq!(target["sources"].as_array().unwrap().len(), 2);
+    assert_eq!(
+        value["checks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|check| check["id"] == "workspace.structure")
+            .count(),
+        1
+    );
+}
+
+#[test]
+fn test_doctor_global_path_failure_preserves_explicit_regular_diagnostics() {
+    let (workspace, local, _ssh, _key) = setup_workspace();
+    let user_home = TempDir::new().unwrap();
+    fs::write(user_home.path().join(".kapsaro"), "unexpected file").unwrap();
+    let output = cmd()
+        .args(["doctor", "--json", "--workspace"])
+        .arg(workspace.path())
+        .arg("--home")
+        .arg(local.path())
+        .env("HOME", user_home.path())
+        .assert()
+        .code(1)
+        .get_output()
+        .stdout
+        .clone();
+    let value: serde_json::Value = serde_json::from_slice(&output).unwrap();
+    let checks = value["checks"].as_array().unwrap();
+    assert!(checks.iter().any(|check| check["target"] == 0
+        && check["id"] == "workspace.structure"
+        && check["status"] == "ok"));
+    assert!(checks.iter().any(|check| check["target"] == 1
+        && check["id"] == "workspace.resolve"
+        && check["status"] == "fail"));
+}
+
+#[test]
+fn test_doctor_missing_explicit_workspace_fails_and_keeps_global_skip() {
+    let local = TempDir::new().unwrap();
+    let user_home = TempDir::new().unwrap();
+    let output = cmd()
+        .args(["doctor", "--json", "--workspace"])
+        .arg(local.path().join("missing"))
+        .arg("--home")
+        .arg(local.path())
+        .env("HOME", user_home.path())
+        .assert()
+        .code(1)
+        .get_output()
+        .stdout
+        .clone();
+    let value: serde_json::Value = serde_json::from_slice(&output).unwrap();
+    let checks = value["checks"].as_array().unwrap();
+    assert!(checks.iter().any(|check| check["target"] == 0
+        && check["id"] == "workspace.resolve"
+        && check["status"] == "fail"));
+    assert!(checks.iter().any(|check| check["target"] == 1
+        && check["id"] == "workspace.resolve"
+        && check["status"] == "skip"));
+}
+
+#[test]
+fn test_doctor_auto_detected_incomplete_workspace_is_a_failure() {
+    let local = TempDir::new().unwrap();
+    let user_home = TempDir::new().unwrap();
+    let cwd = TempDir::new().unwrap();
+    fs::create_dir_all(cwd.path().join(".kapsaro/members/active")).unwrap();
+    let output = cmd()
+        .args(["doctor", "--json", "--home"])
+        .arg(local.path())
+        .current_dir(cwd.path())
+        .env("HOME", user_home.path())
+        .env_remove("KAPSARO_WORKSPACE")
+        .assert()
+        .code(1)
+        .get_output()
+        .stdout
+        .clone();
+    let value: serde_json::Value = serde_json::from_slice(&output).unwrap();
+    assert!(value["checks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|check| check["id"] == "workspace.structure" && check["status"] == "fail"));
+}
+
+#[test]
+fn test_doctor_explicit_inputs_report_invalid_common_configuration() {
+    let (workspace, local, _ssh, _key) = setup_workspace();
+    fs::write(local.path().join("config.toml"), "workspace = [\n").unwrap();
+    let output = cmd()
+        .args(["doctor", "--json", "--workspace"])
+        .arg(workspace.path())
+        .arg("--home")
+        .arg(local.path())
+        .args(["--member-handle", TEST_MEMBER_HANDLE])
+        .assert()
+        .code(1)
+        .get_output()
+        .stdout
+        .clone();
+    let value: serde_json::Value = serde_json::from_slice(&output).unwrap();
+    let checks = value["checks"].as_array().unwrap();
+    assert_eq!(
+        checks
+            .iter()
+            .filter(|check| check["id"] == "config.validation")
+            .count(),
+        1
+    );
+    assert!(checks
+        .iter()
+        .any(|check| check["id"] == "config.validation" && check["status"] == "fail"));
+    assert!(checks
+        .iter()
+        .any(|check| check["id"] == "members.incoming.empty"));
+}
+
+fn assert_doctor_workspace_source(mut command: assert_cmd::Command, source: &str, exit_code: i32) {
+    let output = command.assert().code(exit_code).get_output().stdout.clone();
     let value: serde_json::Value = serde_json::from_slice(&output).unwrap();
     assert!(value["checks"].as_array().unwrap().iter().any(|check| {
         check["id"] == "workspace.resolve"
@@ -105,7 +362,7 @@ fn test_doctor_resolves_workspace_in_cli_environment_config_auto_order() {
         .arg("--member-handle")
         .arg(TEST_MEMBER_HANDLE)
         .env("KAPSARO_WORKSPACE", &invalid_workspace);
-    assert_doctor_workspace_source(cli, "CLI option");
+    assert_doctor_workspace_source(cli, "CLI option", 1);
 
     let mut environment = cmd();
     environment
@@ -116,7 +373,7 @@ fn test_doctor_resolves_workspace_in_cli_environment_config_auto_order() {
         .arg("--member-handle")
         .arg(TEST_MEMBER_HANDLE)
         .env("KAPSARO_WORKSPACE", workspace_dir.path());
-    assert_doctor_workspace_source(environment, "environment variable");
+    assert_doctor_workspace_source(environment, "environment variable", 1);
 
     fs::write(
         home_dir.path().join("config.toml"),
@@ -135,7 +392,7 @@ fn test_doctor_resolves_workspace_in_cli_environment_config_auto_order() {
         .arg("--member-handle")
         .arg(TEST_MEMBER_HANDLE)
         .env_remove("KAPSARO_WORKSPACE");
-    assert_doctor_workspace_source(config, "global configuration");
+    assert_doctor_workspace_source(config, "global configuration", 0);
 
     fs::write(
         home_dir.path().join("config.toml"),
@@ -155,7 +412,7 @@ fn test_doctor_resolves_workspace_in_cli_environment_config_auto_order() {
         .arg("--member-handle")
         .arg(TEST_MEMBER_HANDLE)
         .env_remove("KAPSARO_WORKSPACE");
-    assert_doctor_workspace_source(automatic, "auto-detection");
+    assert_doctor_workspace_source(automatic, "auto-detection", 0);
 }
 
 #[test]
@@ -178,6 +435,7 @@ fn test_doctor_reports_workspace_resolution_failure_and_continues() {
         .clone();
 
     let value: serde_json::Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(value["targets"][0]["sources"][0], "global configuration");
     assert!(value["checks"].as_array().unwrap().iter().any(|check| {
         check["id"] == "workspace.resolve"
             && check["status"] == "fail"
@@ -244,14 +502,14 @@ fn test_doctor_json_incomplete_workspace_fails_with_json() {
         .any(|check| { check["id"] == "workspace.structure" && check["status"] == "fail" }));
 }
 
-/// doctor resolves the owner through the same configuration chain as every
-/// other command, so a configuration file it cannot read is reported by name.
+/// Configuration and owner failures remain local diagnostics while the selected
+/// workspace's independent member inspection completes.
 #[test]
 fn test_doctor_reports_an_unreadable_owner_configuration() {
     let (workspace_dir, home_dir, _ssh_temp, _ssh_priv) = setup_workspace();
     fs::write(home_dir.path().join("config.toml"), "member_handle = [\n").unwrap();
 
-    cmd()
+    let output = cmd()
         .arg("doctor")
         .arg("--json")
         .arg("--workspace")
@@ -261,7 +519,34 @@ fn test_doctor_reports_an_unreadable_owner_configuration() {
         .env_remove("KAPSARO_MEMBER_HANDLE")
         .assert()
         .code(1)
-        .stderr(predicate::str::contains("Invalid TOML in config file"));
+        .get_output()
+        .stdout
+        .clone();
+    let report: serde_json::Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(report["status"], "fail");
+    assert_eq!(report["exit_code"], 1);
+    let targets = report["targets"].as_array().unwrap();
+    let local = targets
+        .iter()
+        .find(|target| target["kind"] == "local_state")
+        .unwrap();
+    let workspace = targets
+        .iter()
+        .find(|target| target["kind"] == "workspace")
+        .unwrap();
+    let checks = report["checks"].as_array().unwrap();
+    for id in ["config.validation", "local_state.owner.resolve"] {
+        let check = checks.iter().find(|check| check["id"] == id).unwrap();
+        assert_eq!(check["target"], local["id"]);
+        assert_eq!(check["status"], "fail");
+        assert!(check["reason"]
+            .as_str()
+            .unwrap()
+            .contains("Invalid TOML in config file"));
+    }
+    assert!(checks.iter().any(|check| check["target"] == workspace["id"]
+        && check["id"] == "members.incoming.empty"
+        && check["status"] == "ok"));
 }
 
 #[test]

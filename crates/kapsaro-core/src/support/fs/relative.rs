@@ -27,6 +27,54 @@ use rustix::fs::RenameFlags;
 #[cfg(unix)]
 use rustix::fs::{self as rfs, AtFlags, FileType, Mode, OFlags};
 
+/// Test ancestry through directory descriptors without resolving display paths.
+pub(crate) fn directory_is_within<D: DirectoryFd, R: DirectoryFd>(
+    dir: &D,
+    root: &R,
+) -> Result<bool> {
+    let expected = open_dir_identity(root)?;
+    let mut current = duplicate_open_dir(dir)?;
+    let mut chain: Vec<OpenDir> = Vec::new();
+    for _ in 0..4096 {
+        let identity = open_dir_identity(&current)?;
+        if identity == expected {
+            if root.scope() == DirectoryScope::GlobalWorkspace {
+                report_scoped_open_permission(root, root.file(), root.path());
+                for entry in chain {
+                    let entry = entry.with_scope(DirectoryScope::GlobalWorkspace);
+                    report_scoped_open_permission(&entry, entry.file(), entry.path());
+                }
+            }
+            return Ok(true);
+        }
+        let fd = rfs::openat(
+            current.file(),
+            "..",
+            OFlags::RDONLY | OFlags::DIRECTORY | OFlags::CLOEXEC,
+            Mode::empty(),
+        )
+        .map_err(|error| {
+            Error::build_io_error_with_source(
+                "Failed to inspect output directory ancestry",
+                std::io::Error::from(error),
+            )
+        })?;
+        let parent = OpenDir {
+            file: fd.into(),
+            path: current.path().join(".."),
+            scope: dir.scope(),
+        };
+        if open_dir_identity(&parent)? == identity {
+            return Ok(false);
+        }
+        chain.push(current);
+        current = parent;
+    }
+    Err(Error::build_invalid_operation_error(
+        "Output directory ancestry exceeds the inspection limit",
+    ))
+}
+
 pub(crate) trait DirectoryFd {
     fn file(&self) -> &File;
     fn path(&self) -> &Path;
@@ -41,6 +89,20 @@ pub(crate) struct OpenDir {
     file: File,
     path: PathBuf,
     scope: DirectoryScope,
+}
+
+impl OpenDir {
+    fn report_global_permission(self) -> Self {
+        if self.scope == DirectoryScope::GlobalWorkspace {
+            report_scoped_open_permission(&self, self.file(), self.path());
+        }
+        self
+    }
+
+    pub(crate) fn with_scope(mut self, scope: DirectoryScope) -> Self {
+        self.scope = scope;
+        self
+    }
 }
 
 /// Duplicate a directory capability without resolving its display path again.
@@ -66,6 +128,7 @@ where
 pub(crate) enum DirectoryScope {
     Generic,
     LocalState,
+    GlobalWorkspace,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -190,7 +253,8 @@ where
         file: fd.into(),
         path,
         scope: parent.scope(),
-    })
+    }
+    .report_global_permission())
 }
 
 #[cfg(unix)]
@@ -209,11 +273,14 @@ where
         Err(error) if is_not_found(error) => return Ok(None),
         Err(error) => return Err(open_child_dir_error(parent, name, child.as_c_str(), error)),
     };
-    Ok(Some(OpenDir {
-        file: fd.into(),
-        path: parent.path().join(name),
-        scope: parent.scope(),
-    }))
+    Ok(Some(
+        OpenDir {
+            file: fd.into(),
+            path: parent.path().join(name),
+            scope: parent.scope(),
+        }
+        .report_global_permission(),
+    ))
 }
 
 /// Open a child directory by a single-component name, resolving a symlink.
@@ -253,7 +320,8 @@ where
         file: fd.into(),
         path,
         scope: parent.scope(),
-    })
+    }
+    .report_global_permission())
 }
 
 /// Confirm the resolved child is a directory before it is opened.
@@ -657,7 +725,9 @@ where
     D: DirectoryFd,
 {
     match parent.scope() {
-        DirectoryScope::LocalState => ensure_child_dir_restricted_at(parent, name),
+        DirectoryScope::LocalState | DirectoryScope::GlobalWorkspace => {
+            ensure_child_dir_restricted_at(parent, name)
+        }
         DirectoryScope::Generic => ensure_child_dir_at(parent, name),
     }
 }
@@ -1434,6 +1504,11 @@ fn save_staged_file<D>(
 where
     D: DirectoryFd,
 {
+    let mode = if dir.scope() == DirectoryScope::GlobalWorkspace {
+        Some(Mode::from(0o600))
+    } else {
+        mode
+    };
     let create_mode = mode.unwrap_or(Mode::from(0o666));
     let mut temp_file = stage_temp_file(dir, temp, temp_name, create_mode)?;
     let result = apply_saved_file_mode(dir, &temp_file, temp_name, mode)
@@ -1946,6 +2021,31 @@ where
     Ok(file)
 }
 
+/// Open a caller-selected regular file relative to its parent, allowing read links.
+pub(crate) fn open_regular_file_following_at<D: DirectoryFd>(
+    dir: &D,
+    name: &OsStr,
+) -> Result<File> {
+    let child = checked_os_child_name(name)?;
+    let path = dir.path().join(name);
+    let fd = rfs::openat(
+        dir.file(),
+        child.as_c_str(),
+        OFlags::RDONLY | OFlags::NONBLOCK | OFlags::CLOEXEC,
+        Mode::empty(),
+    )
+    .map_err(|error| {
+        Error::build_io_error_with_source(
+            format!("Failed to read file {}", format_finding_path(&path)),
+            std::io::Error::from(error),
+        )
+    })?;
+    let file = File::from(fd);
+    validate_regular_file(&file, &format_finding_path(&path), dir.scope())?;
+    report_scoped_open_permission(dir, &file, &path);
+    Ok(file)
+}
+
 #[cfg(unix)]
 fn validate_pre_open_file_type<D>(dir: &D, name: &str, child: &std::ffi::CStr) -> Result<()>
 where
@@ -2121,7 +2221,9 @@ where
 
 fn scoped_invalid_operation_error(scope: DirectoryScope, message: impl Into<String>) -> Error {
     match scope {
-        DirectoryScope::Generic => Error::build_invalid_operation_error(message),
+        DirectoryScope::Generic | DirectoryScope::GlobalWorkspace => {
+            Error::build_invalid_operation_error(message)
+        }
         DirectoryScope::LocalState => Error::build_local_state_path_unsafe_error(message),
     }
 }

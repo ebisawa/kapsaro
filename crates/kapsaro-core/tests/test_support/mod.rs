@@ -3,6 +3,16 @@
 
 //! Common test utilities for environment variable management
 
+pub fn open_test_workspace(
+    path: &std::path::Path,
+) -> kapsaro_core::api::workspace::WorkspaceAccess {
+    kapsaro_core::api::workspace::WorkspaceAccess::open(
+        path,
+        kapsaro_core::api::workspace::WorkspaceKind::Regular,
+    )
+    .expect("open test workspace")
+}
+
 // Shared helper sources from kapsaro-test-support, included via #[path] so they
 // compile within kapsaro-core's test binaries and keep type identity with crate:: paths.
 #[path = "../../../kapsaro-test-support/src/constants.rs"]

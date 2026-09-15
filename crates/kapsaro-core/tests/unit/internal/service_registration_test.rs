@@ -14,12 +14,62 @@ use crate::service::registration::key_plan::open_registration_local_state;
 use crate::service::registration::types::{
     RegistrationKeyPlan, RegistrationMode, RegistrationResult,
 };
+use crate::service::workspace::{WorkspaceCreationTarget, WorkspaceKind};
 use crate::test_support::storage::keystore::storage::load_public_key;
 use crate::test_utils::{
     build_expiring_soon_timestamp, setup_test_keystore_from_fixtures, setup_test_workspace,
     update_active_private_key_expires_at,
 };
 use tempfile::TempDir;
+
+#[test]
+fn initialization_requires_bootstrap_for_a_placeholder_only_workspace() {
+    use crate::io::workspace::setup::ensure_workspace_structure_at;
+    use crate::service::registration::{evaluate_init_workspace_status, InitWorkspaceState};
+    let temp_dir = TempDir::new().unwrap();
+    let workspace_path = temp_dir.path().join(".kapsaro");
+    let workspace = WorkspaceCreationTarget::open(&workspace_path, WorkspaceKind::Regular)
+        .unwrap()
+        .ensure()
+        .unwrap();
+    ensure_workspace_structure_at(workspace.directory()).unwrap();
+    let target = WorkspaceCreationTarget::open(&workspace_path, WorkspaceKind::Regular).unwrap();
+    assert_eq!(
+        evaluate_init_workspace_status(&target).unwrap().state,
+        InitWorkspaceState::Bootstrap
+    );
+}
+
+#[test]
+fn initialization_recognizes_a_valid_active_member_in_a_complete_workspace() {
+    use crate::io::workspace::setup::ensure_workspace_structure_at;
+    use crate::service::registration::{evaluate_init_workspace_status, InitWorkspaceState};
+    use crate::test_utils::{setup_test_workspace_from_fixtures, ALICE_MEMBER_HANDLE};
+    let (_home, workspace_path) = setup_test_workspace_from_fixtures(&[ALICE_MEMBER_HANDLE]);
+    let target = WorkspaceCreationTarget::open(&workspace_path, WorkspaceKind::Regular).unwrap();
+    ensure_workspace_structure_at(target.existing_access().unwrap().directory()).unwrap();
+    assert_eq!(
+        evaluate_init_workspace_status(&target).unwrap().state,
+        InitWorkspaceState::NoOp
+    );
+}
+
+#[test]
+fn global_init_validates_existing_member_before_completing_structure() {
+    use crate::service::registration::evaluate_init_workspace_status;
+    use crate::service::workspace::{WorkspaceCreationTarget, WorkspaceKind};
+    for status in ["active", "incoming"] {
+        let root = TempDir::new().unwrap();
+        let directory = root.path().join("members").join(status);
+        std::fs::create_dir_all(&directory).unwrap();
+        let document = directory.join("alice@example.com.json");
+        std::fs::write(&document, "invalid").unwrap();
+        let target = WorkspaceCreationTarget::open(root.path(), WorkspaceKind::Global).unwrap();
+        assert!(evaluate_init_workspace_status(&target).is_err());
+        assert_eq!(std::fs::read_to_string(document).unwrap(), "invalid");
+        assert!(!root.path().join("secrets").exists());
+    }
+}
 
 fn build_test_ssh_context(
     home: &std::path::Path,
@@ -46,6 +96,86 @@ fn create_test_workspace_dirs() -> TempDir {
     std::fs::create_dir_all(workspace_dir.path().join("members/incoming")).unwrap();
     std::fs::create_dir_all(workspace_dir.path().join("secrets")).unwrap();
     workspace_dir
+}
+
+#[test]
+fn global_registration_publishes_to_the_retained_root_after_confirmation() {
+    let home = setup_test_keystore_from_fixtures("alice@example.com");
+    let parent = TempDir::new().unwrap();
+    let path = parent.path().join(".kapsaro");
+    let target = WorkspaceCreationTarget::open(&path, WorkspaceKind::Global).unwrap();
+    let command = resolve_registration_command(
+        &target,
+        "alice@example.com".to_owned(),
+        None,
+        resolve_test_key_plan(home.path(), "alice@example.com"),
+        RegistrationMode::Init,
+        None,
+    )
+    .unwrap();
+    let retained = parent.path().join("retained");
+    std::fs::rename(&path, &retained).unwrap();
+    std::fs::create_dir(&path).unwrap();
+    let outcome = execute_registration_command(&command, false).unwrap();
+    assert_eq!(outcome.result, RegistrationResult::NewMember);
+    assert!(retained
+        .join("members/active/alice@example.com.json")
+        .is_file());
+    assert_eq!(std::fs::read_dir(&path).unwrap().count(), 0);
+}
+
+#[test]
+fn global_init_distinguishes_structure_completion_from_unchanged_workspace() {
+    use crate::service::registration::{
+        ensure_init_workspace_structure, evaluate_init_workspace_status, InitWorkspaceState,
+    };
+    let (_home, path) = setup_test_workspace(&["alice@example.com"]);
+    std::fs::remove_dir_all(path.join("secrets")).unwrap();
+    let target = WorkspaceCreationTarget::open(&path, WorkspaceKind::Global).unwrap();
+    assert_eq!(
+        evaluate_init_workspace_status(&target).unwrap().state,
+        InitWorkspaceState::CompleteStructure
+    );
+    ensure_init_workspace_structure(&target).unwrap();
+    assert_eq!(
+        evaluate_init_workspace_status(&target).unwrap().state,
+        InitWorkspaceState::NoOp
+    );
+}
+
+#[test]
+fn global_registration_retains_member_directories_across_confirmation() {
+    let home = setup_test_keystore_from_fixtures("alice@example.com");
+    let parent = TempDir::new().unwrap();
+    let path = parent.path().join(".kapsaro");
+    let target = WorkspaceCreationTarget::open(&path, WorkspaceKind::Global).unwrap();
+    let command = resolve_registration_command(
+        &target,
+        "alice@example.com".to_owned(),
+        None,
+        resolve_test_key_plan(home.path(), "alice@example.com"),
+        RegistrationMode::Init,
+        None,
+    )
+    .unwrap();
+    std::fs::rename(path.join("members"), path.join("retained-members")).unwrap();
+    std::fs::create_dir_all(path.join("members/active")).unwrap();
+    std::fs::create_dir_all(path.join("members/incoming")).unwrap();
+    assert_eq!(
+        execute_registration_command(&command, false)
+            .unwrap()
+            .result,
+        RegistrationResult::NewMember
+    );
+    assert!(path
+        .join("retained-members/active/alice@example.com.json")
+        .is_file());
+    assert_eq!(
+        std::fs::read_dir(path.join("members/active"))
+            .unwrap()
+            .count(),
+        0
+    );
 }
 
 fn resolve_test_key_plan(home: &std::path::Path, member_handle: &str) -> RegistrationKeyPlan {
@@ -83,7 +213,8 @@ fn test_resolve_registration_command_reuses_existing_key_without_github_user() {
     std::fs::create_dir_all(workspace_dir.path().join("members/active")).unwrap();
     std::fs::create_dir_all(workspace_dir.path().join("members/incoming")).unwrap();
     std::fs::create_dir_all(workspace_dir.path().join("secrets")).unwrap();
-    let common = workspace_dir.path().to_path_buf();
+    let common =
+        WorkspaceCreationTarget::open(workspace_dir.path(), WorkspaceKind::Regular).unwrap();
     let key_plan = resolve_test_key_plan(home_dir.path(), "alice@example.com");
 
     let prepared = resolve_registration_command(
@@ -109,7 +240,8 @@ fn test_resolve_registration_command_reuses_key_plan_keystore_after_path_swap() 
     std::fs::create_dir_all(workspace_dir.path().join("members/active")).unwrap();
     std::fs::create_dir_all(workspace_dir.path().join("members/incoming")).unwrap();
     std::fs::create_dir_all(workspace_dir.path().join("secrets")).unwrap();
-    let common = workspace_dir.path().to_path_buf();
+    let common =
+        WorkspaceCreationTarget::open(workspace_dir.path(), WorkspaceKind::Regular).unwrap();
     let keystore_root = home_dir.path().join("keys");
     let opened_root = home_dir.path().join("keys.opened");
     let key_plan = resolve_test_key_plan(home_dir.path(), "alice@example.com");
@@ -147,7 +279,8 @@ fn test_execute_registration_decision_reuses_keystore_after_confirmation_path_sw
         .path()
         .join("members/incoming/alice@example.com.json");
     std::fs::write(&member_file, "{}").unwrap();
-    let common = workspace_dir.path().to_path_buf();
+    let common =
+        WorkspaceCreationTarget::open(workspace_dir.path(), WorkspaceKind::Regular).unwrap();
     let keystore_root = home_dir.path().join("keys");
     let opened_root = home_dir.path().join("keys.opened");
     let key_plan = resolve_test_key_plan(home_dir.path(), "alice@example.com");
@@ -184,7 +317,8 @@ fn test_generated_registration_writes_the_key_into_the_planned_home() {
     let home_dir = setup_test_keystore_from_fixtures("alice@example.com");
     let replacement = setup_test_keystore_from_fixtures("alice@example.com");
     let workspace_dir = create_test_workspace_dirs();
-    let common = workspace_dir.path().to_path_buf();
+    let common =
+        WorkspaceCreationTarget::open(workspace_dir.path(), WorkspaceKind::Regular).unwrap();
     let ssh_ctx = build_test_ssh_context(home_dir.path());
     let key_plan = resolve_test_key_plan(home_dir.path(), "bob@example.com");
     assert!(key_plan.needs_new_key());
@@ -224,7 +358,8 @@ fn test_generated_registration_writes_the_key_into_the_planned_home() {
 fn test_generated_registration_reuses_created_keystore_after_path_swap() {
     let home_dir = setup_test_keystore_from_fixtures("alice@example.com");
     let workspace_dir = create_test_workspace_dirs();
-    let common = workspace_dir.path().to_path_buf();
+    let common =
+        WorkspaceCreationTarget::open(workspace_dir.path(), WorkspaceKind::Regular).unwrap();
     let ssh_ctx = build_test_ssh_context(home_dir.path());
     let keystore_root = home_dir.path().join("keys");
     std::fs::rename(&keystore_root, home_dir.path().join("keys.seed")).unwrap();
@@ -259,7 +394,8 @@ fn test_resolve_registration_command_requires_ssh_context_for_generated_key() {
     std::fs::create_dir_all(workspace_dir.path().join("members/active")).unwrap();
     std::fs::create_dir_all(workspace_dir.path().join("members/incoming")).unwrap();
     std::fs::create_dir_all(workspace_dir.path().join("secrets")).unwrap();
-    let common = workspace_dir.path().to_path_buf();
+    let common =
+        WorkspaceCreationTarget::open(workspace_dir.path(), WorkspaceKind::Regular).unwrap();
     let local_state = LocalStateSession::open(home_dir.path().to_path_buf()).unwrap();
 
     let error = resolve_registration_command(
@@ -287,7 +423,8 @@ fn test_apply_join_registration_rejects_duplicate_kid_in_workspace() {
     std::fs::create_dir_all(workspace_dir.path().join("members/active")).unwrap();
     std::fs::create_dir_all(workspace_dir.path().join("members/incoming")).unwrap();
     std::fs::create_dir_all(workspace_dir.path().join("secrets")).unwrap();
-    let common = workspace_dir.path().to_path_buf();
+    let common =
+        WorkspaceCreationTarget::open(workspace_dir.path(), WorkspaceKind::Regular).unwrap();
     let keystore_root = home_dir.path().join("keys");
     let key_plan = resolve_test_key_plan(home_dir.path(), "alice@example.com");
     let kid = key_plan
@@ -333,7 +470,8 @@ fn test_apply_join_registration_rejects_duplicate_kid_in_workspace() {
 fn test_registration_judges_the_kid_against_the_member_set_it_writes_into() {
     let home_dir = setup_test_keystore_from_fixtures("alice@example.com");
     let workspace_dir = create_test_workspace_dirs();
-    let common = workspace_dir.path().to_path_buf();
+    let common =
+        WorkspaceCreationTarget::open(workspace_dir.path(), WorkspaceKind::Regular).unwrap();
     let key_plan = resolve_test_key_plan(home_dir.path(), "alice@example.com");
     let kid = key_plan
         .existing_kid()
@@ -375,7 +513,8 @@ fn test_registration_judges_the_kid_against_the_member_set_it_writes_into() {
 fn test_registration_reports_a_member_that_appeared_under_the_lock() {
     let home_dir = setup_test_keystore_from_fixtures("alice@example.com");
     let workspace_dir = create_test_workspace_dirs();
-    let common = workspace_dir.path().to_path_buf();
+    let common =
+        WorkspaceCreationTarget::open(workspace_dir.path(), WorkspaceKind::Regular).unwrap();
     let key_plan = resolve_test_key_plan(home_dir.path(), "alice@example.com");
     let command = resolve_registration_command(
         &common,
@@ -413,7 +552,8 @@ fn test_evaluate_registration_decision_prompts_for_overwrite_when_interactive() 
         "{}",
     )
     .unwrap();
-    let common = workspace_dir.path().to_path_buf();
+    let common =
+        WorkspaceCreationTarget::open(workspace_dir.path(), WorkspaceKind::Regular).unwrap();
     let key_plan = resolve_test_key_plan(home_dir.path(), "alice@example.com");
     let prepared = resolve_registration_command(
         &common,
@@ -432,20 +572,8 @@ fn test_evaluate_registration_decision_prompts_for_overwrite_when_interactive() 
 
 #[test]
 fn test_evaluate_registration_decision_skips_init_conflict_non_interactive() {
-    let home_dir = setup_test_keystore_from_fixtures("alice@example.com");
-    let workspace_dir = TempDir::new().unwrap();
-    std::fs::create_dir_all(workspace_dir.path().join("members/active")).unwrap();
-    std::fs::create_dir_all(workspace_dir.path().join("members/incoming")).unwrap();
-    std::fs::create_dir_all(workspace_dir.path().join("secrets")).unwrap();
-    std::fs::write(
-        workspace_dir
-            .path()
-            .join("members/active")
-            .join("alice@example.com.json"),
-        "{}",
-    )
-    .unwrap();
-    let common = workspace_dir.path().to_path_buf();
+    let (home_dir, workspace_dir) = setup_test_workspace(&["alice@example.com"]);
+    let common = WorkspaceCreationTarget::open(&workspace_dir, WorkspaceKind::Regular).unwrap();
     let key_plan = resolve_test_key_plan(home_dir.path(), "alice@example.com");
     let prepared = resolve_registration_command(
         &common,
@@ -480,7 +608,8 @@ fn test_evaluate_registration_decision_rejects_join_conflict_non_interactive() {
         "{}",
     )
     .unwrap();
-    let common = workspace_dir.path().to_path_buf();
+    let common =
+        WorkspaceCreationTarget::open(workspace_dir.path(), WorkspaceKind::Regular).unwrap();
     let key_plan = resolve_test_key_plan(home_dir.path(), "alice@example.com");
     let prepared = resolve_registration_command(
         &common,
@@ -505,7 +634,7 @@ fn test_evaluate_registration_decision_rejects_join_conflict_non_interactive() {
 #[test]
 fn test_evaluate_registration_decision_allows_join_rotation_when_active_kid_differs() {
     let (temp_dir, workspace_dir) = setup_test_workspace(&["alice@example.com"]);
-    let common = workspace_dir.clone();
+    let common = WorkspaceCreationTarget::open(&workspace_dir, WorkspaceKind::Regular).unwrap();
     let expires_at = build_expiring_soon_timestamp(365);
     update_active_private_key_expires_at(temp_dir.path(), "alice@example.com", &expires_at);
 
@@ -528,7 +657,7 @@ fn test_evaluate_registration_decision_allows_join_rotation_when_active_kid_diff
 #[test]
 fn test_resolve_registration_command_rejects_mismatched_active_member_file_for_join() {
     let (temp_dir, workspace_dir) = setup_test_workspace(&["alice@example.com", "bob@example.com"]);
-    let common = workspace_dir.clone();
+    let common = WorkspaceCreationTarget::open(&workspace_dir, WorkspaceKind::Regular).unwrap();
     let alice_path = workspace_dir
         .join("members/active")
         .join("alice@example.com.json");

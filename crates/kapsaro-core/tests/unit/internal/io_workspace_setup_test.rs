@@ -2,10 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::io::workspace::members::{save_member_content, MemberStatus};
-use crate::io::workspace::setup::{
-    check_workspace_has_active_members, ensure_workspace_structure, validate_workspace_exists,
-};
-use crate::support::fs::relative::{open_dir_nofollow, DirectoryScope};
+use crate::io::workspace::setup::{ensure_workspace_structure_at, inspect_workspace_structure_at};
+use crate::service::workspace::{WorkspaceAccess, WorkspaceCreationTarget, WorkspaceKind};
 use crate::test_support::storage::keystore::active::load_active_kid;
 use crate::test_support::storage::keystore::storage::load_public_key;
 use crate::test_utils::setup_test_keystore_from_fixtures;
@@ -13,12 +11,17 @@ use crate::test_utils::ALICE_MEMBER_HANDLE;
 use std::fs;
 use tempfile::TempDir;
 
+fn select_creation_target(path: &std::path::Path) -> WorkspaceCreationTarget {
+    WorkspaceCreationTarget::open(path, WorkspaceKind::Regular).unwrap()
+}
+
 #[test]
 fn test_ensure_workspace_structure_creates_required_directories() {
     let temp_dir = TempDir::new().unwrap();
     let workspace_path = temp_dir.path().join(".kapsaro");
 
-    let created = ensure_workspace_structure(&workspace_path).unwrap();
+    let workspace = select_creation_target(&workspace_path).ensure().unwrap();
+    let created = ensure_workspace_structure_at(workspace.directory()).unwrap();
 
     assert!(created);
     assert!(workspace_path.join("members/active/.gitkeep").exists());
@@ -30,9 +33,11 @@ fn test_ensure_workspace_structure_creates_required_directories() {
 fn test_validate_workspace_exists_accepts_complete_workspace() {
     let temp_dir = TempDir::new().unwrap();
     let workspace_path = temp_dir.path().join(".kapsaro");
-    ensure_workspace_structure(&workspace_path).unwrap();
+    let workspace = select_creation_target(&workspace_path).ensure().unwrap();
+    ensure_workspace_structure_at(workspace.directory()).unwrap();
 
-    validate_workspace_exists(&workspace_path).unwrap();
+    workspace.validate().unwrap();
+    assert!(inspect_workspace_structure_at(workspace.directory()).unwrap());
 }
 
 #[test]
@@ -42,37 +47,11 @@ fn test_ensure_workspace_structure_completes_missing_incoming_directory() {
     std::fs::create_dir_all(workspace_path.join("members/active")).unwrap();
     std::fs::create_dir_all(workspace_path.join("secrets")).unwrap();
 
-    let created = ensure_workspace_structure(&workspace_path).unwrap();
+    let workspace = select_creation_target(&workspace_path).ensure().unwrap();
+    let created = ensure_workspace_structure_at(workspace.directory()).unwrap();
 
     assert!(created);
     assert!(workspace_path.join("members/incoming/.gitkeep").exists());
-}
-
-#[test]
-fn test_check_workspace_has_active_members_ignores_gitkeep_only_directory() {
-    let temp_dir = TempDir::new().unwrap();
-    let workspace_path = temp_dir.path().join(".kapsaro");
-    ensure_workspace_structure(&workspace_path).unwrap();
-
-    let has_active_members = check_workspace_has_active_members(&workspace_path).unwrap();
-
-    assert!(!has_active_members);
-}
-
-#[test]
-fn test_check_workspace_has_active_members_detects_json_member_file() {
-    let temp_dir = TempDir::new().unwrap();
-    let workspace_path = temp_dir.path().join(".kapsaro");
-    ensure_workspace_structure(&workspace_path).unwrap();
-    std::fs::write(
-        workspace_path.join("members/active/alice@example.com.json"),
-        "{}",
-    )
-    .unwrap();
-
-    let has_active_members = check_workspace_has_active_members(&workspace_path).unwrap();
-
-    assert!(has_active_members);
 }
 
 /// The member store writes into the very tree this setup builds, so a document
@@ -89,11 +68,11 @@ fn test_member_document_lands_in_the_structure_setup_created() {
     // keys and installs the member into it, which would make this a replacement
     // rather than the first write into a structure setup just created.
     let workspace_path = temp_dir.path().join("workspace-under-test");
-    ensure_workspace_structure(&workspace_path).unwrap();
-    let workspace = open_dir_nofollow(&workspace_path, DirectoryScope::Generic).unwrap();
+    let workspace = select_creation_target(&workspace_path).ensure().unwrap();
+    ensure_workspace_structure_at(workspace.directory()).unwrap();
 
     save_member_content(
-        &workspace,
+        workspace.directory(),
         MemberStatus::Active,
         ALICE_MEMBER_HANDLE,
         &serde_json::to_string_pretty(&public_key).unwrap(),
@@ -116,26 +95,6 @@ fn test_member_document_lands_in_the_structure_setup_created() {
 
 #[cfg(unix)]
 #[test]
-fn test_ensure_workspace_structure_rejects_symlinked_workspace_root() {
-    use std::os::unix::fs::symlink;
-
-    let temp_dir = TempDir::new().unwrap();
-    let outside_dir = temp_dir.path().join("outside");
-    let workspace_path = temp_dir.path().join(".kapsaro");
-    fs::create_dir(&outside_dir).unwrap();
-    symlink(&outside_dir, &workspace_path).unwrap();
-
-    let error = ensure_workspace_structure(&workspace_path).unwrap_err();
-
-    assert!(error.to_string().contains("symlink"));
-    assert!(
-        !outside_dir.join("members/active/.gitkeep").exists(),
-        "workspace setup must not write through a symlinked workspace root"
-    );
-}
-
-#[cfg(unix)]
-#[test]
 fn test_ensure_workspace_structure_rejects_symlinked_members_directory() {
     use std::os::unix::fs::symlink;
 
@@ -146,7 +105,8 @@ fn test_ensure_workspace_structure_rejects_symlinked_members_directory() {
     fs::create_dir(&outside_dir).unwrap();
     symlink(&outside_dir, workspace_path.join("members")).unwrap();
 
-    let error = ensure_workspace_structure(&workspace_path).unwrap_err();
+    let workspace = select_creation_target(&workspace_path).ensure().unwrap();
+    let error = ensure_workspace_structure_at(workspace.directory()).unwrap_err();
 
     assert!(error.to_string().contains("symlink"));
     assert!(
@@ -168,9 +128,8 @@ fn test_validate_workspace_exists_rejects_symlinked_secrets_directory() {
     fs::create_dir(&outside_dir).unwrap();
     symlink(&outside_dir, workspace_path.join("secrets")).unwrap();
 
-    let error = validate_workspace_exists(&workspace_path).unwrap_err();
-
-    assert!(error
-        .to_string()
-        .contains("Workspace not found or incomplete"));
+    let workspace = WorkspaceAccess::open(&workspace_path, WorkspaceKind::Regular).unwrap();
+    let error = workspace.validate().unwrap_err();
+    assert_eq!(error.kind(), crate::ErrorKind::InvalidOperation);
+    assert!(error.to_string().contains("symlink"));
 }

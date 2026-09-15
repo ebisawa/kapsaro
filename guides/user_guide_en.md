@@ -196,6 +196,36 @@ If you prefer not to use an SSH agent, Kapsaro can sign directly using `ssh-keyg
 
 ## 3. Creating and Joining a Workspace
 
+<a id="global-workspace"></a>
+
+### Use a Global Workspace Across Projects
+
+--global (short form -g) selects .kapsaro/ directly under HOME as captured when the command starts. The same HOME selects the same store from different Git repositories and outside Git. Set HOME to a non-empty absolute path. --home and KAPSARO_HOME select the local keys, configuration, and approval records; they do not change the global workspace location.
+
+Prepare an Ed25519 SSH key before initialization. This example saves a value and checks decryption without printing secrets.
+
+```bash
+kapsaro init --global --member-handle alice@example.com
+kapsaro set --global API_TOKEN --stdin < ./api-token.txt
+kapsaro run --global -- true
+kapsaro doctor
+```
+
+Omitting the name selects the default store. To separate uses, pass the same -n when saving and running.
+
+```bash
+kapsaro set -g -n deploy API_TOKEN --stdin < ./api-token.txt
+kapsaro run -g -n deploy -- ./deploy.sh
+```
+
+run passes the selected store's values to the child using the existing environment rules and preserves the caller's working directory and the child's exit code. It does not merge values with the regular workspace or synchronize stores automatically. Relative input and output paths for file operations also resolve from the caller's working directory.
+
+--global and --workspace are mutually exclusive. --global takes precedence over workspace environment and configuration values. Automatic discovery and the default init/join selection exclude the global workspace, including when you run from HOME. Select it explicitly; --workspace, KAPSARO_WORKSPACE, and the workspace configuration value can also select it by path.
+
+init --global reuses existing active members and completes missing structure. When the structure is complete, it succeeds without resolving the member identity or keys. Use join --global to request membership or register a key update. Member authorization, key and recipient approvals, and environment-key mode restrictions follow the regular rules.
+
+New directories under the global workspace use mode 0700 and files use 0600. Existing permission deviations produce W_GLOBAL_WORKSPACE_PERMISSIONS with repair guidance. Users manage sharing and backups.
+
 ### Create a Workspace
 
 Follow these steps when setting up Kapsaro for your team for the first time.
@@ -240,7 +270,7 @@ Added 'alice@example.com' to members/active/
 - Uses your local keypair or generates one in `~/.config/kapsaro/keys/` if needed
 - Registers your public key at `.kapsaro/members/active/alice@example.com.json`
 
-If the workspace already contains active members, `init` exits without changes. Use `kapsaro join` to submit a key to an existing workspace.
+If the workspace already contains active members, init completes only missing structure. When the structure is complete, it exits without changes. Use kapsaro join to submit a key to an existing workspace.
 
 #### Step 3: Add Your First Secrets
 
@@ -901,7 +931,9 @@ jobs:
 
 ## 9. Diagnostics
 
-`kapsaro doctor` inspects workspace structure, local keys, trust records, and permissions without modifying them.
+kapsaro doctor inspects the regular workspace, HOME/.kapsaro/, and local keys, configuration, and approval records together without modifying them. --workspace changes the regular target; --home changes the local state target. Aliases for the same directory are checked once with both selection sources recorded.
+
+A missing automatic regular candidate or an uncreated global workspace is SKIP. A missing explicit target, malformed structure, or invalid HOME is FAIL. A failure in one target still allows other available checks to run. A global workspace without Git is a normal layout. In JSON, targets records each target's kind, sources, and path; each checks entry refers to its target through target.
 
 ```bash
 kapsaro doctor
@@ -1026,6 +1058,7 @@ Assuming a `git merge` stopped with conflicts:
 | :--- | :--- |
 | `--home <path>` | Specify local Kapsaro state directory (default: `~/.config/kapsaro/`) |
 | `-w` / `--workspace <path>` | Specify workspace root directory |
+| -g / --global | Select HOME/.kapsaro/; mutually exclusive with --workspace. doctor checks both scopes without a scope option |
 | `-m` / `--member-handle <handle>` | Specify active member handle |
 | `-i` / `--ssh-identity <path>` | Path to an Ed25519 SSH private key, or its public key for agent signing |
 | `--ssh-agent` | Force signing via `ssh-agent` |

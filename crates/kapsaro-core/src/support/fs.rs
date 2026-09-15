@@ -16,7 +16,9 @@ pub(crate) mod snapshot;
 pub(crate) mod test_umask;
 
 pub(crate) use permission::ensure_dir;
-pub use read::{load_bytes, load_text_with_limit};
+#[cfg(test)]
+pub use read::load_bytes;
+pub use read::load_text_with_limit;
 
 #[cfg(test)]
 #[path = "../../tests/unit/internal/support_fs_test.rs"]

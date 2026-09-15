@@ -12,5 +12,6 @@ pub use crate::service::doctor::{
 pub mod types {
     pub use crate::service::doctor::types::{
         DoctorCategory, DoctorCheck, DoctorReason, DoctorReport, DoctorStatus, DoctorSubject,
+        DoctorTarget, DoctorTargetKind,
     };
 }

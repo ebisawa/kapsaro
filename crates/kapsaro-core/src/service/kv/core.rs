@@ -33,7 +33,7 @@ use crate::service::artifact::verified::{
     EncArtifactKind, ReadableEncArtifact, VerifiedEncArtifact,
 };
 use crate::service::artifact_text::{ArtifactLoadPolicy, ArtifactText};
-use crate::support::fs::load_text_with_limit;
+use crate::service::file::FileInputTarget;
 use crate::support::fs::relative::{load_text_with_limit_at, DirectoryFd};
 use crate::support::limits::MAX_KV_ENC_FILE_SIZE;
 use crate::support::path::format_path_relative_to_cwd;
@@ -129,8 +129,8 @@ const KV_ENC_LOAD_POLICY: ArtifactLoadPolicy =
     ArtifactLoadPolicy::new(MAX_KV_ENC_FILE_SIZE, KV_ENC_READ_SUBJECT);
 
 /// Load a bounded dotenv input for KV import.
-pub fn load_import_text(path: impl AsRef<std::path::Path>) -> Result<String> {
-    load_text_with_limit(path.as_ref(), MAX_KV_ENC_FILE_SIZE, "dotenv file")
+pub fn load_import_text(target: &FileInputTarget) -> Result<String> {
+    target.load_text(MAX_KV_ENC_FILE_SIZE, "dotenv file")
 }
 
 /// Resolve and validate a KV store basename to its secrets-directory entry name.

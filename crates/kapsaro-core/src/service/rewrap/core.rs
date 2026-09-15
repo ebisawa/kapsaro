@@ -14,6 +14,7 @@ use crate::io::trust::paths::TRUST_DIR_NAME;
 use crate::io::workspace::setup::SECRETS_DIR_NAME;
 use crate::service::artifact::verified::{EncArtifactKind, VerifiedEncArtifact};
 use crate::service::artifact::ReviewedTextFile;
+use crate::service::file::output::output_scope;
 use crate::service::file::{FileEncArtifact, VerifiedFileEncArtifact};
 use crate::service::key::{KeyContext, Kid, MemberHandle, RecipientKeys};
 use crate::service::kv::VerifiedKvEncArtifact;
@@ -24,6 +25,7 @@ use crate::service::trust::{
     TrustApprovalOutcome, TrustCommandSession, TrustDecision, TrustPolicyEvaluator,
     TrustReviewRequest,
 };
+use crate::service::workspace::WorkspaceAccess;
 use crate::support::fs::anchor::AnchoredDir;
 use crate::support::fs::lock;
 use crate::support::fs::relative::{
@@ -141,6 +143,7 @@ pub struct RewrapPromotionOutcome {
 }
 
 /// One rewrap target fixed to the directory capability used for review.
+#[derive(Clone)]
 pub struct RewrapTarget {
     dir: Arc<OpenDir>,
     parent_binding: RewrapParentBinding,
@@ -149,6 +152,7 @@ pub struct RewrapTarget {
     display_path: PathBuf,
 }
 
+#[derive(Clone)]
 enum RewrapParentBinding {
     Root,
     Child {
@@ -317,7 +321,7 @@ impl RewrapTarget {
     }
 
     /// Fix an explicitly selected artifact below its opened parent directory.
-    pub fn open(path: impl AsRef<Path>) -> Result<Self> {
+    pub fn open(path: impl AsRef<Path>, global: Option<&WorkspaceAccess>) -> Result<Self> {
         let path = path.as_ref();
         let display_path = path.to_path_buf();
         let absolute = std::path::absolute(path).map_err(|error| {
@@ -330,7 +334,9 @@ impl RewrapTarget {
         let parent_path = absolute
             .parent()
             .ok_or_else(|| invalid_target_parent(path))?;
-        let dir = Arc::new(open_dir_nofollow(parent_path, DirectoryScope::Generic)?);
+        let dir = open_dir_nofollow(parent_path, DirectoryScope::Generic)?;
+        let scope = output_scope(&dir, global)?;
+        let dir = Arc::new(dir.with_scope(scope));
         let parent_identity = open_dir_identity(dir.as_ref())?;
         let parent_binding = resolve_rewrap_parent_binding(parent_path, &parent_identity)?;
         Self::from_fixed_parent(parent_binding, dir, name, display_path)
@@ -544,15 +550,11 @@ impl RewrapPromotionOutcome {
 impl<'a> RewrapSession<'a> {
     /// Fix the workspace and local-state roots and capture pre-promotion members.
     pub fn open(
-        workspace_path: impl AsRef<Path>,
+        workspace_access: &WorkspaceAccess,
         home_path: Option<PathBuf>,
         key_ctx: &'a KeyContext,
     ) -> Result<Self> {
-        let workspace = AnchoredDir::open(
-            workspace_path.as_ref().to_path_buf(),
-            DirectoryScope::Generic,
-            "workspace root",
-        )?;
+        let workspace = workspace_access.directory().clone();
         let secrets_dir = Arc::new(open_child_dir(&workspace, SECRETS_DIR_NAME)?);
         let home = home_path
             .map(|path| AnchoredDir::open(path, DirectoryScope::LocalState, "local state root"))
@@ -565,14 +567,10 @@ impl<'a> RewrapSession<'a> {
 
     /// Bind rewrap and trust-store recovery to one fixed trust command session.
     pub fn from_trust_command(
-        workspace_path: impl AsRef<Path>,
+        workspace_access: &WorkspaceAccess,
         trust_session: &'a TrustCommandSession,
     ) -> Result<Self> {
-        let workspace = AnchoredDir::open(
-            workspace_path.as_ref().to_path_buf(),
-            DirectoryScope::Generic,
-            "workspace root",
-        )?;
+        let workspace = workspace_access.directory().clone();
         let secrets_dir = Arc::new(open_child_dir(&workspace, SECRETS_DIR_NAME)?);
         let directories = RewrapDirectories::from_fixed(
             workspace,

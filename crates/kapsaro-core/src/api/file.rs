@@ -6,7 +6,8 @@
 
 pub use crate::service::file::{
     load_plaintext_bytes, save_decrypted_bytes, save_encrypted_text, FileEncArtifact,
-    FileReadOperation, TrustedFileEncArtifact, VerifiedFileEncArtifact,
+    FileInputTarget, FileOutputTarget, FileReadOperation, TrustedFileEncArtifact,
+    VerifiedFileEncArtifact,
 };
 
 pub mod encrypt {

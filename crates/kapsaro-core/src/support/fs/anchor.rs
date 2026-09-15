@@ -10,8 +10,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use super::relative::{
-    ensure_scoped_child_dir_at, open_child_dir, open_child_dir_following, open_dir_following,
-    DirectoryFd, DirectoryScope, OpenDir,
+    duplicate_open_dir, ensure_scoped_child_dir_at, open_child_dir, open_child_dir_following,
+    open_dir_following, DirectoryFd, DirectoryScope, OpenDir,
 };
 use crate::error::absent_as_none;
 #[cfg(unix)]
@@ -32,6 +32,27 @@ pub(crate) struct AnchoredDir {
 }
 
 impl AnchoredDir {
+    pub(crate) fn with_scope(&self, scope: DirectoryScope) -> Result<Self> {
+        let parent = if scope == DirectoryScope::GlobalWorkspace {
+            self.parent
+                .as_ref()
+                .map(|parent| {
+                    duplicate_open_dir(parent.as_ref())
+                        .map(|dir| Arc::new(dir.with_scope(DirectoryScope::Generic)))
+                })
+                .transpose()?
+        } else {
+            self.parent.clone()
+        };
+        let opened = duplicate_open_dir(self)?.with_scope(scope);
+        if scope == DirectoryScope::GlobalWorkspace {
+            report_scoped_open_permission(&opened, opened.file(), opened.path());
+        }
+        Ok(Self {
+            parent,
+            opened: Arc::new(opened),
+        })
+    }
     pub(crate) fn open(
         path: impl Into<PathBuf>,
         scope: DirectoryScope,
@@ -42,12 +63,9 @@ impl AnchoredDir {
         report_ancestor_safety(&path, scope);
         let (parent, opened) = open_bound_directory(&path, scope)
             .map_err(|error| with_subject(error, scope, subject, &path))?;
-        // A bare open reports nothing about the root's own permissions: a
-        // command that only enumerates what it holds never touches a document,
-        // and one that does reads or writes through a permission chain that
-        // already covers this directory (`document_store`, the keystore's
-        // per-key chains, the trust store's own chain). Reporting here as well
-        // would only warn a command that never needed to know.
+        if scope == DirectoryScope::GlobalWorkspace {
+            report_scoped_open_permission(&opened, opened.file(), opened.path());
+        }
         Ok(Self {
             parent: parent.map(Arc::new),
             opened: Arc::new(opened),
@@ -109,11 +127,23 @@ impl AnchoredDir {
         })
     }
 
+    pub(crate) fn ensure_child_with_scope(
+        &self,
+        name: &str,
+        scope: DirectoryScope,
+    ) -> Result<Self> {
+        let parent = duplicate_open_dir(self)?.with_scope(scope);
+        let opened = ensure_scoped_child_dir_at(&parent, name)?;
+        Ok(Self {
+            parent: Some(self.opened.clone()),
+            opened: Arc::new(opened),
+        })
+    }
+
     pub(crate) fn open_child(&self, name: &str) -> Result<Self> {
         let opened = open_child_dir(self, name)?;
-        // See `open`'s note: a bare open reports nothing here either, for the
-        // same reason. A caller that reads or writes through this child reaches
-        // its own permission chain, which covers this directory too.
+        // The child opener reports global permissions; local state readers
+        // retain their document-specific permission chains.
         Ok(Self {
             parent: Some(self.opened.clone()),
             opened: Arc::new(opened),
@@ -248,6 +278,11 @@ fn open_bound_directory(path: &Path, scope: DirectoryScope) -> Result<(Option<Op
     };
     let parent = open_dir_following(parent_path, scope)?;
     let opened = open_child_dir_following(&parent, name)?;
+    let parent = if scope == DirectoryScope::GlobalWorkspace {
+        parent.with_scope(DirectoryScope::Generic)
+    } else {
+        parent
+    };
     Ok((Some(parent), opened))
 }
 
@@ -280,7 +315,9 @@ fn non_utf8_created_component_error(path: &Path, scope: DirectoryScope) -> Error
     );
     match scope {
         DirectoryScope::LocalState => Error::build_local_state_path_unsafe_error(message),
-        DirectoryScope::Generic => Error::build_invalid_operation_error(message),
+        DirectoryScope::Generic | DirectoryScope::GlobalWorkspace => {
+            Error::build_invalid_operation_error(message)
+        }
     }
 }
 
@@ -324,7 +361,9 @@ fn with_subject(error: Error, scope: DirectoryScope, subject: &str, path: &Path)
             );
             match scope {
                 DirectoryScope::LocalState => Error::build_local_state_path_unsafe_error(message),
-                DirectoryScope::Generic => Error::build_invalid_operation_error(message),
+                DirectoryScope::Generic | DirectoryScope::GlobalWorkspace => {
+                    Error::build_invalid_operation_error(message)
+                }
             }
         }
         _ => error,

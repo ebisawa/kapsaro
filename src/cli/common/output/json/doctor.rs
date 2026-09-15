@@ -16,10 +16,18 @@ use kapsaro_core::Result;
 struct DoctorReportOutput<'a> {
     status: &'static str,
     exit_code: i32,
-    workspace: &'a str,
+    targets: Vec<DoctorTargetOutput<'a>>,
     summary: DoctorSummaryOutput,
     next_actions: Vec<&'a str>,
     checks: Vec<DoctorCheckOutput<'a>>,
+}
+
+#[derive(Serialize)]
+struct DoctorTargetOutput<'a> {
+    id: usize,
+    kind: &'static str,
+    sources: Vec<&'static str>,
+    path: Option<&'a str>,
 }
 
 #[derive(Serialize)]
@@ -34,6 +42,7 @@ struct DoctorSummaryOutput {
 
 #[derive(Serialize)]
 struct DoctorCheckOutput<'a> {
+    target: Option<usize>,
     id: &'a str,
     category: &'static str,
     status: &'static str,
@@ -55,7 +64,21 @@ pub(crate) fn print_doctor_report(report: &DoctorReport) -> Result<()> {
     let output = DoctorReportOutput {
         status: status_name(report.overall_status()),
         exit_code: report.exit_code(),
-        workspace: report.workspace_display(),
+        targets: report
+            .targets()
+            .iter()
+            .enumerate()
+            .map(|(id, target)| DoctorTargetOutput {
+                id,
+                kind: target.kind.as_str(),
+                sources: target
+                    .sources
+                    .iter()
+                    .map(|source| source.as_str())
+                    .collect(),
+                path: target.path.as_deref(),
+            })
+            .collect(),
         summary: DoctorSummaryOutput {
             ok: report.count(DoctorStatus::Ok),
             warn: report.count(DoctorStatus::Warn),
@@ -78,6 +101,7 @@ impl<'a> From<&'a DoctorCheck> for DoctorCheckOutput<'a> {
     fn from(check: &'a DoctorCheck) -> Self {
         let (reason, reason_entries) = split_reason(check.reason.as_ref());
         Self {
+            target: check.target,
             id: check.id,
             category: category_name(check.category),
             status: status_name(check.status),

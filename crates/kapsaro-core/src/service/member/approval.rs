@@ -17,8 +17,8 @@ use crate::service::trust::approval::{save_known_key_approvals, ApprovedKnownKey
 use crate::service::trust::store::{load_session_trust_store, trust_store_or_empty};
 use crate::service::trust::TrustCommandSession;
 use crate::service::trust::{TrustApprovalCandidate, TrustApprovalCandidateBuilder};
+use crate::service::workspace::WorkspaceAccess;
 use crate::support::fs::anchor::AnchoredDir;
-use crate::support::fs::relative::DirectoryScope;
 use crate::support::runtime::block_on_result;
 use crate::{Error, Result};
 use std::collections::BTreeMap;
@@ -32,15 +32,8 @@ pub struct MemberApprovalSession {
 
 impl MemberApprovalSession {
     /// Bind an explicit workspace to the already selected local signing identity.
-    pub fn open(
-        workspace_path: impl AsRef<std::path::Path>,
-        trust: TrustCommandSession,
-    ) -> Result<Self> {
-        let workspace = AnchoredDir::open(
-            workspace_path.as_ref().to_path_buf(),
-            DirectoryScope::Generic,
-            "workspace root",
-        )?;
+    pub fn open(workspace: &WorkspaceAccess, trust: TrustCommandSession) -> Result<Self> {
+        let workspace = workspace.directory().clone();
         Ok(Self { workspace, trust })
     }
 

@@ -32,13 +32,35 @@ pub(super) fn validate_workspace_path(path: &Path) -> Result<WorkspaceRoot> {
 }
 
 pub fn detect_workspace_root(start_path: &Path) -> Result<WorkspaceRoot> {
+    detect_workspace_root_filtered(start_path, &|_| Ok(true))
+}
+
+pub(crate) fn detect_workspace_root_filtered(
+    start_path: &Path,
+    include: &impl Fn(&Path) -> Result<bool>,
+) -> Result<WorkspaceRoot> {
+    detect_workspace_root_with_layout(start_path, include, true)
+}
+
+pub(crate) fn detect_workspace_candidate_root_filtered(
+    start_path: &Path,
+    include: &impl Fn(&Path) -> Result<bool>,
+) -> Result<WorkspaceRoot> {
+    detect_workspace_root_with_layout(start_path, include, false)
+}
+
+fn detect_workspace_root_with_layout(
+    start_path: &Path,
+    include: &impl Fn(&Path) -> Result<bool>,
+    require_layout: bool,
+) -> Result<WorkspaceRoot> {
     let current = start_path.canonicalize().map_err(|e| {
         Error::build_io_error_with_source(format!("Failed to canonicalize path: {}", e), e)
     })?;
     let Some(git_root) = find_git_root(&current)? else {
-        return detect_current_workspace_without_git(start_path, &current);
+        return detect_current_workspace_without_git(start_path, &current, include, require_layout);
     };
-    search_workspace_towards_git_root(start_path, current, &git_root)
+    search_workspace_towards_git_root(start_path, current, &git_root, include, require_layout)
 }
 
 /// Walk from the starting directory up to the git root, stopping at the first
@@ -47,13 +69,15 @@ fn search_workspace_towards_git_root(
     start_path: &Path,
     mut current: PathBuf,
     git_root: &Path,
+    include: &impl Fn(&Path) -> Result<bool>,
+    require_layout: bool,
 ) -> Result<WorkspaceRoot> {
     loop {
-        if let Some(workspace) = check_workspace(&current)? {
+        if let Some(workspace) = check_workspace_filtered(&current, include, require_layout)? {
             return Ok(workspace);
         }
         if current == git_root {
-            return search_worktree_main_repository(start_path, git_root);
+            return search_worktree_main_repository(start_path, git_root, include, require_layout);
         }
         match current.parent() {
             Some(parent) => current = parent.to_path_buf(),
@@ -71,9 +95,14 @@ fn search_workspace_towards_git_root(
 ///
 /// In a git worktree `.git` is a file, and the workspace may live in the main
 /// repository the file points at rather than in the worktree.
-fn search_worktree_main_repository(start_path: &Path, git_root: &Path) -> Result<WorkspaceRoot> {
+fn search_worktree_main_repository(
+    start_path: &Path,
+    git_root: &Path,
+    include: &impl Fn(&Path) -> Result<bool>,
+    require_layout: bool,
+) -> Result<WorkspaceRoot> {
     if let Some(main_root) = resolve_worktree_main_root(git_root) {
-        if let Some(workspace) = check_workspace(&main_root)? {
+        if let Some(workspace) = check_workspace_filtered(&main_root, include, require_layout)? {
             return Ok(workspace);
         }
     }
@@ -86,12 +115,17 @@ fn search_worktree_main_repository(start_path: &Path, git_root: &Path) -> Result
 fn detect_current_workspace_without_git(
     start_path: &Path,
     current: &Path,
+    include: &impl Fn(&Path) -> Result<bool>,
+    require_layout: bool,
 ) -> Result<WorkspaceRoot> {
-    if let Some(workspace) = check_workspace(current)? {
+    if let Some(workspace) = check_workspace_filtered(current, include, require_layout)? {
         return Ok(workspace);
     }
 
-    if let Some(rejected) = build_rejected_workspace_dir_error(current) {
+    if let Some(rejected) = include(&current.join(WORKSPACE_DIR_NAME))?
+        .then(|| build_rejected_workspace_dir_error(current))
+        .flatten()
+    {
         return Err(rejected);
     }
 
@@ -228,6 +262,28 @@ fn check_workspace(path: &Path) -> Result<Option<WorkspaceRoot>> {
         return Ok(None);
     }
     validate_workspace_structure(&kapsaro_dir)
+}
+
+fn check_workspace_filtered(
+    path: &Path,
+    include: &impl Fn(&Path) -> Result<bool>,
+    require_layout: bool,
+) -> Result<Option<WorkspaceRoot>> {
+    if !include(&path.join(WORKSPACE_DIR_NAME))? {
+        return Ok(None);
+    }
+    if !require_layout {
+        let root_path = path.join(WORKSPACE_DIR_NAME);
+        return match fs::symlink_metadata(&root_path) {
+            Ok(_) => Ok(Some(WorkspaceRoot { root_path })),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(error) => Err(Error::build_io_error_with_source(
+                "Failed to inspect workspace candidate",
+                error,
+            )),
+        };
+    }
+    check_workspace(path)
 }
 
 fn validate_workspace_structure(path: &Path) -> Result<Option<WorkspaceRoot>> {

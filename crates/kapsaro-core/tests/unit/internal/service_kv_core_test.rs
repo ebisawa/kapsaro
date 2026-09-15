@@ -13,6 +13,7 @@ use crate::api::trust::{
     TrustApproval, TrustDecision, TrustPolicyEvaluator, TrustRecipientHandleHint, TrustReviewKind,
     TrustReviewRequest,
 };
+use crate::test_utils::open_test_workspace;
 use crate::test_utils::{setup_member_key_context, setup_test_workspace_from_fixtures};
 
 const ALICE_MEMBER_HANDLE: &str = "alice@example.com";
@@ -98,7 +99,7 @@ fn test_authorized_kv_set_mutation_binds_operation() {
     )
     .unwrap();
     let verified = artifact.verify(OperationOptions::default()).unwrap();
-    let members = CurrentMemberSnapshot::load(&workspace_dir).unwrap();
+    let members = CurrentMemberSnapshot::load(&open_test_workspace(&workspace_dir)).unwrap();
     let evaluator = TrustPolicyEvaluator::new(members, None);
     let decision = evaluator
         .evaluate_kv_mutation(
@@ -157,8 +158,10 @@ fn test_evaluate_kv_mutation_requires_output_recipient_reviews() {
     )
     .unwrap();
     let verified = artifact.verify(OperationOptions::default()).unwrap();
-    let evaluator =
-        TrustPolicyEvaluator::new(CurrentMemberSnapshot::load(&workspace_dir).unwrap(), None);
+    let evaluator = TrustPolicyEvaluator::new(
+        CurrentMemberSnapshot::load(&open_test_workspace(&workspace_dir)).unwrap(),
+        None,
+    );
 
     let decision = evaluator
         .evaluate_kv_mutation(
@@ -265,7 +268,7 @@ fn test_evaluate_kv_mutation_accepts_approved_output_recipient_set_and_persists_
     )
     .unwrap();
     let verified = artifact.verify(OperationOptions::default()).unwrap();
-    let members = CurrentMemberSnapshot::load(&workspace_dir).unwrap();
+    let members = CurrentMemberSnapshot::load(&open_test_workspace(&workspace_dir)).unwrap();
     let TrustDecision::ReviewRequired(requests) = TrustPolicyEvaluator::new(members.clone(), None)
         .evaluate_kv_mutation(
             &verified,
@@ -348,7 +351,7 @@ fn test_evaluate_kv_mutation_requires_review_for_changed_output_recipient_set() 
     )
     .unwrap();
     let verified = artifact.verify(OperationOptions::default()).unwrap();
-    let members = CurrentMemberSnapshot::load(&workspace_dir).unwrap();
+    let members = CurrentMemberSnapshot::load(&open_test_workspace(&workspace_dir)).unwrap();
     let TrustDecision::ReviewRequired(initial_requests) =
         TrustPolicyEvaluator::new(members.clone(), None)
             .evaluate_kv_mutation(
@@ -476,7 +479,7 @@ fn test_evaluate_kv_mutation_rejects_store_owner_before_recipient_lookup() {
         .unwrap()
         .into_store();
     let evaluator = TrustPolicyEvaluator::new(
-        CurrentMemberSnapshot::load(&workspace_dir).unwrap(),
+        CurrentMemberSnapshot::load(&open_test_workspace(&workspace_dir)).unwrap(),
         Some(store),
     );
 
@@ -519,8 +522,10 @@ fn test_evaluate_kv_mutation_output_recipient_subset_error() {
     )
     .unwrap();
     let verified = artifact.verify(OperationOptions::default()).unwrap();
-    let evaluator =
-        TrustPolicyEvaluator::new(CurrentMemberSnapshot::load(&workspace_dir).unwrap(), None);
+    let evaluator = TrustPolicyEvaluator::new(
+        CurrentMemberSnapshot::load(&open_test_workspace(&workspace_dir)).unwrap(),
+        None,
+    );
 
     let error = match evaluator.evaluate_kv_mutation(
         &verified,

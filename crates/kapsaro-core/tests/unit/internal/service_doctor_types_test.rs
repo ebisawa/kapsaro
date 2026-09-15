@@ -3,6 +3,23 @@
 
 use super::{DoctorCategory, DoctorCheck, DoctorReport, DoctorStatus, DoctorSubject};
 
+#[test]
+fn test_doctor_counts_artifacts_per_target() {
+    let mut report = DoctorReport::new(Vec::new());
+    for target in [0, 1] {
+        let mut finding = check(
+            DoctorStatus::Warn,
+            DoctorCategory::Artifacts,
+            DoctorSubject::Artifact("secrets/default.kvenc".to_string()),
+            Some("run kapsaro rewrap"),
+        );
+        finding.target = Some(target);
+        report.extend([finding]);
+    }
+    assert_eq!(report.artifact_count(), 2);
+    assert_eq!(report.rewrap_recommended_count(), 2);
+}
+
 fn check(
     status: DoctorStatus,
     category: DoctorCategory,
@@ -18,7 +35,7 @@ fn check(
 
 #[test]
 fn test_doctor_report_overall_status_prefers_fail() {
-    let mut report = DoctorReport::new("workspace".to_string());
+    let mut report = DoctorReport::new(Vec::new());
     report.extend([
         check(
             DoctorStatus::Warn,
@@ -40,7 +57,7 @@ fn test_doctor_report_overall_status_prefers_fail() {
 
 #[test]
 fn test_doctor_report_overall_status_all_skip() {
-    let mut report = DoctorReport::new("workspace".to_string());
+    let mut report = DoctorReport::new(Vec::new());
     report.extend([check(
         DoctorStatus::Skip,
         DoctorCategory::CiReadiness,
@@ -54,7 +71,7 @@ fn test_doctor_report_overall_status_all_skip() {
 
 #[test]
 fn test_doctor_report_next_actions_dedupes_fail_before_warn() {
-    let mut report = DoctorReport::new("workspace".to_string());
+    let mut report = DoctorReport::new(Vec::new());
     report.extend([
         check(
             DoctorStatus::Warn,
@@ -84,7 +101,7 @@ fn test_doctor_report_next_actions_dedupes_fail_before_warn() {
 
 #[test]
 fn test_doctor_report_counts_unique_artifacts() {
-    let mut report = DoctorReport::new("workspace".to_string());
+    let mut report = DoctorReport::new(Vec::new());
     report.extend([
         check(
             DoctorStatus::Fail,
@@ -112,7 +129,7 @@ fn test_doctor_report_counts_unique_artifacts() {
 
 #[test]
 fn test_doctor_report_healthy_categories_are_sorted_and_unique() {
-    let mut report = DoctorReport::new("workspace".to_string());
+    let mut report = DoctorReport::new(Vec::new());
     report.extend([
         check(
             DoctorStatus::Ok,

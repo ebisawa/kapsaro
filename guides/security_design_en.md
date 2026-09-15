@@ -1558,6 +1558,10 @@ If an attestor's GitHub account is compromised, online verification checks becom
 
 #### 8.8.5 Local Trusted Area
 
+The global workspace at HOME/.kapsaro/ uses the regular ciphertext and public-key formats, signature verification, member authorization, and key and recipient approval rules. Operations retain the selected directory identity and kind through confirmations and retries. Aliases and explicit paths receive the same protection: new directories use mode 0700 and files use 0600. Existing permission deviations produce W_GLOBAL_WORKSPACE_PERMISSIONS with repair guidance; unsafe paths and read failures retain their respective errors.
+
+doctor diagnoses the regular workspace, global workspace, and local state by target and merges selections for the same directory. Shared checks of keys, configuration, approvals, and environment-key readiness run once. Diagnosis does not print plaintext, initialize storage, or save approvals.
+
 Kapsaro relies upon the security of the local host operating system. File isolation on the local machine depends on OS-level user permissions and filesystem access controls, assuming proper host configuration by the user or system administrator. Kapsaro operates within and adheres strictly to these underlying permissions.
 
 While digital signatures on the local trust store detect accidental corruption or malformed data, they cannot protect against an attacker with write access to `<KAPSARO_HOME>/trust/`. An adversary with local user privileges could coherently replace or roll back trust stores. This is a recognized residual risk outside the local trust boundary.
@@ -1568,7 +1572,7 @@ To assist users in verifying local security posture, Kapsaro audits permissions 
 
 The private key file is the sole exception to this non-blocking posture: Kapsaro unconditionally refuses to read `private.json` if permissions allow other users read access or if the file is owned by another account. While encrypted artifacts and public keys tolerate leakage, private key material is the cryptographic foundation of the entire system. Unsafe private key permissions trigger immediate operational refusal.
 
-The directory path from the filesystem root down to `<KAPSARO_HOME>` is also audited: any intermediate directory writable by other users allows the entire state hierarchy to be replaced. Symlinks along this path (including `<KAPSARO_HOME>` itself) are supported to accommodate encrypted volume mounts; Kapsaro resolves directory handles once upon opening to mitigate symlink race conditions. Public workspace artifacts distributed via Git (`members/` and encrypted payloads) are excluded from these local permission checks.
+The directory path from the filesystem root down to &lt;KAPSARO_HOME&gt; is also audited: any intermediate directory writable by other users allows the entire state hierarchy to be replaced. Symlinks along this path (including &lt;KAPSARO_HOME&gt; itself) are supported to accommodate encrypted volume mounts; Kapsaro resolves directory handles once upon opening to mitigate symlink race conditions. Regular workspace artifacts distributed via Git retain the regular permission rules. The global workspace receives the owner-only protection described above.
 
 <a id="136-post-decryption-control-and-distribution-policy"></a>
 

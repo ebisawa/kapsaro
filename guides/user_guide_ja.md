@@ -196,6 +196,36 @@ SSH エージェントの代わりに `ssh-keygen` で署名する設定は、[S
 
 ## 3. ワークスペースの作成と参加
 
+<a id="global-workspace"></a>
+
+### 複数のプロジェクトで使うグローバルワークスペース
+
+--global（短縮形 -g）は、コマンド開始時の HOME 直下にある .kapsaro/ を選択します。同じ HOME なら、別の Git リポジトリや Git 管理外からも同じストアを利用できます。HOME には空でない絶対パスを設定してください。--home と KAPSARO_HOME は鍵・設定・承認履歴の保存先を切り替えるもので、グローバルの保存先は変えません。
+
+Ed25519 SSH 鍵を準備してから初期化します。次の例は秘密値を表示せずに保存と実読を確認します。
+
+```bash
+kapsaro init --global --member-handle alice@example.com
+kapsaro set --global API_TOKEN --stdin < ./api-token.txt
+kapsaro run --global -- true
+kapsaro doctor
+```
+
+名前を省略すると default ストアを使います。用途ごとに分ける場合は、保存と実行の両方で同じ -n を指定します。
+
+```bash
+kapsaro set -g -n deploy API_TOKEN --stdin < ./api-token.txt
+kapsaro run -g -n deploy -- ./deploy.sh
+```
+
+run は選択したストアの値を既存の環境変数適用規則に従って子プロセスへ渡し、呼び出し元の作業ディレクトリと終了コードを維持します。通常ワークスペースの値との合成や自動同期は行いません。ファイル操作の相対入出力パスも、呼び出し元の作業ディレクトリから解決します。
+
+--global と --workspace は排他です。--global は環境変数や設定の workspace より優先します。通常探索と init／join の既定対象からはグローバルを除外するため、ホーム直下でも明示的に選択してください。--workspace、KAPSARO_WORKSPACE、設定の workspace による明示パスでも選択できます。
+
+init --global は既存の有効メンバーを再利用し、不足した構造を補完します。構造がそろっていれば本人情報や鍵の解決も省いて成功します。既存ワークスペースへの参加や鍵更新の申請には join --global を使います。メンバーの認可、鍵と受信者の承認、環境変数鍵モードの操作制限は通常と共通です。
+
+グローバル配下で新設するディレクトリは 0700、ファイルは 0600 です。既存権限の逸脱は W_GLOBAL_WORKSPACE_PERMISSIONS と修復手順で案内します。共有・バックアップは利用者が管理します。
+
 ### ワークスペースを作成する
 
 チームに初めて Kapsaro を導入する際の手順です。
@@ -240,7 +270,7 @@ Added 'alice@example.com' to members/active/
 - 手元の鍵ペアの利用、または必要に応じた `~/.config/kapsaro/keys/` 内での生成
 - `.kapsaro/members/active/alice@example.com.json` への初期公開鍵の登録
 
-すでにワークスペースに有効なメンバーが存在する場合、`init` は変更を行わずに終了します。既存ワークスペースへの鍵登録には `kapsaro join` を使用してください。
+すでにワークスペースに有効なメンバーが存在する場合、init は不足した構造だけを補完します。構造がそろっていれば変更せず終了します。既存ワークスペースへの鍵登録には kapsaro join を使用してください。
 
 #### ステップ 3: 最初のシークレットを追加
 
@@ -902,7 +932,9 @@ jobs:
 
 ## 9. 診断
 
-`kapsaro doctor` は、ワークスペースの構成、手元の鍵、信頼ストア、アクセス権限を読み取り専用で診断します。
+kapsaro doctor は、通常ワークスペース、HOME/.kapsaro/、手元の鍵・設定・承認履歴を一括して読み取り専用で診断します。--workspace は通常側の対象を、--home はローカル状態の対象を変更します。同じディレクトリを別名で選んだ場合は一度だけ検査し、両方の選択元を表示します。
+
+通常候補がない場合とグローバルが未作成の場合は SKIP、明示した対象の不在、不正構造、HOME 不正は FAIL です。一方が失敗しても、取得できる他の診断を続けます。グローバルで Git がない配置は正常です。JSON の targets は対象の種別・選択元・保存先を持ち、各 checks の target が対応する対象を参照します。
 
 ```bash
 kapsaro doctor
@@ -1029,6 +1061,7 @@ KV ストアはキーごとに値を暗号化しますが、電子署名はフ�
 | :--- | :--- |
 | `--home <path>` | ローカル状態ディレクトリを指定（既定: `~/.config/kapsaro/`） |
 | `-w` / `--workspace <path>` | ワークスペースのルートパスを指定 |
+| -g / --global | HOME/.kapsaro/ を選択。--workspace と排他。doctor はオプションなしで両方を診断 |
 | `-m` / `--member-handle <handle>` | 使用するメンバーハンドルを指定 |
 | `-i` / `--ssh-identity <path>` | Ed25519 SSH 秘密鍵、またはエージェント署名で使う公開鍵ファイルのパス |
 | `--ssh-agent` | `ssh-agent` による署名を強制 |

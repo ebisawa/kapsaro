@@ -12,17 +12,6 @@ use crate::{Error, Result};
 
 use super::relative::{ensure_child_dir_at, open_dir_nofollow, DirectoryScope};
 
-/// Which wording a refusal about a directory is phrased in.
-///
-/// This selects nothing but message text. Every directory made here is created
-/// the same way and with the same mode; what differs is only whether the
-/// operator is told about a directory or about a workspace path.
-#[derive(Debug, Clone, Copy)]
-pub(crate) enum DirectoryKind {
-    General,
-    Workspace,
-}
-
 /// Whether the path names a directory rather than a link or another entry type.
 ///
 /// An inspection that could not answer is an error rather than a `false`.
@@ -49,13 +38,13 @@ pub(crate) fn is_real_dir(path: &Path) -> Result<bool> {
 /// by full path instead would re-resolve the ones already made, so a component
 /// replaced by a symlink between two steps would carry the rest of the tree
 /// wherever it points.
-pub(crate) fn ensure_real_directory_tree(path: &Path, kind: DirectoryKind) -> Result<()> {
-    let (ancestor, missing) = split_at_existing_ancestor(path, kind)?;
+pub(crate) fn ensure_real_directory_tree(path: &Path) -> Result<()> {
+    let (ancestor, missing) = split_at_existing_ancestor(path)?;
     if missing.is_empty() {
         return Ok(());
     }
     let mut parent = open_dir_nofollow(&ancestor, DirectoryScope::Generic)
-        .map_err(|error| creation_root_error(&ancestor, error, kind))?;
+        .map_err(|error| creation_root_error(&ancestor, error))?;
     for name in missing {
         parent = ensure_child_dir_at(&parent, &name)?;
         run_after_level_created();
@@ -108,44 +97,40 @@ pub(crate) fn enforce_path_not_symlink(
 
 /// Split the path into the deepest directory that exists and what is missing
 /// below it, outermost missing name first.
-fn split_at_existing_ancestor(path: &Path, kind: DirectoryKind) -> Result<(PathBuf, Vec<String>)> {
+fn split_at_existing_ancestor(path: &Path) -> Result<(PathBuf, Vec<String>)> {
     let mut missing = Vec::new();
 
     for ancestor in path.ancestors() {
         let candidate = path_or_current_dir(ancestor);
         match fs::symlink_metadata(candidate) {
             Ok(metadata) => {
-                validate_real_directory(candidate, &metadata, kind)?;
+                validate_real_directory(candidate, &metadata)?;
                 missing.reverse();
                 return Ok((candidate.to_path_buf(), missing));
             }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                missing.push(required_component(candidate, kind)?);
+                missing.push(required_component(candidate)?);
             }
             Err(e) => return Err(inspect_directory_error(candidate, e)),
         }
     }
 
-    Err(resolve_directory_error(path, kind))
+    Err(resolve_directory_error(path))
 }
 
 /// The final component of a path, as a name a directory-relative create accepts.
-fn required_component(path: &Path, kind: DirectoryKind) -> Result<String> {
+fn required_component(path: &Path) -> Result<String> {
     path.file_name()
         .and_then(|name| name.to_str())
         .map(str::to_string)
-        .ok_or_else(|| resolve_directory_error(path, kind))
+        .ok_or_else(|| resolve_directory_error(path))
 }
 
-fn validate_real_directory(
-    path: &Path,
-    metadata: &fs::Metadata,
-    kind: DirectoryKind,
-) -> Result<()> {
+fn validate_real_directory(path: &Path, metadata: &fs::Metadata) -> Result<()> {
     let file_type = metadata.file_type();
     if file_type.is_symlink() {
         return Err(Error::build_invalid_operation_error(
-            symlink_directory_message(path, kind),
+            symlink_directory_message(path),
         ));
     }
     if !file_type.is_dir() {
@@ -166,45 +151,25 @@ fn inspect_directory_error(path: &Path, e: std::io::Error) -> Error {
 }
 
 /// Report a deepest existing ancestor that could not be bound to a descriptor.
-fn creation_root_error(path: &Path, error: Error, kind: DirectoryKind) -> Error {
+fn creation_root_error(path: &Path, error: Error) -> Error {
     if error.kind() == crate::ErrorKind::InvalidOperation {
-        return Error::build_invalid_operation_error(symlink_directory_message(path, kind));
+        return Error::build_invalid_operation_error(symlink_directory_message(path));
     }
     error
 }
 
-fn resolve_directory_error(path: &Path, kind: DirectoryKind) -> Error {
-    let path_display = format_path_relative_to_cwd(path);
-    let message = match kind {
-        DirectoryKind::General => {
-            format!("Failed to resolve directory ancestry for {}", path_display)
-        }
-        DirectoryKind::Workspace => {
-            format!(
-                "Failed to resolve workspace directory ancestry for {}",
-                path_display
-            )
-        }
-    };
-    Error::build_io_error(message)
+fn resolve_directory_error(path: &Path) -> Error {
+    Error::build_io_error(format!(
+        "Failed to resolve directory ancestry for {}",
+        format_path_relative_to_cwd(path)
+    ))
 }
 
-fn symlink_directory_message(path: &Path, kind: DirectoryKind) -> String {
-    let path_display = format_path_relative_to_cwd(path);
-    match kind {
-        DirectoryKind::General => {
-            format!(
-                "refusing to create directory through symlink: {}",
-                path_display
-            )
-        }
-        DirectoryKind::Workspace => {
-            format!(
-                "refusing to create workspace path through symlink: {}",
-                path_display
-            )
-        }
-    }
+fn symlink_directory_message(path: &Path) -> String {
+    format!(
+        "refusing to create directory through symlink: {}",
+        format_path_relative_to_cwd(path)
+    )
 }
 
 fn non_directory_message(path: &Path) -> String {

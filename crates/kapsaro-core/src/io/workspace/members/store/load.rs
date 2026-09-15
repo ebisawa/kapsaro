@@ -4,10 +4,13 @@
 //! Reading member documents out of a workspace.
 //! Every read is addressed relative to the directory descriptor that holds the document.
 
+#[cfg(test)]
+use super::super::paths::member_file_name;
 use super::super::paths::{
-    has_member_document_extension, member_file_name, members_dir, open_member_document_parent,
-    open_optional_members_dir, open_optional_members_dir_at, MemberStatus,
+    has_member_document_extension, members_dir, open_optional_members_dir_at, MemberStatus,
 };
+#[cfg(any(test, feature = "cli-test-support"))]
+use super::super::paths::{open_member_document_parent, open_optional_members_dir};
 use crate::format::schema::document::parse_public_key_str;
 use crate::model::public_key::PublicKey;
 use crate::support::fs::relative::{self, ChildType, DirectoryFd, OpenDir};
@@ -99,6 +102,7 @@ where
 /// A directory that is not there yields nothing: a workspace without an
 /// incoming/ directory has no incoming members, which is a state to report
 /// rather than a failure.
+#[cfg(any(test, feature = "cli-test-support"))]
 pub(crate) fn load_sorted_members(
     workspace_path: &Path,
     status: MemberStatus,
@@ -132,6 +136,7 @@ where
     Ok(members)
 }
 
+#[cfg(test)]
 fn list_member_paths(workspace_path: &Path, status: MemberStatus) -> Result<Vec<PathBuf>> {
     let Some(dir) = open_optional_members_dir(workspace_path, status)? else {
         return Ok(Vec::new());
@@ -143,6 +148,7 @@ fn list_member_paths(workspace_path: &Path, status: MemberStatus) -> Result<Vec<
         .collect())
 }
 
+#[cfg(any(test, feature = "cli-test-support"))]
 pub fn load_active_member_files(workspace_path: &Path) -> Result<Vec<PublicKey>> {
     load_sorted_members(workspace_path, MemberStatus::Active)
 }
@@ -242,15 +248,13 @@ where
     load_sorted_members_at(workspace, MemberStatus::Active)
 }
 
+#[cfg(test)]
 pub fn list_active_member_paths(workspace_path: &Path) -> Result<Vec<PathBuf>> {
     list_member_paths(workspace_path, MemberStatus::Active)
 }
 
-pub fn list_incoming_member_paths(workspace_path: &Path) -> Result<Vec<PathBuf>> {
-    list_member_paths(workspace_path, MemberStatus::Incoming)
-}
-
 /// Load the document for one member, reporting which directory holds it.
+#[cfg(test)]
 pub fn load_member_file(
     workspace_path: &Path,
     member_handle: &str,
@@ -272,6 +276,7 @@ pub fn load_member_file(
     )))
 }
 
+#[cfg(any(test, feature = "cli-test-support"))]
 pub fn load_member_file_from_path(path: &Path) -> Result<PublicKey> {
     let (dir, name) = open_member_document_parent(path)?;
     load_member_file_at(&dir, &name)
@@ -316,6 +321,7 @@ where
     Ok(load_member_document_at(dir, name)?.public_key)
 }
 
+#[cfg(test)]
 pub fn load_verified_member_file_from_path(path: &Path) -> Result<PublicKey> {
     let (dir, name) = open_member_document_parent(path)?;
     load_verified_member_file_at(&dir, &name)

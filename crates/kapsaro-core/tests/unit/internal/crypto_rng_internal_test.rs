@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::BufferedCryptoRng;
-use rand::RngCore;
+use rand::Rng;
 use zeroize::Zeroizing;
 
 #[test]

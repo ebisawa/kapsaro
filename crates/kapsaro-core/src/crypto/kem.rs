@@ -96,7 +96,7 @@ pub fn seal_base(
         .map_err(|_| build_crypto_operation_error("Invalid recipient public key"))?;
 
     let mut csprng = hpke_sender_setup_rng()?;
-    let (enc, mut sender_ctx) = hpke::setup_sender::<Aead, Kdf, Kem, _>(
+    let (enc, mut sender_ctx) = hpke::setup_sender_with_rng::<Aead, Kdf, Kem>(
         &OpModeS::Base,
         &pk_recip_hpke,
         info.as_bytes(),

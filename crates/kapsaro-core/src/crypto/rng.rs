@@ -5,16 +5,16 @@
 
 use crate::crypto::build_crypto_operation_error;
 use crate::Result;
-use rand::RngCore;
-use rand::{rngs::OsRng, CryptoRng, TryRngCore};
+use rand::{rngs::SysRng, TryCryptoRng, TryRng};
+use std::convert::Infallible;
 use zeroize::Zeroizing;
 
 const OS_RNG_ERROR_MESSAGE: &str = "OS random number generation failed";
 
 /// Fill a buffer with cryptographically secure random bytes from the OS.
 pub(crate) fn fill_random_bytes(bytes: &mut [u8]) -> Result<()> {
-    let mut rng = OsRng;
-    rng.try_fill_bytes(bytes)
+    SysRng
+        .try_fill_bytes(bytes)
         .map_err(|_| build_crypto_operation_error(OS_RNG_ERROR_MESSAGE))
 }
 
@@ -69,31 +69,34 @@ impl<const N: usize> BufferedCryptoRng<N> {
     }
 }
 
-impl<const N: usize> RngCore for BufferedCryptoRng<N> {
-    fn next_u32(&mut self) -> u32 {
+impl<const N: usize> TryRng for BufferedCryptoRng<N> {
+    type Error = Infallible;
+
+    fn try_next_u32(&mut self) -> std::result::Result<u32, Infallible> {
         self.mark_invalid();
-        0
+        Ok(0)
     }
 
-    fn next_u64(&mut self) -> u64 {
+    fn try_next_u64(&mut self) -> std::result::Result<u64, Infallible> {
         self.mark_invalid();
-        0
+        Ok(0)
     }
 
-    fn fill_bytes(&mut self, dest: &mut [u8]) {
+    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> std::result::Result<(), Infallible> {
         if dest.len() > self.remaining() {
             self.mark_invalid();
             dest.fill(0);
-            return;
+            return Ok(());
         }
 
         let end = self.position + dest.len();
         dest.copy_from_slice(&self.bytes[self.position..end]);
         self.position = end;
+        Ok(())
     }
 }
 
-impl<const N: usize> CryptoRng for BufferedCryptoRng<N> {}
+impl<const N: usize> TryCryptoRng for BufferedCryptoRng<N> {}
 
 #[cfg(test)]
 #[path = "../../tests/unit/internal/crypto_rng_internal_test.rs"]

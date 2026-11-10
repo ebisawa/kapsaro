@@ -11,10 +11,10 @@ autotests = false
 members = ["crates/kapsaro-core", "crates/kapsaro-test-support"]
 
 [workspace.package]
-version = "0.99.2-beta"
+version = "0.99.3-beta"
 
 [workspace.dependencies]
-kapsaro-core = { version = "0.99.2-beta", path = "crates/kapsaro-core", default-features = false }
+kapsaro-core = { version = "0.99.3-beta", path = "crates/kapsaro-core", default-features = false }
 
 # CI already runs clippy with -D warnings. Declaring the policy here applies the
 # same strictness to local builds and editors.

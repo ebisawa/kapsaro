@@ -863,7 +863,7 @@ kapsaro key export --private --member-handle ci@example.com --out ci-key.txt
 
 ### GitHub Actions の設定例
 
-この例は Kapsaro を `v0.99.2-beta` に固定し、ダウンロードしたアーカイブの GitHub 証明を検証してから展開・実行します。`main` とランナーは、上記の条件を満たすように設定してください。
+この例は Kapsaro を `v0.99.3-beta` に固定し、ダウンロードしたアーカイブの GitHub 証明を検証してから展開・実行します。`main` とランナーは、上記の条件を満たすように設定してください。
 
 ```yaml
 name: Deploy
@@ -888,7 +888,7 @@ jobs:
           command -v tar
           command -v gh
 
-          kapsaro_tag=v0.99.2-beta
+          kapsaro_tag=v0.99.3-beta
           kapsaro_archive="kapsaro-${kapsaro_tag}-x86_64-unknown-linux-gnu.tar.gz"
           kapsaro_bundle="kapsaro-${kapsaro_tag}.sigstore.jsonl"
           kapsaro_url="https://github.com/ebisawa/kapsaro/releases/download/${kapsaro_tag}"

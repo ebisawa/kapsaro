@@ -862,7 +862,7 @@ On the runner, confirm `kapsaro run -- true` succeeds against the shared commit 
 
 ### GitHub Actions Example
 
-This example pins Kapsaro to `v0.99.2-beta` and verifies the downloaded archive's GitHub attestation before extracting or executing it. Configure `main` and the runner to meet the conditions above.
+This example pins Kapsaro to `v0.99.3-beta` and verifies the downloaded archive's GitHub attestation before extracting or executing it. Configure `main` and the runner to meet the conditions above.
 
 ```yaml
 name: Deploy
@@ -887,7 +887,7 @@ jobs:
           command -v tar
           command -v gh
 
-          kapsaro_tag=v0.99.2-beta
+          kapsaro_tag=v0.99.3-beta
           kapsaro_archive="kapsaro-${kapsaro_tag}-x86_64-unknown-linux-gnu.tar.gz"
           kapsaro_bundle="kapsaro-${kapsaro_tag}.sigstore.jsonl"
           kapsaro_url="https://github.com/ebisawa/kapsaro/releases/download/${kapsaro_tag}"
